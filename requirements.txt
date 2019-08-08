@@ -1,0 +1,15 @@
+jupyter
+torch
+pandas
+matplotlib
+nltk
+tqdm
+
+# HAN
+beautifulsoup4
+more-itertools
+lxml
+gensim
+
+# Siamese
+pyyaml
