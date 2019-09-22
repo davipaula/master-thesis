@@ -73,10 +73,6 @@ class HANData:
 
         words_frequency = self.frequency_of_words(x_train_texts, x_test_texts, x_val_texts)
 
-        # Just to compare words_frequency. To remove one of them
-        texts = list(more_itertools.collapse(x_train_texts[:] + x_test_texts[:] + x_val_texts[:], levels=1))
-        words_frequency_with_texts = self.frequency_of_words_with_texts(texts)
-
         x_test_texts = self.remove_non_frequent_words(words_frequency, x_test_texts)
         x_train_texts = self.remove_non_frequent_words(words_frequency, x_train_texts)
         x_val_texts = self.remove_non_frequent_words(words_frequency, x_val_texts)

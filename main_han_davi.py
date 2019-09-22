@@ -9,6 +9,7 @@ import time
 
 def main():
     # execute_training()
+
     execute_evaluation()
 
     print("Working")
@@ -16,84 +17,38 @@ def main():
 
 def execute_training():
     han_data = HANData()
-    x_train_vec = han_data.x_train_vec
-    x_test_vec = han_data.x_test_vec
-    x_val_vec = han_data.x_val_vec
-    y_train = han_data.y_train
-    y_test = han_data.y_test
-    y_val = han_data.y_val
-    vocab_size = han_data.vocab_size
-    weights = han_data.weights
-    cls_arr = han_data.cls_arr
-    classes = han_data.classes
-    han_model = HANModel(x_train_vec, x_test_vec, x_val_vec, y_train, y_test, y_val, vocab_size, weights, cls_arr,
-                         classes)
-    X_train_pad = han_model.X_train_pad
-    X_test_pad = han_model.X_test_pad
-    X_val_pad = han_model.X_val_pad
-    y_train_tensor = han_model.y_train_tensor
-    y_test_tensor = han_model.y_test_tensor
-    y_val_tensor = han_model.y_val_tensor
-    sent_optimizer = han_model.sent_optimizer
-    sentence_attention = han_model.sentence_attention
-    criterion = han_model.criterion
-    batch_size = han_model.batch_size
-    max_sequence_of_sentences_size = han_model.max_sequence_of_sentences_size
-    training(X_train_pad, X_val_pad, y_train_tensor, y_val_tensor, sent_optimizer, sentence_attention, criterion,
-             batch_size)
+    han_model = HANModel(han_data)
+
+    training_steps(han_model)
 
 
 def execute_evaluation():
     han_data = HANData()
-    x_train_vec = han_data.x_train_vec
-    x_test_vec = han_data.x_test_vec
-    x_val_vec = han_data.x_val_vec
-    y_train = han_data.y_train
-    y_test = han_data.y_test
-    y_val = han_data.y_val
-    vocab_size = han_data.vocab_size
-    weights = han_data.weights
-    cls_arr = han_data.cls_arr
-    classes = han_data.classes
-    han_model = HANModel(x_train_vec, x_test_vec, x_val_vec, y_train, y_test, y_val, vocab_size, weights, cls_arr,
-                         classes)
-    X_train_pad = han_model.X_train_pad
-    X_test_pad = han_model.X_test_pad
-    X_val_pad = han_model.X_val_pad
-    y_train_tensor = han_model.y_train_tensor
-    y_test_tensor = han_model.y_test_tensor
-    y_val_tensor = han_model.y_val_tensor
-    sent_optimizer = han_model.sent_optimizer
-    sentence_attention = han_model.sentence_attention
-    criterion = han_model.criterion
+    han_model = HANModel(han_data)
+
+    evaluation_steps(han_model)
+
+
+def training_steps(han_model):
+
+    num_epoch = 1
     batch_size = han_model.batch_size
-    max_sequence_of_sentences_size = han_model.max_sequence_of_sentences_size
 
-    evaluation(X_test_pad, y_test_tensor, sentence_attention, batch_size)
+    x_train = han_model.X_train_pad
+    y_train = han_model.y_train_tensor
+    x_val = han_model.X_val_pad
+    y_val = han_model.y_val_tensor
+    sentence_attention_optimizer = han_model.sentence_optimizer
+    sentence_attention_model = han_model.sentence_attention
+    loss_criterion = han_model.criterion
 
-
-def training(X_train_pad, X_val_pad, y_train_tensor, y_val_tensor, sent_optimizer, sentence_attention, criterion,
-             batch_size_value):
-    num_epoch = 5
-    batch_size = batch_size_value
-
-    x_train = X_train_pad
-    y_train = y_train_tensor
-    x_val = X_val_pad
-    y_val = y_val_tensor
-    sentence_attention_optimiser = sent_optimizer
-    sentence_attention_model = sentence_attention
-    loss_criterion = criterion
     print_loss_every = 50
     code_test = True
 
     start = time.time()
     loss_full = []
-    loss_epoch = []
-    acc_epoch = []
     acc_full = []
     val_acc = []
-    epoch_counter = 0
     train_length = len(x_train)
     for i in range(1, num_epoch + 1):
         loss_epoch = []
@@ -108,7 +63,7 @@ def training(X_train_pad, X_val_pad, y_train_tensor, y_val_tensor, sent_optimize
 
             state_word = sentence_attention_model.init_hidden_word()
             state_sent = sentence_attention_model.init_hidden_sent()
-            sentence_attention_optimiser.zero_grad()
+            sentence_attention_optimizer.zero_grad()
 
             y_pred, state_sent = sentence_attention_model(review, state_sent, state_word)
 
@@ -119,7 +74,7 @@ def training(X_train_pad, X_val_pad, y_train_tensor, y_val_tensor, sent_optimize
             acc = float(correct) / batch_size
 
             loss.backward()
-            sent_optimizer.step()
+            sentence_attention_optimizer.step()
 
             loss = loss.data.item()
 
@@ -142,11 +97,16 @@ def training(X_train_pad, X_val_pad, y_train_tensor, y_val_tensor, sent_optimize
         # return loss_full,acc_full,val_acc
 
 
-def evaluation(X_test_pad, y_test_tensor, sentence_attention, batch_size):
+def evaluation_steps(han_model):
+
+    X_test_pad = han_model.X_test_pad
+    y_test_tensor = han_model.y_test_tensor
+    sentence_attention = han_model.sentence_attention
+    batch_size = han_model.batch_size
+
     test_accuracy(batch_size, X_test_pad, y_test_tensor, sentence_attention)
 
     # Predict only a single batch
-
     x, y = utils.gen_batch(X_test_pad, y_test_tensor, batch_size)
 
     state_word = sentence_attention.init_hidden_word()
@@ -169,7 +129,7 @@ def test_accuracy(batch_size, x_test, y_test, sentence_attention_model):
     for j in range(int(test_length / batch_size)):
         print(j)
 
-        x, y = gen_batch(x_test, y_test, batch_size)
+        x, y = utils.gen_batch(x_test, y_test, batch_size)
         state_word = sentence_attention_model.init_hidden_word()
         state_sent = sentence_attention_model.init_hidden_sent()
 

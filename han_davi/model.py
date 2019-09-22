@@ -113,9 +113,19 @@ class SentenceRNN(nn.Module):
         return Variable(torch.zeros(2, self.batch_size, self.hidden_size))  # .cuda()
 
 
-class HANModel():
-    def __init__(self, x_train_vec, x_test_vec, x_val_vec, y_train, y_test, y_val, vocab_size, weights, cls_arr,
-                 classes):
+class HANModel:
+    def __init__(self, han_data):
+        x_train_vec = han_data.x_train_vec
+        x_test_vec = han_data.x_test_vec
+        x_val_vec = han_data.x_val_vec
+        y_train = han_data.y_train
+        y_test = han_data.y_test
+        y_val = han_data.y_val
+        vocab_size = han_data.vocab_size
+        weights = han_data.weights
+        cls_arr = han_data.cls_arr
+        classes = han_data.classes
+
         # converting list to tensor
         self.y_train_tensor = [torch.FloatTensor([cls_arr.index(label)]) for label in y_train]
         self.y_val_tensor = [torch.FloatTensor([cls_arr.index(label)]) for label in y_val]
@@ -144,6 +154,7 @@ class HANModel():
 
         learning_rate = 1e-3
         momentum = 0.9
-        self.sent_optimizer = torch.optim.SGD(self.sentence_attention.parameters(), lr=learning_rate, momentum=momentum)
+        self.sentence_optimizer = torch.optim.SGD(self.sentence_attention.parameters(), lr=learning_rate,
+                                                  momentum=momentum)
 
         self.criterion = nn.NLLLoss()
