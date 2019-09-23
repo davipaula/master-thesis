@@ -6,8 +6,8 @@ In current implementation:
 The model taken from https://github.com/pandeykartikey/Hierarchical-Attention-Network/blob/master/HAN%20yelp.ipynb was refactored and is working with Yelp data.
 
 - Usage:
- - Train: python han_davi.py --task=train
- - Test: python han_davi.py --task=test
+  - Train: python han_davi.py --task=train
+  - Test: python han_davi.py --task=test
  
 Please note that to build the Smash-RNN implementation, I will use the HAN model from https://github.com/vietnguyen1991/Hierarchical-attention-networks-pytorch/, once it seems to have a better implementation
 
