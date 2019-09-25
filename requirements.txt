@@ -13,3 +13,6 @@ gensim
 
 # Siamese
 pyyaml
+
+# CLI
+fire
