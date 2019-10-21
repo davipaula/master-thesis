@@ -100,8 +100,8 @@ def main(_):
     weight_matrix = np.array(embed_list)
 
     # TODO check how to adapt this piece of code when using GLOVE embeddings
-    # # pass weights to nn embedding
-    # embedding.weight = nn.Parameter(torch.from_numpy(weight_matrix).type(torch.FloatTensor), requires_grad=False)
+    # pass weights to nn embedding
+    embedding.weight = nn.Parameter(torch.from_numpy(weight_matrix).type(torch.FloatTensor), requires_grad=False)
 
     """ Model Preparation """
 

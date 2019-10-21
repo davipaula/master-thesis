@@ -5,15 +5,18 @@ import random
 import torch
 import numpy as np
 import time
+import argparse
 
 
 def main():
-    # execute_training()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", type=str, default="train")
+    args = parser.parse_args()
 
-    execute_evaluation()
-
-    print("Working")
-
+    if args.task == "train":
+        execute_training()
+    else:
+        execute_evaluation()
 
 def execute_training():
     han_data = HANData()
