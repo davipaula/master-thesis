@@ -77,7 +77,7 @@ print(b[0].shape)
 print(b[1].shape)
 
 x = AttentionDecoder(20 * (1 + bidirectional), 25, 30)
-y, z, w = x.forward(x.init_hidden(), torch.cat((a,a)), torch.zeros(1,1, 30)) #Assuming <SOS> to be all zeros
+y, z, w = x.forward(x.init_hidden(), torch.cat((a,a)), torch.zeros(1,1, 30))  # Assuming <SOS> to be all zeros
 print(y.shape)
 print(z[0].shape)
 print(z[1].shape)

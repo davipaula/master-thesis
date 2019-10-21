@@ -1,3 +1,5 @@
+numpy
+scikit-learn
 jupyter
 torch
 pandas
@@ -13,3 +15,6 @@ gensim
 
 # Siamese
 pyyaml
+
+# CLI
+fire

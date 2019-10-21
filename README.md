@@ -1,5 +1,26 @@
 # SMASH-RNN: Semantic Text Matching for Long-Form Documents
 
+In current implementation:
+
+**HAN model**
+The model taken from https://github.com/pandeykartikey/Hierarchical-Attention-Network/blob/master/HAN%20yelp.ipynb was refactored and is working with Yelp data.
+
+- Usage:
+  - Train: ```python han_davi.py --task=train```
+  - Test: ```python han_davi.py --task=test```
+ 
+Please note that to build the Smash-RNN implementation, I will use the HAN model from https://github.com/vietnguyen1991/Hierarchical-attention-networks-pytorch/, once it seems to have a better implementation
+
+**Siamese-LSTM**
+Adapted to work with the Yelp polarized data. Still needs some code cleaning.
+
+- Usage:
+  - Data can be downloaded from https://drive.google.com/open?id=0Bz8a_Dbh9QhbNUpYQ2N3SGlFaDg
+  - Change the variables ```train_dataset_path``` and ```test_dataset_path``` in file ```siamese-config.yaml``` to point to the right path of the data
+  - Train: Change the variable ```task``` to ```train``` in ```siamese-config.yaml```
+  - Test: Change the variable ```task``` to ```inference``` in ```siamese-config.yaml```
+
+
 PyTorch implementation of the paper [Semantic Text Match for Long-Form Docuemnts (Jiang et al.)](https://pub-tools-public-publication-data.storage.googleapis.com/pdf/99357ca2ef0d89250e8d0aea47607fc4c556aa09.pdf).
 
 ## Install

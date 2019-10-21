@@ -41,7 +41,12 @@ def removeSpanishStopWords(df, stop):
                                                          if word not in stop]))
 
 
-def data_preprocessing():
+def deprecated_data_preprocessing():
+
+    """
+    The model was adapted to work with Yelp polarized data, so the data processing steps should be deprecated.
+    I decided to leave them for future reference
+    """
 
     # Training data
     df_train_en_sp = pd.read_csv('./input/cikm_english_train_20180516.txt', sep='	', header=None,
