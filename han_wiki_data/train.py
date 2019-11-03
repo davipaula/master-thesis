@@ -18,13 +18,13 @@ from json_dataset import JSONDataset
 def get_args():
     parser = argparse.ArgumentParser(
         """Implementation of the model described in the paper: Hierarchical Attention Networks for Document Classification""")
-    parser.add_argument("--batch_size", type=int, default=62)
+    parser.add_argument("--batch_size", type=int, default=24)
     parser.add_argument("--num_epoches", type=int, default=2)  # 100
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--word_hidden_size", type=int, default=50)  # 50
-    parser.add_argument("--sent_hidden_size", type=int, default=14)  # 50
-    parser.add_argument("--paragraph_hidden_size", type=int, default=14)  # 50
+    parser.add_argument("--sent_hidden_size", type=int, default=13)  # 50
+    parser.add_argument("--paragraph_hidden_size", type=int, default=13)  # 50
     parser.add_argument("--es_min_delta", type=float, default=0.0,
                         help="Early stopping's parameter: minimum change loss to qualify as an improvement")
     parser.add_argument("--es_patience", type=int, default=5,

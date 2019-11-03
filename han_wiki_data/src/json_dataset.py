@@ -43,7 +43,9 @@ class JSONDataset(Dataset):
         current_article_text_padded = self.get_padded_document(current_article_text).astype(np.int64)
         previous_article_text_padded = self.get_padded_document(previous_article_text).astype(np.int64)
 
-        return current_article_text_padded, current_article_title, previous_article_text_padded, previous_article_title
+        click_rate = self.click_rate.iloc[index]
+
+        return current_article_text_padded, current_article_title, previous_article_text_padded, previous_article_title, click_rate
 
     def get_padded_document(self, document_encode):
         for paragraph in document_encode:
@@ -63,6 +65,7 @@ class JSONDataset(Dataset):
                                    for _ in range(self.max_length_paragraph - len(document_encode))]
 
             document_encode.extend(extended_paragraphs)
+
         document_encode = [sentences[:self.max_length_word] for sentences in document_encode][
                           :self.max_length_sentences]
 
@@ -78,4 +81,4 @@ if __name__ == '__main__':
     test = JSONDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
     print(len(test))
-    print(test.__getitem__(index=93))
+    print(test.__getitem__(index=95))

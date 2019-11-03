@@ -60,6 +60,7 @@ def get_max_lengths(data_path):
     dataset = pd.read_csv(data_path)
 
     document_encode = dataset['current_article_text']
+    document_encode = pd.concat([document_encode, dataset['previous_article_text']])
 
     for index, article in enumerate(document_encode):
         for paragraph in literal_eval(article):
@@ -141,10 +142,10 @@ def dataset_creation(click_stream_dump_path, dataset_path):
 
 
 if __name__ == "__main__":
-    # word, sent, paragraph = get_max_lengths("../data/simplewiki_small.jsonl")
-    # print(word)
-    # print(sent)
-    # print(paragraph)
+    word, sent, paragraph = get_max_lengths('../data/wiki_df_small.csv')
+    print(word)
+    print(sent)
+    print(paragraph)
 
     cs_dump_path = '../data/clickstream-enwiki-2019-08.tsv'
     docs_path = '../data/simplewiki.jsonl'
