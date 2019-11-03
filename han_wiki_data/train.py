@@ -15,7 +15,6 @@ import numpy as np
 from json_dataset import JSONDataset
 
 
-
 def get_args():
     parser = argparse.ArgumentParser(
         """Implementation of the model described in the paper: Hierarchical Attention Networks for Document Classification""")
@@ -24,16 +23,16 @@ def get_args():
     parser.add_argument("--lr", type=float, default=0.1)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--word_hidden_size", type=int, default=50)  # 50
-    parser.add_argument("--sent_hidden_size", type=int, default=50)  # 50
-    parser.add_argument("--paragraph_hidden_size", type=int, default=50)  # 50
+    parser.add_argument("--sent_hidden_size", type=int, default=14)  # 50
+    parser.add_argument("--paragraph_hidden_size", type=int, default=14)  # 50
     parser.add_argument("--es_min_delta", type=float, default=0.0,
                         help="Early stopping's parameter: minimum change loss to qualify as an improvement")
     parser.add_argument("--es_patience", type=int, default=5,
                         help="Early stopping's parameter: number of epochs with no improvement after which training will be stopped. Set to 0 to disable this technique.")
-    parser.add_argument("--train_set", type=str, default="data/simplewiki_small.jsonl")
-    parser.add_argument("--test_set", type=str, default="data/simplewiki_small.jsonl")
+    parser.add_argument("--train_set", type=str, default="./data/wiki_df_small.csv")
+    parser.add_argument("--test_set", type=str, default="./data/wiki_df_small.csv")
     parser.add_argument("--test_interval", type=int, default=1, help="Number of epoches between testing phases")
-    parser.add_argument("--word2vec_path", type=str, default="data/glove.6B.50d.txt")
+    parser.add_argument("--word2vec_path", type=str, default="./data/glove.6B.50d.txt")
     parser.add_argument("--log_path", type=str, default="tensorboard/han_voc")
     parser.add_argument("--saved_path", type=str, default="trained_models")
     args = parser.parse_args()
@@ -41,7 +40,6 @@ def get_args():
 
 
 def train(opt):
-
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123)
     else:
@@ -56,13 +54,14 @@ def train(opt):
                    "shuffle": False,
                    "drop_last": False}
 
-    max_word_length, max_sent_length = get_max_lengths(opt.train_set)
-    training_set = JSONDataset(opt.train_set, opt.word2vec_path, max_sent_length, max_word_length)
+    max_word_length, max_sent_length, max_paragraph_length = get_max_lengths(opt.train_set)
+    training_set = JSONDataset(opt.train_set, opt.word2vec_path, max_sent_length, max_word_length, max_paragraph_length)
     training_generator = DataLoader(training_set, **training_params)
-    test_set = JSONDataset(opt.test_set, opt.word2vec_path, max_sent_length, max_word_length)
+    test_set = JSONDataset(opt.test_set, opt.word2vec_path, max_sent_length, max_word_length, max_paragraph_length)
     test_generator = DataLoader(test_set, **test_params)
 
-    model = HierAttNet(opt.word_hidden_size, opt.sent_hidden_size, opt.paragraph_hidden_size, opt.batch_size, training_set.num_classes,
+    model = HierAttNet(opt.word_hidden_size, opt.sent_hidden_size, opt.paragraph_hidden_size, opt.batch_size,
+                       training_set.num_classes,
                        opt.word2vec_path, max_sent_length, max_word_length)
 
     if os.path.isdir(opt.log_path):
@@ -82,18 +81,20 @@ def train(opt):
     num_iter_per_epoch = len(training_generator)
 
     for epoch in range(opt.num_epoches):
-        for iter, (feature, label) in enumerate(training_generator):
+        for iter, (current_article_text, current_article_title, previous_article_text, previous_article_title,
+                   click_rate) in enumerate(training_generator):
             if torch.cuda.is_available():
-                feature = feature.cuda()
-                label = label.cuda()
+                current_article_text = current_article_text.cuda()
+                click_rate = click_rate.cuda()
 
             optimizer.zero_grad()
             model._init_hidden_state()
-            predictions = model(feature)
-            loss = criterion(predictions, label)
+            predictions = model(current_article_text)
+            loss = criterion(predictions, click_rate)
             loss.backward()
             optimizer.step()
-            training_metrics = get_evaluation(label.cpu().numpy(), predictions.cpu().detach().numpy(), list_metrics=["accuracy"])
+            training_metrics = get_evaluation(click_rate.cpu().numpy(), predictions.cpu().detach().numpy(),
+                                              list_metrics=["accuracy"])
 
             print("Epoch: {}/{}, Iteration: {}/{}, Lr: {}, Loss: {}, Accuracy: {}".format(
                 epoch + 1,

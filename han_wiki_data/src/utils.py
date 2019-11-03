@@ -9,6 +9,7 @@ import json
 import pandas as pd
 import logging
 from sklearn import metrics
+from ast import literal_eval
 
 csv.field_size_limit(sys.maxsize)
 
@@ -31,7 +32,7 @@ def get_evaluation(y_true, y_prob, list_metrics):
 def matrix_mul(input, weight, bias=False):
     feature_list = []
     for feature in input:
-        feature = torch.mm(feature, weight)
+        feature = torch.matmul(feature, weight)
         if isinstance(bias, torch.nn.parameter.Parameter):
             feature = feature + bias.expand(feature.size()[0], bias.size()[1])
         feature = torch.tanh(feature).unsqueeze(0)
@@ -41,7 +42,6 @@ def matrix_mul(input, weight, bias=False):
 
 
 def element_wise_mul(input1, input2):
-
     feature_list = []
     for feature_1, feature_2 in zip(input1, input2):
         feature_2 = feature_2.unsqueeze(1).expand_as(feature_1)
@@ -55,24 +55,22 @@ def element_wise_mul(input1, input2):
 def get_max_lengths(data_path):
     word_length_list = []
     sent_length_list = []
+    paragraph_length_list = []
 
-    document_encode = []
+    dataset = pd.read_csv(data_path)
 
-    with open(data_path, 'r') as json_file:
-        json_list = list(json_file)
-
-    for json_str in json_list:
-        result = json.loads(json_str)
-        document_encode.append(result['sections'][0]['paragraphs'])
+    document_encode = dataset['current_article_text']
 
     for index, article in enumerate(document_encode):
-        for paragraph in article:
+        for paragraph in literal_eval(article):
             for sentences in paragraph:
                 word_length_list.append(len(sentences))
 
             sent_length_list.append(len(paragraph))
 
-    return max(word_length_list), max(sent_length_list)
+        paragraph_length_list.append(len(literal_eval(article)))
+
+    return max(word_length_list), max(sent_length_list), max(paragraph_length_list)
 
 
 def read_click_stream_dump(click_stream_dump_path):
@@ -110,7 +108,6 @@ def get_available_titles(dataset_path):
 
 
 def normalize_dataset(cdf, available_titles):
-
     # Clicks for that we have matching articles
     fdf = cdf[(cdf['prev'].isin(available_titles)) & (cdf['current'].isin(available_titles))].copy()
 
@@ -128,7 +125,6 @@ def normalize_dataset(cdf, available_titles):
 
 
 def dataset_creation(click_stream_dump_path, dataset_path):
-
     cdf = read_click_stream_dump(click_stream_dump_path)
 
     print(f'Total click pairs: {len(cdf):,}')
@@ -145,9 +141,10 @@ def dataset_creation(click_stream_dump_path, dataset_path):
 
 
 if __name__ == "__main__":
-    word, sent = get_max_lengths("../data/simplewiki_small.jsonl")
-    print(word)
-    print(sent)
+    # word, sent, paragraph = get_max_lengths("../data/simplewiki_small.jsonl")
+    # print(word)
+    # print(sent)
+    # print(paragraph)
 
     cs_dump_path = '../data/clickstream-enwiki-2019-08.tsv'
     docs_path = '../data/simplewiki.jsonl'

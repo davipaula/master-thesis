@@ -34,7 +34,7 @@ class WordAttNet(nn.Module):
 
     def forward(self, input, hidden_state):
 
-        # TODO does it work witbh already embedded words?
+        # TODO does it work with already embedded words?
         output = self.lookup(input)
         feature_output, hidden_state_output = self.gru(output.float(), hidden_state)
         output = matrix_mul(feature_output, self.word_weight, self.word_bias)

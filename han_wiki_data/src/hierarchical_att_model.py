@@ -19,7 +19,7 @@ class HierAttNet(nn.Module):
         self.max_word_length = max_word_length
         self.word_att_net = WordAttNet(pretrained_word2vec_path, word_hidden_size)
         self.sent_att_net = SentAttNet(sent_hidden_size, word_hidden_size, num_classes)
-        self.paragraph_att_net = ParagraphAttNet(paragraph_hidden_size, sent_hidden_size, word_hidden_size, num_classes)
+        self.paragraph_att_net = ParagraphAttNet(paragraph_hidden_size, sent_hidden_size, num_classes)
         self._init_hidden_state()
 
     def _init_hidden_state(self, last_batch_size=None):
@@ -38,11 +38,14 @@ class HierAttNet(nn.Module):
 
     def forward(self, input):
 
-        word_output_list, sentence_output_list = [], []
-
         input = input.permute(1, 0, 2, 3)
 
+        sentence_output_list = []
+
         for paragraph in input:
+
+            word_output_list = []
+
             for word in paragraph:
                 word_output, self.word_hidden_state = self.word_att_net(word.permute(1, 0), self.word_hidden_state)
                 word_output_list.append(word_output)
@@ -55,8 +58,8 @@ class HierAttNet(nn.Module):
 
         # for paragraph in input:
 
-        sentence_output = torch.cat(sentence_output_list, 1)
+        sentence_output = torch.cat(sentence_output_list, 0)
 
-        output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output, self.paragraph_hidden_state)
+        output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output.permute(2, 1, 0), self.paragraph_hidden_state)
 
         return output

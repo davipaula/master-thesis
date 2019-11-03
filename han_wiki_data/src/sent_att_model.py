@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from utils import matrix_mul, element_wise_mul
 
+
 class SentAttNet(nn.Module):
     def __init__(self, sent_hidden_size=50, word_hidden_size=50, num_classes=14):
         super(SentAttNet, self).__init__()
@@ -25,15 +26,14 @@ class SentAttNet(nn.Module):
         self.context_weight.data.normal_(mean, std)
 
     def forward(self, input, hidden_state):
-
-        f_output, h_output = self.gru(input, hidden_state)
-        output = matrix_mul(f_output, self.sent_weight, self.sent_bias)
+        feature_output, hidden_state_output = self.gru(input, hidden_state)
+        output = matrix_mul(feature_output, self.sent_weight, self.sent_bias)
         output = matrix_mul(output, self.context_weight).permute(1, 0)
         output = F.softmax(output)
-        output = element_wise_mul(f_output, output.permute(1, 0)).squeeze(0)
-        output = self.fc(output)
+        output = element_wise_mul(feature_output, output.permute(1, 0))
+        # output = self.fc(output)
 
-        return output, h_output
+        return output, hidden_state_output
 
 
 if __name__ == "__main__":
