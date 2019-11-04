@@ -89,7 +89,7 @@ def train(opt):
 
             optimizer.zero_grad()
             model._init_hidden_state()
-            predictions = model(current_article_text)
+            predictions = model(current_article_text, previous_article_text)
             loss = criterion(predictions, click_rate)
             loss.backward()
             optimizer.step()
