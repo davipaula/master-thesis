@@ -9,7 +9,6 @@ import numpy as np
 
 
 class MyDataset(Dataset):
-
     def __init__(self, data_path, dict_path, max_length_sentences=30, max_length_word=35):
         super(MyDataset, self).__init__()
 

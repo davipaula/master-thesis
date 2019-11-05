@@ -1,170 +1,186 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import os
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import get_max_lengths, get_evaluation
-from dataset import MyDataset
-from hierarchical_att_model import HierAttNet
+from utils import get_max_lengths
+from smash_rnn_model import SmashRNNModel
 from tensorboardX import SummaryWriter
 import argparse
 import shutil
-import numpy as np
-from json_dataset import JSONDataset
+from json_dataset import SMASHDataset
 
 
-def get_args():
-    parser = argparse.ArgumentParser(
-        """Implementation of the model described in the paper: Hierarchical Attention Networks for Document Classification""")
-    parser.add_argument("--batch_size", type=int, default=24)
-    parser.add_argument("--num_epoches", type=int, default=2)  # 100
-    parser.add_argument("--lr", type=float, default=0.1)
-    parser.add_argument("--momentum", type=float, default=0.9)
-    parser.add_argument("--word_hidden_size", type=int, default=50)  # 50
-    parser.add_argument("--sent_hidden_size", type=int, default=13)  # 50
-    parser.add_argument("--paragraph_hidden_size", type=int, default=13)  # 50
-    parser.add_argument("--es_min_delta", type=float, default=0.0,
-                        help="Early stopping's parameter: minimum change loss to qualify as an improvement")
-    parser.add_argument("--es_patience", type=int, default=5,
-                        help="Early stopping's parameter: number of epochs with no improvement after which training will be stopped. Set to 0 to disable this technique.")
-    parser.add_argument("--train_set", type=str, default="./data/wiki_df_small.csv")
-    parser.add_argument("--test_set", type=str, default="./data/wiki_df_small.csv")
-    parser.add_argument("--test_interval", type=int, default=1, help="Number of epoches between testing phases")
-    parser.add_argument("--word2vec_path", type=str, default="./data/glove.6B.50d.txt")
-    parser.add_argument("--log_path", type=str, default="tensorboard/han_voc")
-    parser.add_argument("--saved_path", type=str, default="trained_models")
-    args = parser.parse_args()
-    return args
+class SmashRNN:
+    def __init__(self):
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+        else:
+            torch.manual_seed(123)
 
+        self.opt = self.get_args()
 
-def train(opt):
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(123)
-    else:
-        torch.manual_seed(123)
+        self.output_file = self.create_output_file()
 
-    output_file = open(opt.saved_path + os.sep + "logs.txt", "w")
-    output_file.write("Model's parameters: {}".format(vars(opt)))
-    training_params = {"batch_size": opt.batch_size,
+        training_params = {"batch_size": self.opt.batch_size,
+                           "shuffle": True,
+                           "drop_last": True}
+
+        # TODO work on model parameters (batch size) and change test_params to shuffle: false and drop_last:false
+        test_params = {"batch_size": self.opt.batch_size,
                        "shuffle": True,
                        "drop_last": True}
-    test_params = {"batch_size": opt.batch_size,
-                   "shuffle": False,
-                   "drop_last": False}
 
-    max_word_length, max_sent_length, max_paragraph_length = get_max_lengths(opt.train_set)
-    training_set = JSONDataset(opt.train_set, opt.word2vec_path, max_sent_length, max_word_length, max_paragraph_length)
-    training_generator = DataLoader(training_set, **training_params)
-    test_set = JSONDataset(opt.test_set, opt.word2vec_path, max_sent_length, max_word_length, max_paragraph_length)
-    test_generator = DataLoader(test_set, **test_params)
+        self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(self.opt.train_set)
+        self.training_set = SMASHDataset(self.opt.train_set, self.opt.word2vec_path, self.max_sent_length,
+                                         self.max_word_length,
+                                         self.max_paragraph_length)
+        self.training_generator = DataLoader(self.training_set, **training_params)
+        # TODO create test dataset
+        self.test_set = SMASHDataset(self.opt.test_set, self.opt.word2vec_path, self.max_sent_length,
+                                     self.max_word_length,
+                                     self.max_paragraph_length)
+        self.test_generator = DataLoader(self.test_set, **test_params)
 
-    model = HierAttNet(opt.word_hidden_size, opt.sent_hidden_size, opt.paragraph_hidden_size, opt.batch_size,
-                       training_set.num_classes,
-                       opt.word2vec_path, max_sent_length, max_word_length)
+        self.model = SmashRNNModel(self.opt.word_hidden_size, self.opt.sent_hidden_size, self.opt.paragraph_hidden_size,
+                                   self.opt.batch_size,
+                                   self.training_set.num_classes,
+                                   self.opt.word2vec_path, self.max_sent_length, self.max_word_length)
 
-    if os.path.isdir(opt.log_path):
-        shutil.rmtree(opt.log_path)
-    os.makedirs(opt.log_path)
-    writer = SummaryWriter(opt.log_path)
-    # writer.add_graph(model, torch.zeros(opt.batch_size, max_sent_length, max_word_length))
+        if torch.cuda.is_available():
+            self.model.cuda()
 
-    if torch.cuda.is_available():
-        model.cuda()
+        if os.path.isdir(self.opt.log_path):
+            shutil.rmtree(self.opt.log_path)
+        os.makedirs(self.opt.log_path)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()), lr=opt.lr, momentum=opt.momentum)
-    best_loss = 1e5
-    best_epoch = 0
-    model.train()
-    num_iter_per_epoch = len(training_generator)
+        self.writer = SummaryWriter(self.opt.log_path)
+        # writer.add_graph(model, torch.zeros(opt.batch_size, max_sent_length, max_word_length))
 
-    for epoch in range(opt.num_epoches):
-        for iter, (current_article_text, current_article_title, previous_article_text, previous_article_title,
-                   click_rate) in enumerate(training_generator):
-            if torch.cuda.is_available():
-                current_article_text = current_article_text.cuda()
-                click_rate = click_rate.cuda()
+        self.criterion = nn.MSELoss()
+        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()), lr=self.opt.lr,
+                                         momentum=self.opt.momentum)
+        self.best_loss = 1e5
+        self.best_epoch = 0
+        self.model.train()
+        self.num_iter_per_epoch = len(self.training_generator)
 
-            optimizer.zero_grad()
-            model._init_hidden_state()
-            predictions = model(current_article_text, previous_article_text)
-            loss = criterion(predictions, click_rate)
-            loss.backward()
-            optimizer.step()
-            training_metrics = get_evaluation(click_rate.cpu().numpy(), predictions.cpu().detach().numpy(),
-                                              list_metrics=["accuracy"])
+    def get_args(self):
+        parser = argparse.ArgumentParser(
+            """Implementation of the model described in the paper: Hierarchical Attention Networks for Document 
+            Classification""")
+        parser.add_argument("--batch_size", type=int, default=24)
+        parser.add_argument("--num_epoches", type=int, default=1)  # 100
+        parser.add_argument("--lr", type=float, default=0.1)
+        parser.add_argument("--momentum", type=float, default=0.9)
+        parser.add_argument("--word_hidden_size", type=int, default=50)  # 50
+        parser.add_argument("--sent_hidden_size", type=int, default=13)  # 50
+        parser.add_argument("--paragraph_hidden_size", type=int, default=13)  # 50
+        parser.add_argument("--es_min_delta", type=float, default=0.0,
+                            help="Early stopping's parameter: minimum change loss to qualify as an improvement")
+        parser.add_argument("--es_patience", type=int, default=5,
+                            help="Early stopping's parameter: number of epochs with no improvement after which training"
+                                 " will be stopped. Set to 0 to disable this technique.")
+        parser.add_argument("--train_set", type=str, default="./data/wiki_df_small.csv")
+        parser.add_argument("--test_set", type=str, default="./data/wiki_df_small.csv")
+        parser.add_argument("--test_interval", type=int, default=1, help="Number of epoches between testing phases")
+        parser.add_argument("--word2vec_path", type=str, default="./data/glove.6B.50d.txt")
+        parser.add_argument("--log_path", type=str, default="tensorboard/han_voc")
+        parser.add_argument("--saved_path", type=str, default="trained_models")
+        args = parser.parse_args()
 
-            print("Epoch: {}/{}, Iteration: {}/{}, Lr: {}, Loss: {}, Accuracy: {}".format(
-                epoch + 1,
-                opt.num_epoches,
-                iter + 1,
-                num_iter_per_epoch,
-                optimizer.param_groups[0]['lr'],
-                loss, training_metrics["accuracy"]))
+        return args
 
-            writer.add_scalar('Train/Loss', loss, epoch * num_iter_per_epoch + iter)
-            writer.add_scalar('Train/Accuracy', training_metrics["accuracy"], epoch * num_iter_per_epoch + iter)
-
-        if epoch % opt.test_interval == 0:
-            model.eval()
-            loss_ls = []
-            te_label_ls = []
-            te_pred_ls = []
-
-            for te_feature, te_label in test_generator:
-                num_sample = len(te_label)
-
+    def train(self):
+        for epoch in range(self.opt.num_epoches):
+            for iter, (current_article_text, current_article_title, previous_article_text, previous_article_title,
+                       click_rate) in enumerate(self.training_generator):
                 if torch.cuda.is_available():
-                    te_feature = te_feature.cuda()
-                    te_label = te_label.cuda()
+                    current_article_text = current_article_text.cuda()
+                    previous_article_text = previous_article_text.cuda()
+                    click_rate = click_rate.cuda()
 
-                with torch.no_grad():
-                    model._init_hidden_state(num_sample)
-                    te_predictions = model(te_feature)
+                self.optimizer.zero_grad()
+                self.model._init_hidden_state()
+                predictions = self.model(current_article_text, previous_article_text)
+                loss = self.criterion(predictions, click_rate)
+                loss.backward()
+                self.optimizer.step()
 
-                te_loss = criterion(te_predictions, te_label)
-                loss_ls.append(te_loss * num_sample)
+                print("Epoch: {}/{}, Iteration: {}/{}, Lr: {}, Loss: {}".format(
+                    epoch + 1,
+                    self.opt.num_epoches,
+                    iter + 1,
+                    self.num_iter_per_epoch,
+                    self.optimizer.param_groups[0]['lr'],
+                    loss))
 
-                te_label_ls.extend(te_label.clone().cpu())
-                te_pred_ls.append(te_predictions.clone().cpu())
+                self.writer.add_scalar('Train/Loss', loss, epoch * self.num_iter_per_epoch + iter)
 
-            te_loss = sum(loss_ls) / test_set.__len__()
-            te_pred = torch.cat(te_pred_ls, 0)
-            te_label = np.array(te_label_ls)
+            torch.save(self.model.state_dict(), './model.pt')
+            # TODO implement validation step
+            # TODO move lines below to validation step
 
-            test_metrics = get_evaluation(te_label, te_pred.numpy(), list_metrics=["accuracy", "confusion_matrix"])
+            # self.model.train()
+            #
+            # if test_loss + self.opt.es_min_delta < self.best_loss:
+            #     self.best_loss = test_loss
+            #     self.best_epoch = epoch
+            #     torch.save(self.model, self.opt.saved_path + os.sep + "whole_model_han")
+            #
+            # # Early stopping
+            # if epoch - self.best_epoch > self.opt.es_patience > 0:
+            #     print("Stop training at epoch {}. The lowest loss achieved is {}".format(epoch, test_loss))
+            #     break
 
-            output_file.write(
-                "Epoch: {}/{} \nTest loss: {} Test accuracy: {} \nTest confusion matrix: \n{}\n\n".format(
-                    epoch + 1, opt.num_epoches,
-                    te_loss,
-                    test_metrics["accuracy"],
-                    test_metrics["confusion_matrix"]))
+    def test(self):
+        self.model.load_state_dict(torch.load('./model.pt'))
 
-            print("Epoch: {}/{}, Lr: {}, Loss: {}, Accuracy: {}".format(
-                epoch + 1,
-                opt.num_epoches,
-                optimizer.param_groups[0]['lr'],
-                te_loss, test_metrics["accuracy"]))
+        for epoch in range(self.opt.num_epoches):
+            if epoch % self.opt.test_interval == 0:
+                self.model.eval()
+                loss_list = []
+                predictions_list = []
 
-            writer.add_scalar('Test/Loss', te_loss, epoch)
-            writer.add_scalar('Test/Accuracy', test_metrics["accuracy"], epoch)
+                for current_article_text, current_article_title, previous_article_text, previous_article_title, click_rate in self.test_generator:
+                    if torch.cuda.is_available():
+                        current_article_text = current_article_text.cuda()
+                        previous_article_text = previous_article_text.cuda()
 
-            model.train()
+                    with torch.no_grad():
+                        self.model._init_hidden_state()
+                        predictions = self.model(current_article_text, previous_article_text)
 
-            if te_loss + opt.es_min_delta < best_loss:
-                best_loss = te_loss
-                best_epoch = epoch
-                torch.save(model, opt.saved_path + os.sep + "whole_model_han")
+                    loss = self.criterion(predictions, click_rate)
+                    loss_list.append(loss)
 
-            # Early stopping
-            if epoch - best_epoch > opt.es_patience > 0:
-                print("Stop training at epoch {}. The lowest loss achieved is {}".format(epoch, te_loss))
-                break
+                    predictions_list.append(predictions.clone().cpu())
+
+                test_loss = sum(loss_list) / self.test_set.__len__()
+
+                self.output_file.write(
+                    "Epoch: {}/{} \nTest loss: {}\n\n".format(
+                        epoch + 1, self.opt.num_epoches,
+                        test_loss))
+
+                print("Epoch: {}/{}, Lr: {}, Loss: {}".format(
+                    epoch + 1,
+                    self.opt.num_epoches,
+                    self.optimizer.param_groups[0]['lr'],
+                    test_loss
+                ))
+
+                self.writer.add_scalar('Test/Loss', test_loss, epoch)
+
+    def create_output_file(self):
+        output_file = open(self.opt.saved_path + os.sep + "logs.txt", "w")
+        output_file.write("Model's parameters: {}".format(vars(self.opt)))
+
+        return output_file
 
 
 if __name__ == "__main__":
-    opt = get_args()
-    train(opt)
+    model = SmashRNN()
+    model.test()

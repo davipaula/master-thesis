@@ -9,10 +9,10 @@ from paragraph_att_model import ParagraphAttNet
 from siamese_lstm import SiameseLSTM
 
 
-class HierAttNet(nn.Module):
+class SmashRNNModel(nn.Module):
     def __init__(self, word_hidden_size, sent_hidden_size, paragraph_hidden_size, batch_size, num_classes,
                  pretrained_word2vec_path, max_sent_length, max_word_length):
-        super(HierAttNet, self).__init__()
+        super(SmashRNNModel, self).__init__()
         self.batch_size = batch_size
         self.word_hidden_size = word_hidden_size
         self.sent_hidden_size = sent_hidden_size

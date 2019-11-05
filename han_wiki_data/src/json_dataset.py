@@ -10,10 +10,10 @@ import utils
 from ast import literal_eval
 
 
-class JSONDataset(Dataset):
+class SMASHDataset(Dataset):
 
     def __init__(self, data_path, dict_path, max_length_sentences=6, max_length_word=18, max_length_paragraph=10):
-        super(JSONDataset, self).__init__()
+        super(SMASHDataset, self).__init__()
 
         dataset = pd.read_csv(data_path)
 
@@ -78,7 +78,7 @@ class JSONDataset(Dataset):
 if __name__ == '__main__':
     wiki_data_path = '../data/wiki_df_small.csv'
     max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
-    test = JSONDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
-                       max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
+    test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
+                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
     print(len(test))
     print(test.__getitem__(index=95))

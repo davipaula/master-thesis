@@ -14,7 +14,7 @@ class SiameseLSTM(nn.Module):
         self.input_dim = 5 * 1 * 150
 
         self.mlp_dim = int(self.input_dim / 2)
-        self.out_dim = 2
+        self.out_dim = 1
 
         self.classifier = nn.Sequential(
             nn.Linear(self.input_dim, self.mlp_dim),
