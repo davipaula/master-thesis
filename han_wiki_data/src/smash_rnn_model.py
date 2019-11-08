@@ -18,6 +18,8 @@ class SmashRNNModel(nn.Module):
         self.sent_hidden_size = sent_hidden_size
         self.max_sent_length = max_sent_length
         self.max_word_length = max_word_length
+
+        # TODO should I use nn.sequential to somehow concatenate the layers?
         self.word_att_net = WordAttNet(pretrained_word2vec_path, word_hidden_size)
         self.sent_att_net = SentAttNet(sent_hidden_size, word_hidden_size, num_classes)
         self.paragraph_att_net = ParagraphAttNet(paragraph_hidden_size, sent_hidden_size, num_classes)

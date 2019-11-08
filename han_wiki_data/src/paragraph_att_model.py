@@ -10,6 +10,7 @@ from utils import matrix_mul, element_wise_mul
 class ParagraphAttNet(nn.Module):
     def __init__(self, paragraph_hidden_size=14, sent_hidden_size=62, num_classes=14):
         super(ParagraphAttNet, self).__init__()
+        # TODO the parameters are hardcoded - paragraph_hidden_size and sent_hidden_size match both
 
         self.paragraph_weight = nn.Parameter(torch.Tensor(2 * paragraph_hidden_size, 2 * paragraph_hidden_size))
         self.paragraph_bias = nn.Parameter(torch.Tensor(1, 2 * paragraph_hidden_size))
@@ -31,6 +32,8 @@ class ParagraphAttNet(nn.Module):
         output = matrix_mul(output, self.context_weight).permute(1, 0)
         output = F.softmax(output)
         output = element_wise_mul(f_output, output.permute(1, 0)).squeeze(0)
+
+        # TODO should this model have an FC? If so, how to configure it?
         # output = self.fc(output)
 
         return output, h_output

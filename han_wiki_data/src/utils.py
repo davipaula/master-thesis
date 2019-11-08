@@ -74,10 +74,10 @@ def get_max_lengths(data_path):
 
 
 if __name__ == "__main__":
-    # word, sent, paragraph = get_max_lengths('../data/wiki_df_small.csv')
-    # print(word)
-    # print(sent)
-    # print(paragraph)
+    word, sent, paragraph = get_max_lengths('../data/wiki_df_small.csv')
+    print(word)
+    print(sent)
+    print(paragraph)
 
     click_stream_dump_path = '../data/clickstream-enwiki-2019-08.tsv'
     wiki_documents_path = '../data/simplewiki.jsonl'
