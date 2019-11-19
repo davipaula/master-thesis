@@ -42,8 +42,8 @@ class SmashRNNModel(nn.Module):
 
     def forward(self, current_document, previous_document):
         # TODO remove permutes and change batch_first=True
-        current_document = current_document.permute(1, 0, 2, 3)
-        previous_document = previous_document.permute(1, 0, 2, 3)
+        current_document = current_document
+        previous_document = previous_document
 
         current_document_output = self.get_document_output(current_document)
         previous_document_output = self.get_document_output(previous_document)
@@ -58,16 +58,16 @@ class SmashRNNModel(nn.Module):
             word_output_list = []
 
             for word in paragraph:
-                word_output, self.word_hidden_state = self.word_att_net(word.permute(1, 0), self.word_hidden_state)
+                word_output, self.word_hidden_state = self.word_att_net(word, self.word_hidden_state)
                 word_output_list.append(word_output)
 
             word_output = torch.cat(word_output_list, 0)
 
-            sentence_output, self.sent_hidden_state = self.sent_att_net(word_output.permute(1, 0, 2),
+            sentence_output, self.sent_hidden_state = self.sent_att_net(word_output,
                                                                         self.sent_hidden_state)
             sentence_output_list.append(sentence_output)
         # for paragraph in input:
         sentence_output = torch.cat(sentence_output_list, 0)
-        output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output.permute(2, 1, 0),
+        output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output,
                                                                      self.paragraph_hidden_state)
         return output

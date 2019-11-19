@@ -24,7 +24,7 @@ class WordAttNet(nn.Module):
         self.context_weight = nn.Parameter(torch.Tensor(2 * hidden_size, 1))
 
         self.lookup = nn.Embedding(num_embeddings=dict_len, embedding_dim=embed_size).from_pretrained(dict)
-        self.gru = nn.GRU(embed_size, hidden_size, bidirectional=True)
+        self.gru = nn.GRU(embed_size, hidden_size, bidirectional=True, batch_first=True)
         self._create_weights(mean=0.0, std=0.05)
 
     def _create_weights(self, mean=0.0, std=0.05):
@@ -32,13 +32,12 @@ class WordAttNet(nn.Module):
         self.context_weight.data.normal_(mean, std)
 
     def forward(self, input, hidden_state):
-        # TODO does it work with already embedded words?
         output = self.lookup(input)
         feature_output, hidden_state_output = self.gru(output.float(), hidden_state)
         output = matrix_mul(feature_output, self.word_weight, self.word_bias)
-        output = matrix_mul(output, self.context_weight).permute(1, 0)
+        output = matrix_mul(output, self.context_weight)
         output = F.softmax(output)
-        output = element_wise_mul(feature_output, output.permute(1, 0))
+        output = element_wise_mul(feature_output, output)
 
         return output, hidden_state_output
 

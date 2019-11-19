@@ -121,27 +121,6 @@ class SmashRNN:
         self.model.eval()
         self.run_model(1, 'test')
 
-    def should_run_validation(self, epoch):
-        return (epoch % self.opt.validation_interval) == 0
-
-    def get_predictions(self, current_article_text, previous_article_text):
-        self.model._init_hidden_state()
-        predictions = self.model(current_article_text, previous_article_text)
-
-        return predictions
-
-    def is_best_loss(self, loss):
-        return (loss + self.opt.es_min_delta) < self.best_loss
-
-    def save_model(self, loss, epoch):
-        self.best_loss = loss
-        self.best_epoch = epoch
-
-        torch.save(self.model.state_dict(), './model.pt')
-
-    def should_stop(self, epoch):
-        return epoch - self.best_epoch > self.opt.es_patience > 0
-
     def run_model(self, epoch, step='train'):
         loss_list = []
         predictions_list = []
@@ -197,6 +176,27 @@ class SmashRNN:
         self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
         return loss
+
+    def should_run_validation(self, epoch):
+        return (epoch % self.opt.validation_interval) == 0
+
+    def get_predictions(self, current_article_text, previous_article_text):
+        self.model._init_hidden_state()
+        predictions = self.model(current_article_text, previous_article_text)
+
+        return predictions
+
+    def is_best_loss(self, loss):
+        return (loss + self.opt.es_min_delta) < self.best_loss
+
+    def save_model(self, loss, epoch):
+        self.best_loss = loss
+        self.best_epoch = epoch
+
+        torch.save(self.model.state_dict(), './model.pt')
+
+    def should_stop(self, epoch):
+        return epoch - self.best_epoch > self.opt.es_patience > 0
 
     def create_output_file(self):
         output_file = open(self.opt.saved_path + os.sep + 'logs.txt', 'w')

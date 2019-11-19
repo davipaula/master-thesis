@@ -27,11 +27,11 @@ class ParagraphAttNet(nn.Module):
         self.context_weight.data.normal_(mean, std)
 
     def forward(self, input, hidden_state):
-        f_output, h_output = self.gru(input, hidden_state)
+        f_output, h_output = self.gru(input, None)
         output = matrix_mul(f_output, self.paragraph_weight, self.paragraph_bias)
-        output = matrix_mul(output, self.context_weight).permute(1, 0)
+        output = matrix_mul(output, self.context_weight)
         output = F.softmax(output)
-        output = element_wise_mul(f_output, output.permute(1, 0)).squeeze(0)
+        output = element_wise_mul(f_output, output).squeeze(0)
 
         # TODO should this model have an FC? If so, how to configure it?
         # output = self.fc(output)
