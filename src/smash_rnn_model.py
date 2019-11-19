@@ -7,6 +7,7 @@ from sent_att_model import SentAttNet
 from word_att_model import WordAttNet
 from paragraph_att_model import ParagraphAttNet
 from siamese_lstm import SiameseLSTM
+import numpy as np
 
 
 class SmashRNNModel(nn.Module):
@@ -19,14 +20,12 @@ class SmashRNNModel(nn.Module):
         self.max_sent_length = max_sent_length
         self.max_word_length = max_word_length
 
-        # TODO should I use nn.sequential to somehow concatenate the layers?
         self.word_att_net = WordAttNet(pretrained_word2vec_path, word_hidden_size)
         self.sent_att_net = SentAttNet(sent_hidden_size, word_hidden_size, num_classes)
         self.paragraph_att_net = ParagraphAttNet(paragraph_hidden_size, sent_hidden_size, num_classes)
         self.siamese_lstm = SiameseLSTM()
         self._init_hidden_state()
 
-        # self.input_dim = 5 * self.encoder.direction * self.encoder.hidden_size
         self.input_dim = 2 * paragraph_hidden_size * 3   # 3 = number of concatenations
 
         # Not mentioned in the paper.
@@ -59,13 +58,14 @@ class SmashRNNModel(nn.Module):
         print()
 
     def forward(self, current_document, previous_document):
-        # TODO remove permutes and change batch_first=True
-        current_document = current_document
-        previous_document = previous_document
+
+        # word_representation_output = self.get_word_representation(current_document)
+
+        sentence_representation_output = self.get_sentence_representation(current_document)
 
         # Generate representations at word, sentence and paragraph level
-        current_document_output = self.get_document_output(current_document)
-        previous_document_output = self.get_document_output(previous_document)
+        current_document_output = self.get_document_representation(current_document)
+        previous_document_output = self.get_document_representation(previous_document)
 
         # utilize these two encoded vectors
         features = torch.cat((current_document_output,
@@ -79,11 +79,10 @@ class SmashRNNModel(nn.Module):
 
         return predicted_ctr
 
-    def get_document_output(self, document):
+    def get_document_representation(self, document):
         sentence_output_list = []
 
         for paragraph in document:
-
             word_output_list = []
 
             for word in paragraph:
@@ -100,3 +99,19 @@ class SmashRNNModel(nn.Module):
         output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output,
                                                                      self.paragraph_hidden_state)
         return output
+
+    def get_word_representation(self, document):
+        # Transforms document into a long sequence of words
+        document = document.view(1, np.prod(document.shape))
+
+        word_output, _ = self.word_att_net(document, self.word_hidden_state)
+
+        return word_output
+
+    def get_sentence_representation(self, document):
+        # Transforms paragraphs into a sequence of words
+        document = document.view(document.shape[0], document.shape[1], document.shape[2] * document.shape[3])
+
+        sentence_output = self.get_document_representation(document)
+
+        return sentence_output

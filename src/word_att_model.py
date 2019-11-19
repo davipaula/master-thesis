@@ -32,8 +32,14 @@ class WordAttNet(nn.Module):
         self.context_weight.data.normal_(mean, std)
 
     def forward(self, input, hidden_state):
+        if len(input.shape) == 1:
+            input = input.unsqueeze(0)
+
         output = self.lookup(input)
-        feature_output, hidden_state_output = self.gru(output.float(), hidden_state)
+        # if len(output.shape) == 2:
+        #     output = output.unsqueeze(2)
+
+        feature_output, hidden_state_output = self.gru(output.float(), None)
         # This implementation uses the feature output. Paper uses hidden state
         output = matrix_mul(feature_output, self.word_weight, self.word_bias)
 
