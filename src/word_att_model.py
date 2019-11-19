@@ -34,9 +34,12 @@ class WordAttNet(nn.Module):
     def forward(self, input, hidden_state):
         output = self.lookup(input)
         feature_output, hidden_state_output = self.gru(output.float(), hidden_state)
+        # This implementation uses the feature output. Paper uses hidden state
         output = matrix_mul(feature_output, self.word_weight, self.word_bias)
+
         output = matrix_mul(output, self.context_weight)
         output = F.softmax(output)
+
         output = element_wise_mul(feature_output, output)
 
         return output, hidden_state_output

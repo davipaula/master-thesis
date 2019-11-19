@@ -26,6 +26,21 @@ class SmashRNNModel(nn.Module):
         self.siamese_lstm = SiameseLSTM()
         self._init_hidden_state()
 
+        # self.input_dim = 5 * self.encoder.direction * self.encoder.hidden_size
+        self.input_dim = 2 * paragraph_hidden_size * 3   # 3 = number of concatenations
+
+        # Not mentioned in the paper.
+        self.mlp_dim = int(self.input_dim / 2)
+        self.out_dim = 1
+
+        self.classifier = nn.Sequential(
+            nn.Linear(self.input_dim, self.mlp_dim),
+            nn.ReLU(),
+            nn.Linear(self.mlp_dim, self.out_dim)
+        )
+
+        self.sigmoid = nn.Sigmoid()
+
     def _init_hidden_state(self, last_batch_size=None):
         if last_batch_size:
             batch_size = last_batch_size
@@ -40,15 +55,29 @@ class SmashRNNModel(nn.Module):
             self.word_hidden_state = self.word_hidden_state.cuda()
             self.sent_hidden_state = self.sent_hidden_state.cuda()
 
+    def siamese(self):
+        print()
+
     def forward(self, current_document, previous_document):
         # TODO remove permutes and change batch_first=True
         current_document = current_document
         previous_document = previous_document
 
+        # Generate representations at word, sentence and paragraph level
         current_document_output = self.get_document_output(current_document)
         previous_document_output = self.get_document_output(previous_document)
 
-        return self.siamese_lstm(current_document_output, previous_document_output)
+        # utilize these two encoded vectors
+        features = torch.cat((current_document_output,
+                              previous_document_output,
+                              torch.abs(current_document_output - previous_document_output),
+                              ), 1)
+
+        output = self.classifier(features)
+
+        predicted_ctr = self.sigmoid(output)
+
+        return predicted_ctr
 
     def get_document_output(self, document):
         sentence_output_list = []

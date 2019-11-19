@@ -16,7 +16,7 @@ class ParagraphAttNet(nn.Module):
         self.paragraph_bias = nn.Parameter(torch.Tensor(1, 2 * paragraph_hidden_size))
         self.context_weight = nn.Parameter(torch.Tensor(2 * paragraph_hidden_size, 1))
 
-        self.gru = nn.GRU(sent_hidden_size, paragraph_hidden_size, bidirectional=True, batch_first=True)
+        self.gru = nn.GRU(2 * sent_hidden_size, paragraph_hidden_size, bidirectional=True, batch_first=True)
         self.fc = nn.Linear(paragraph_hidden_size, num_classes)
         # self.sent_softmax = nn.Softmax()
         # self.fc_softmax = nn.Softmax()
