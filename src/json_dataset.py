@@ -8,6 +8,7 @@ import numpy as np
 import json
 import utils
 from ast import literal_eval
+import torch
 
 
 class SMASHDataset(Dataset):
@@ -40,15 +41,46 @@ class SMASHDataset(Dataset):
         previous_article_text = literal_eval(self.previous_article_text.iloc[index])
         previous_article_title = self.previous_article_title.iloc[index]
 
+        current_article_structure = self.get_document_structure(current_article_text)
+        previous_article_structure = self.get_document_structure(previous_article_text)
+
         current_article_text_padded = self.get_padded_document(current_article_text).astype(np.int64)
         previous_article_text_padded = self.get_padded_document(previous_article_text).astype(np.int64)
 
         click_rate = self.click_rate.iloc[index]
 
-        return current_article_text_padded, current_article_title, previous_article_text_padded, previous_article_title, click_rate
+        return current_article_text_padded, \
+               current_article_structure, \
+               current_article_title, \
+               previous_article_text_padded, \
+               previous_article_structure,\
+               previous_article_title, \
+               click_rate
 
-    def get_padded_document(self, document_encode):
-        for paragraph in document_encode:
+    def get_document_structure(self, document):
+        paragraphs_per_document = len(document)
+        sentences_per_paragraph = []
+        words_per_sentence = []
+        for paragraph in document:
+            words_per_sentence_in_paragraph = []
+            for sentence in paragraph:
+                words_per_sentence_in_paragraph.append(len(sentence))
+            words_per_sentence.append(words_per_sentence_in_paragraph)
+            sentences_per_paragraph.append(len(paragraph))
+
+        document_structure = {
+            'paragraphs_per_document': paragraphs_per_document,
+            'sentences_per_paragraph': sentences_per_paragraph,
+            'words_per_sentence': words_per_sentence
+        }
+
+        return document_structure
+
+    def get_document(self, index):
+        return literal_eval(self.current_article_text.iloc[index])
+
+    def get_padded_document(self, document):
+        for paragraph in document:
             for sentences in paragraph:
                 if len(sentences) < self.max_length_word:
                     extended_words = [-1 for _ in range(self.max_length_word - len(sentences))]
@@ -59,20 +91,20 @@ class SMASHDataset(Dataset):
                                       range(self.max_length_sentences - len(paragraph))]
                 paragraph.extend(extended_sentences)
 
-        if len(document_encode) < self.max_length_paragraph:
+        if len(document) < self.max_length_paragraph:
             extended_paragraphs = [[[-1 for _ in range(self.max_length_word)]
                                     for _ in range(self.max_length_sentences)]
-                                   for _ in range(self.max_length_paragraph - len(document_encode))]
+                                   for _ in range(self.max_length_paragraph - len(document))]
 
-            document_encode.extend(extended_paragraphs)
+            document.extend(extended_paragraphs)
 
-        document_encode = [sentences[:self.max_length_word] for sentences in document_encode][
+        document = [sentences[:self.max_length_word] for sentences in document][
                           :self.max_length_sentences]
 
-        document_encode = np.stack(arrays=document_encode, axis=0)
-        document_encode += 1
+        document = np.stack(arrays=document, axis=0)
+        document += 1
 
-        return document_encode
+        return document
 
 
 if __name__ == '__main__':
@@ -80,5 +112,6 @@ if __name__ == '__main__':
     max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
     test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
                         max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
-    print(len(test))
-    print(test.__getitem__(index=95))
+
+    document_structure = test.get_document_structure(test.get_padded_document(test.get_document(95)))
+    print(document_structure)

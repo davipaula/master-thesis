@@ -4,6 +4,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
+
 from utils import matrix_mul, element_wise_mul
 import pandas as pd
 import numpy as np
@@ -27,56 +29,79 @@ class WordAttNet(nn.Module):
         self.gru = nn.GRU(embed_size, hidden_size, bidirectional=True, batch_first=True)
         self._create_weights(mean=0.0, std=0.05)
 
+        self.word_attention = nn.Linear(2 * hidden_size, 50)
+
+        # Word context vector to take dot-product with
+        self.word_context_vector = nn.Linear(50, 1, bias=False)
+
+        torch.set_printoptions(threshold=10000)
+
     def _create_weights(self, mean=0.0, std=0.05):
         self.word_weight.data.normal_(mean, std)
         self.context_weight.data.normal_(mean, std)
 
-    def forward(self, input, hidden_state):
-        if len(input.shape) == 1:
-            input = input.unsqueeze(0)
+    def forward(self, sentence, words_per_sentence):
+        # if len(input.shape) == 1:
+        #     input = input.unsqueeze(0)
 
-        output = self.lookup(input)
-        # if len(output.shape) == 2:
-        #     output = output.unsqueeze(2)
+        sentence_embeddings = self.lookup(sentence)
+        # Adding a third dimension to the tensor
+        # sentence_embeddings = sentence_embeddings.view(1, 54, 50)
 
-        feature_output, hidden_state_output = self.gru(output.float(), None)
-        # This implementation uses the feature output. Paper uses hidden state
-        output = matrix_mul(feature_output, self.word_weight, self.word_bias)
+        packed_sentence_embeddings = pack_padded_sequence(sentence_embeddings,
+                                                          lengths=torch.LongTensor(words_per_sentence),
+                                                          batch_first=True,
+                                                          enforce_sorted=False)
 
-        output = matrix_mul(output, self.context_weight)
-        output = F.softmax(output)
+        words_representation, _ = self.gru(packed_sentence_embeddings.float(), None)
+        # This implementation uses the feature sentence_embeddings. Paper uses hidden state
+        word_attention = self.word_attention(words_representation.data)
+        word_attention = torch.tanh(word_attention)
 
-        output = element_wise_mul(feature_output, output)
+        # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
+        word_attention = self.word_context_vector(word_attention).squeeze(1)  # (n_words)
 
-        return output, hidden_state_output
+        # Compute softmax over the dot-product manually
+        # Manually because they have to be computed only over words in the same sentence
+
+        # First, take the exponent
+        max_value = word_attention.max()  # scalar, for numerical stability during exponent calculation
+        word_attention = torch.exp(word_attention - max_value)  # (n_words)
+
+        # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
+        word_attention, _ = pad_packed_sequence(PackedSequence(data=word_attention,
+                                                               batch_sizes=words_representation.batch_sizes,
+                                                               sorted_indices=words_representation.sorted_indices,
+                                                               unsorted_indices=words_representation.unsorted_indices),
+                                                batch_first=True)  # (n_sentences, max(words_per_sentence))
+
+        # Calculate softmax values as now words are arranged in their respective sentences
+        word_alphas = word_attention / torch.sum(word_attention, dim=1, keepdim=True)  # (n_sentences, max(words_per_sentence))
+
+        # Similarly re-arrange word-level RNN outputs as sentences by re-padding with 0s (WORDS -> SENTENCES)
+        sentences, _ = pad_packed_sequence(words_representation,
+                                           batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
+
+        # Find sentence embeddings
+        sentences = sentences.float() * word_alphas.unsqueeze(2)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
+
+        # gets the representation for the sentence
+        sentences = sentences.sum()  # (n_sentences, 2 * word_rnn_size)
+
+        return sentences
+
+
+def test_model():
+    sentence = torch.LongTensor([8, 9354, 31, 8, 301, 39, 13856, 154, 47, 65, 4, 27, 215, 5, 8, 2831, 0, 0, 0, 0,
+                                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                 0, 0, 0, 0, 0])
+
+    word_model = WordAttNet("../data/glove.6B.50d.txt")
+
+    output = word_model(sentence)
+
+    print(output)
 
 
 if __name__ == "__main__":
-    abc = WordAttNet("../data/glove.6B.50d.txt")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    test_model()

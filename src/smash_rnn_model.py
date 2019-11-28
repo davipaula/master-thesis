@@ -26,19 +26,21 @@ class SmashRNNModel(nn.Module):
         self.siamese_lstm = SiameseLSTM()
         self._init_hidden_state()
 
-        self.input_dim = 2 * paragraph_hidden_size * 3   # 3 = number of concatenations
+        self.input_dim = 2 * paragraph_hidden_size * 3  # 3 = number of concatenations
 
         # Not mentioned in the paper.
         self.mlp_dim = int(self.input_dim / 2)
         self.out_dim = 1
 
+        # These layers compute the semantic similarity between two documents
         self.classifier = nn.Sequential(
             nn.Linear(self.input_dim, self.mlp_dim),
             nn.ReLU(),
-            nn.Linear(self.mlp_dim, self.out_dim)
+            nn.Linear(self.mlp_dim, self.out_dim),
+            nn.Sigmoid()
         )
 
-        self.sigmoid = nn.Sigmoid()
+        torch.set_printoptions(threshold=10000)
 
     def _init_hidden_state(self, last_batch_size=None):
         if last_batch_size:
@@ -57,59 +59,64 @@ class SmashRNNModel(nn.Module):
     def siamese(self):
         print()
 
-    def forward(self, current_document, previous_document):
+    def forward(self, current_document, current_document_structure, previous_document, previous_document_structure):
 
         # word_representation_output = self.get_word_representation(current_document)
 
-        sentence_representation_output = self.get_sentence_representation(current_document)
+        # sentence_representation_output = self.get_sentence_representation(current_document)
 
-        # Generate representations at word, sentence and paragraph level
-        current_document_output = self.get_document_representation(current_document)
-        previous_document_output = self.get_document_representation(previous_document)
+        # Generate representations at word, sentence and paragraph level. This is the MASH part of the model
+        current_document_representation = self.get_document_representation(current_document, current_document_structure)
+        previous_document_representation = self.get_document_representation(previous_document, previous_document_structure)
 
-        # utilize these two encoded vectors
-        features = torch.cat((current_document_output,
-                              previous_document_output,
-                              torch.abs(current_document_output - previous_document_output),
-                              ), 1)
+        # Concatenates document representations. This is the siamese part of the model
+        concatenated_documents_representation = torch.cat((current_document_representation,
+                                                           previous_document_representation,
+                                                           torch.abs(
+                                                               current_document_representation - previous_document_representation),
+                                                           ), 1)
 
-        output = self.classifier(features)
-
-        predicted_ctr = self.sigmoid(output)
+        predicted_ctr = self.classifier(concatenated_documents_representation)
 
         return predicted_ctr
 
-    def get_document_representation(self, document):
+    def get_document_representation(self, batch, document_structure):
+        paragraphs_per_document = document_structure['paragraphs_per_document']
+        sentences_per_paragraph = document_structure['sentences_per_paragraph']
+        words_per_sentence = document_structure['words_per_sentence']
+
         sentence_output_list = []
 
-        for paragraph in document:
-            word_output_list = []
+        for document in batch:
+            for paragraph in document:
+                word_output_list = []
 
-            for word in paragraph:
-                word_output, self.word_hidden_state = self.word_att_net(word, self.word_hidden_state)
-                word_output_list.append(word_output)
+                for sentence in paragraph:
+                    word_output = self.word_att_net(sentence, words_per_sentence)
+                    word_output_list.append(word_output)
 
-            word_output = torch.cat(word_output_list, 0)
+                word_output = torch.cat(word_output_list, 0)
 
-            sentence_output, self.sent_hidden_state = self.sent_att_net(word_output,
-                                                                        self.sent_hidden_state)
-            sentence_output_list.append(sentence_output)
-        # for paragraph in input:
-        sentence_output = torch.cat(sentence_output_list, 0)
-        output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output,
-                                                                     self.paragraph_hidden_state)
+                sentence_output, self.sent_hidden_state = self.sent_att_net(word_output,
+                                                                            self.sent_hidden_state)
+                sentence_output_list.append(sentence_output)
+            # for paragraph in input:
+            sentence_output = torch.cat(sentence_output_list, 0)
+            output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output,
+                                                                         self.paragraph_hidden_state)
         return output
 
     def get_word_representation(self, document):
-        # Transforms document into a long sequence of words
+        # Removes paragraphs and sentences structures, transforming the document into a long sequence of words
         document = document.view(1, np.prod(document.shape))
 
-        word_output, _ = self.word_att_net(document, self.word_hidden_state)
+        word_output = self.word_att_net(document)
 
         return word_output
 
     def get_sentence_representation(self, document):
-        # Transforms paragraphs into a sequence of words
+        # Removes the sentences structure, transforming the document into a set of paragraphs containing
+        # a long sequence of words
         document = document.view(document.shape[0], document.shape[1], document.shape[2] * document.shape[3])
 
         sentence_output = self.get_document_representation(document)

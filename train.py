@@ -71,7 +71,7 @@ class SmashRNN:
         parser = argparse.ArgumentParser(
             '''Implementation of the model described in the paper: Hierarchical Attention Networks for Document 
             Classification''')
-        parser.add_argument('--batch_size', type=int, default=24)
+        parser.add_argument('--batch_size', type=int, default=1)
         parser.add_argument('--num_epoches', type=int, default=1)  # 100
         parser.add_argument('--lr', type=float, default=0.1)
         parser.add_argument('--momentum', type=float, default=0.9)
@@ -136,7 +136,7 @@ class SmashRNN:
             generator = self.training_generator
             dataset = self.training_dataset
 
-        for current_article_text, current_article_title, previous_article_text, previous_article_title, click_rate in generator:
+        for current_article_text, current_article_structure, current_article_title, previous_article_text, previous_article_structure, previous_article_title, click_rate in generator:
             if torch.cuda.is_available():
                 current_article_text = current_article_text.cuda()
                 previous_article_text = previous_article_text.cuda()
@@ -144,13 +144,13 @@ class SmashRNN:
 
             if step == 'train':
                 self.optimizer.zero_grad()
-                predictions = self.get_predictions(current_article_text, previous_article_text)
+                predictions = self.get_predictions(current_article_text, current_article_structure, previous_article_text, previous_article_structure)
                 loss = self.criterion(predictions, click_rate)
                 loss.backward()
                 self.optimizer.step()
             else:
                 with torch.no_grad():
-                    predictions = self.get_predictions(current_article_text, previous_article_text)
+                    predictions = self.get_predictions(current_article_text, current_article_structure, previous_article_text, previous_article_structure)
                 loss = self.criterion(predictions, click_rate)
 
             loss_list.append(loss)
@@ -180,9 +180,9 @@ class SmashRNN:
     def should_run_validation(self, epoch):
         return (epoch % self.opt.validation_interval) == 0
 
-    def get_predictions(self, current_article_text, previous_article_text):
+    def get_predictions(self, current_article_text, current_article_structure, previous_article_text, previous_article_structure):
         self.model._init_hidden_state()
-        predictions = self.model(current_article_text, previous_article_text)
+        predictions = self.model(current_article_text, current_article_structure, previous_article_text, previous_article_structure)
 
         return predictions
 
