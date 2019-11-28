@@ -61,8 +61,9 @@ class SmashRNNModel(nn.Module):
 
     def forward(self, current_document, current_document_structure, previous_document, previous_document_structure):
 
+        # Adapt both functions to use document structure
         # word_representation_output = self.get_word_representation(current_document)
-
+        #
         # sentence_representation_output = self.get_sentence_representation(current_document)
 
         # Generate representations at word, sentence and paragraph level. This is the MASH part of the model
@@ -100,10 +101,9 @@ class SmashRNNModel(nn.Module):
                 sentence_output, self.sent_hidden_state = self.sent_att_net(word_output,
                                                                             self.sent_hidden_state)
                 sentence_output_list.append(sentence_output)
-            # for paragraph in input:
-            sentence_output = torch.cat(sentence_output_list, 0)
-            output, self.paragraph_hidden_state = self.paragraph_att_net(sentence_output,
-                                                                         self.paragraph_hidden_state)
+
+        sentence_output = torch.cat(sentence_output_list, 0)
+        output, _ = self.paragraph_att_net(sentence_output, None)
         return output
 
     def get_word_representation(self, document):

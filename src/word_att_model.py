@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
-
 from utils import matrix_mul, element_wise_mul
 import pandas as pd
 import numpy as np
@@ -20,6 +19,8 @@ class WordAttNet(nn.Module):
         dict_len += 1
         unknown_word = np.zeros((1, embed_size))
         dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
+
+        self.word_hidden_state = torch.zeros(2, 1, hidden_size)
 
         self.word_weight = nn.Parameter(torch.Tensor(2 * hidden_size, 2 * hidden_size))
         self.word_bias = nn.Parameter(torch.Tensor(1, 2 * hidden_size))
@@ -41,19 +42,17 @@ class WordAttNet(nn.Module):
         self.context_weight.data.normal_(mean, std)
 
     def forward(self, sentence, words_per_sentence):
-        # if len(input.shape) == 1:
-        #     input = input.unsqueeze(0)
+        # if len(sentence.shape) == 1:
+        #     sentence = sentence.unsqueeze(0)
 
         sentence_embeddings = self.lookup(sentence)
-        # Adding a third dimension to the tensor
-        # sentence_embeddings = sentence_embeddings.view(1, 54, 50)
 
         packed_sentence_embeddings = pack_padded_sequence(sentence_embeddings,
                                                           lengths=torch.LongTensor(words_per_sentence),
                                                           batch_first=True,
                                                           enforce_sorted=False)
 
-        words_representation, _ = self.gru(packed_sentence_embeddings.float(), None)
+        words_representation, _ = self.gru(packed_sentence_embeddings.float())
         # This implementation uses the feature sentence_embeddings. Paper uses hidden state
         word_attention = self.word_attention(words_representation.data)
         word_attention = torch.tanh(word_attention)
@@ -67,6 +66,7 @@ class WordAttNet(nn.Module):
         # First, take the exponent
         max_value = word_attention.max()  # scalar, for numerical stability during exponent calculation
         word_attention = torch.exp(word_attention - max_value)  # (n_words)
+        print(words_representation.data.sum())
 
         # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
         word_attention, _ = pad_packed_sequence(PackedSequence(data=word_attention,
@@ -96,9 +96,11 @@ def test_model():
                                  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                                  0, 0, 0, 0, 0])
 
+    sentence = sentence.view(1, 54)
+
     word_model = WordAttNet("../data/glove.6B.50d.txt")
 
-    output = word_model(sentence)
+    output = word_model(sentence, [16])
 
     print(output)
 
