@@ -3,6 +3,8 @@
 """
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence
+
 from sent_att_model import SentAttNet
 from word_att_model import WordAttNet
 from paragraph_att_model import ParagraphAttNet
@@ -89,17 +91,38 @@ class SmashRNNModel(nn.Module):
         sentence_output_list = []
 
         for document in batch:
-            for paragraph in document:
-                word_output_list = []
+            for i, paragraph in enumerate(document):
+                # word_output_list = []
+                #
+                # for j, sentence in enumerate(paragraph):
+                #     if sentence.sum() == 0:
+                #         break
+                #
+                #     word_output = self.word_att_net(sentence, words_per_sentence[i].squeeze(0)[j])
+                #     word_output_list.append(word_output)
 
-                for sentence in paragraph:
-                    word_output = self.word_att_net(sentence, words_per_sentence)
-                    word_output_list.append(word_output)
+                # Re-arrange as sentences by removing sentence-pads (DOCUMENTS -> SENTENCES)
+                # packed_sentences = pack_padded_sequence(documents,
+                #                                         lengths=sentences_per_document.tolist(),
+                #                                         batch_first=True,
+                #                                         enforce_sorted=False)  # a PackedSequence object, where 'data' is the flattened sentences (n_sentences, word_pad_len)
 
-                word_output = torch.cat(word_output_list, 0)
+                # Re-arrange as sentences by removing sentence-pads (DOCUMENTS -> SENTENCES)
+                packed_sentences = pack_padded_sequence(document,
+                                                        lengths=sentences_per_paragraph,
+                                                        batch_first=True,
+                                                        enforce_sorted=False)  # a PackedSequence object, where 'data' is the flattened sentences (n_sentences, word_pad_len)
 
-                sentence_output, self.sent_hidden_state = self.sent_att_net(word_output,
-                                                                            self.sent_hidden_state)
+                word_output = self.word_att_net(paragraph, words_per_sentence[i].squeeze(0))
+
+                re_packed_sentence = PackedSequence(data=word_output,
+                                                    batch_sizes=packed_sentences.batch_sizes,
+                                                    sorted_indices=packed_sentences.sorted_indices,
+                                                    unsorted_indices=packed_sentences.unsorted_indices)  # a PackedSequence object, where 'data' is the output of the RNN (n_sentences, 2 * sentence_rnn_size)
+
+                # word_output = torch.tensor(word_output_list)
+
+                sentence_output = self.sent_att_net(re_packed_sentence)
                 sentence_output_list.append(sentence_output)
 
         sentence_output = torch.cat(sentence_output_list, 0)

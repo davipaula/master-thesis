@@ -65,7 +65,7 @@ class SMASHDataset(Dataset):
             words_per_sentence_in_paragraph = []
             for sentence in paragraph:
                 words_per_sentence_in_paragraph.append(len(sentence))
-            words_per_sentence.append(words_per_sentence_in_paragraph)
+            words_per_sentence.append(torch.LongTensor(words_per_sentence_in_paragraph))
             sentences_per_paragraph.append(len(paragraph))
 
         document_structure = {
@@ -113,5 +113,5 @@ if __name__ == '__main__':
     test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
                         max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
 
-    document_structure = test.get_document_structure(test.get_padded_document(test.get_document(95)))
+    document_structure = test.get_document_structure(test.get_document(10))
     print(document_structure)

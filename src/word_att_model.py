@@ -41,14 +41,22 @@ class WordAttNet(nn.Module):
         self.word_weight.data.normal_(mean, std)
         self.context_weight.data.normal_(mean, std)
 
+    def convert_tensor_to_list(self, tensor):
+        converted_list = []
+
+        for tensor_item in tensor[0]:
+            converted_list.append(tensor_item.numpy()[0])
+
+        return converted_list
+
     def forward(self, sentence, words_per_sentence):
-        # if len(sentence.shape) == 1:
-        #     sentence = sentence.unsqueeze(0)
+        if len(sentence.shape) == 1:
+            sentence = sentence.view(1, 54)
 
         sentence_embeddings = self.lookup(sentence)
 
         packed_sentence_embeddings = pack_padded_sequence(sentence_embeddings,
-                                                          lengths=torch.LongTensor(words_per_sentence),
+                                                          lengths=words_per_sentence.tolist(),
                                                           batch_first=True,
                                                           enforce_sorted=False)
 
@@ -66,7 +74,6 @@ class WordAttNet(nn.Module):
         # First, take the exponent
         max_value = word_attention.max()  # scalar, for numerical stability during exponent calculation
         word_attention = torch.exp(word_attention - max_value)  # (n_words)
-        print(words_representation.data.sum())
 
         # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
         word_attention, _ = pad_packed_sequence(PackedSequence(data=word_attention,
@@ -86,7 +93,7 @@ class WordAttNet(nn.Module):
         sentences = sentences.float() * word_alphas.unsqueeze(2)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
 
         # gets the representation for the sentence
-        sentences = sentences.sum()  # (n_sentences, 2 * word_rnn_size)
+        sentences = sentences.sum(dim=1)  # (n_sentences)
 
         return sentences
 
