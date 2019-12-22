@@ -12,7 +12,6 @@ import torch
 
 
 class SMASHDataset(Dataset):
-
     def __init__(self, data_path, dict_path, max_length_sentences=6, max_length_word=18, max_length_paragraph=10):
         super(SMASHDataset, self).__init__()
 

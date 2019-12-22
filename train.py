@@ -9,13 +9,10 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from torch.utils.data import DataLoader, TensorDataset
 from utils import get_max_lengths
 from smash_rnn_model import SmashRNNModel
 from tensorboardX import SummaryWriter
-import argparse
-import shutil
 from json_dataset import SMASHDataset
 
 
@@ -26,10 +23,21 @@ class SmashRNN:
         else:
             torch.manual_seed(123)
 
+        # Basic config. Should be customizable in the future
         self.batch_size = 1
+        self.learning_rate = 0.1
+        self.momentum = 0.9
+        self.num_epoches = 2
+        self.log_path = 'tensorboard/smash_rnn'
+        self.early_stopping_minimum_delta = 0
+        self.early_stopping_patience = 0
 
         train_dataset_path = './data/wiki_df_small.csv'
         word2vec_path = './data/glove.6B.50d.txt'
+        # End of configs
+
+        self.output_file = self.create_output_file()
+        self.writer = SummaryWriter(self.log_path)
 
         self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(train_dataset_path)
 
@@ -68,213 +76,82 @@ class SmashRNN:
         unknown_word = np.zeros((1, embed_dim))
         dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
 
-        # Convert to PyTorch tensor
-        # weights = torch.FloatTensor(w2v_model.vectors)
+        # Siamese + Attention model
+        self.model = SmashRNNModel(dict, dict_len, embed_dim)
 
-        # Init embedding layer
-        self.embedding = nn.Embedding(num_embeddings=dict_len, embedding_dim=embed_dim).from_pretrained(dict)
+        # Overall model optimization and evaluation parameters
+        self.criterion = nn.MSELoss()
+        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
+                                         lr=self.learning_rate,
+                                         momentum=self.momentum)
+        self.best_loss = 1e5
+        self.best_epoch = 0
+        self.model.train()
+        # self.num_iter_per_epoch = len(self.training_generator)
 
-        # RNN + attention layers
-        word_gru_hidden_size = 100
-        self.word_gru_out_size = word_gru_hidden_size * 2
-        self.word_gru = nn.GRU(embed_dim, word_gru_hidden_size, bidirectional=True, batch_first=True)
-        self.word_attention = nn.Linear(self.word_gru_out_size, 50)
-        self.word_context_vector = nn.Linear(50, 1, bias=False)  # Word context vector to take dot-product with
+    def train(self):
+        training_params = {'batch_size': self.batch_size,
+                           'shuffle': True,
+                           'drop_last': True}
 
-        sentence_gru_hidden_size = 200
-        self.sentence_gru_out_size = sentence_gru_hidden_size * 2
-        self.sentence_gru = nn.GRU(self.word_gru_out_size, sentence_gru_hidden_size, bidirectional=True,
-                                   batch_first=True)
-        self.sentence_attention = nn.Linear(self.sentence_gru_out_size, 50)
-        self.sentence_context_vector = nn.Linear(50, 1, bias=False)
+        training_generator = DataLoader(self.dataset, **training_params)
 
-        paragraph_gru_hidden_size = 300
-        self.paragraph_gru_out_size = paragraph_gru_hidden_size * 2
-        self.paragraph_gru = nn.GRU(self.sentence_gru_out_size, paragraph_gru_hidden_size, bidirectional=True,
-                                    batch_first=True)
-        self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, 50)
-        self.paragraph_context_vector = nn.Linear(50, 1, bias=False)
+        loss_list = []
+        predictions_list = []
+        step = 'train'
 
-        self.input_dim = 2 * paragraph_gru_hidden_size * 3  # 3 = number of concatenations
+        for epoch in range(self.num_epoches):
+            self.model.train()
 
-        # Not mentioned in the paper.
-        self.mlp_dim = int(self.input_dim / 2)
-        self.out_dim = 1
+            for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
+                if torch.cuda.is_available():
+                    current_document = current_document.cuda()
+                    words_per_sentence_current_document = words_per_sentence_current_document.cuda()
+                    sentences_per_paragraph_current_document = sentences_per_paragraph_current_document.cuda()
+                    paragraphs_per_document_current_document = paragraphs_per_document_current_document.cuda()
+                    previous_document = previous_document.cuda()
+                    words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
+                    sentences_per_paragraph_previous_document = sentences_per_paragraph_previous_document.cuda()
+                    paragraphs_per_document_previous_document = paragraphs_per_document_previous_document.cuda()
+                    click_rate_tensor = click_rate_tensor.cuda()
 
-        # These layers compute the semantic similarity between two documents
-        self.classifier = nn.Sequential(
-            nn.Linear(self.input_dim, self.mlp_dim),
-            nn.ReLU(),
-            nn.Linear(self.mlp_dim, self.out_dim),
-            nn.Sigmoid()
-        )
+                self.optimizer.zero_grad()
+                predictions = self.model(current_document, words_per_sentence_current_document,
+                                         sentences_per_paragraph_current_document,
+                                         paragraphs_per_document_current_document,
+                                         previous_document, words_per_sentence_previous_document,
+                                         sentences_per_paragraph_previous_document,
+                                         paragraphs_per_document_previous_document,
+                                         click_rate_tensor)
+                loss = self.criterion(predictions, click_rate_tensor)
+                loss.backward()
+                self.optimizer.step()
 
-    def forward(self, current_document, words_per_sentence_current_document,
-                sentences_per_paragraph_current_document, paragraphs_per_document_current_document,
-                previous_document, words_per_sentence_previous_document,
-                sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document,
-                click_rate_tensor):
-        # This only works with self.batch_size = 1
-        current_document_representation = self.get_document_representation(current_document,
-                                                                           paragraphs_per_document_current_document,
-                                                                           sentences_per_paragraph_current_document,
-                                                                           words_per_sentence_current_document)
-        previous_document_representation = self.get_document_representation(previous_document,
-                                                                            paragraphs_per_document_previous_document,
-                                                                            sentences_per_paragraph_previous_document,
-                                                                            words_per_sentence_previous_document)
+                loss_list.append(loss)
+                predictions_list.append(predictions.clone().cpu())
 
-        # Concatenates document representations. This is the siamese part of the model
-        concatenated_documents_representation = torch.cat((current_document_representation,
-                                                           previous_document_representation,
-                                                           torch.abs(
-                                                               current_document_representation - previous_document_representation),
-                                                           ), 1)
+            loss = sum(loss_list) / self.dataset.__len__()
 
-        predicted_ctr = self.classifier(concatenated_documents_representation)
+            print('Final loss: %1.4f' % loss)
 
-        return predicted_ctr
+            self.output_file.write(
+                'Epoch: {}/{} \n{} loss: {}\n\n'.format(
+                    epoch + 1,
+                    self.num_epoches,
+                    step.capitalize(),
+                    loss
+                ))
 
-    def get_document_representation(self, current_document, paragraphs_per_document_current_document,
-                                    sentences_per_paragraph_current_document, words_per_sentence_current_document):
+            print('Epoch: {}/{}, Lr: {}, Loss: {}'.format(
+                epoch + 1,
+                self.num_epoches,
+                self.optimizer.param_groups[0]['lr'],
+                loss
+            ))
 
-        # this only works with batch_size = 1
-        _paragraphs_per_doc = paragraphs_per_document_current_document.item()
-        _sentences_per_paragraph = [[words for words in paragraph if words > 0] for paragraph in
-                                    sentences_per_paragraph_current_document.tolist()][0]
-        _words_per_sentence = words_per_sentence_current_document
-        # zero placeholders
-        sentences = torch.zeros(
-            (self.batch_size, self.max_paragraph_length, self.max_sent_length, self.word_gru_out_size))
-        paragraphs = torch.zeros((self.batch_size, self.max_paragraph_length, self.sentence_gru_out_size))
-        docs = torch.zeros((self.batch_size, self.paragraph_gru_out_size))
-        # iterate over each hierarchy level
-        for paragraph_idx in range(_paragraphs_per_doc):
-            for sentence_idx in range(_sentences_per_paragraph[paragraph_idx]):
-                # attention over words
-                word_ids_in_sent = current_document[:, paragraph_idx, sentence_idx, :]
-                # 1st dim = batch, last dim = words
-                words_in_sent = self.embedding(word_ids_in_sent)  # get word embeddings from ids
+            self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-                # pack padded sequence
-                packed_words = pack_padded_sequence(words_in_sent,
-                                                    lengths=torch.LongTensor(
-                                                        words_per_sentence_current_document[:, paragraph_idx,
-                                                        sentence_idx].tolist()),
-                                                    batch_first=True, enforce_sorted=False)
-
-                word_gru_out, _ = self.word_gru(packed_words.float())
-
-                # This implementation uses the feature sentence_embeddings. Paper uses hidden state
-                word_att_out = torch.tanh(self.word_attention(word_gru_out.data))
-
-                # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
-                word_att_out = self.word_context_vector(word_att_out).squeeze(1)  # (n_words)
-
-                # Compute softmax over the dot-product manually
-                # Manually because they have to be computed only over words in the same sentence
-
-                # First, take the exponent
-                max_value = word_att_out.max()  # scalar, for numerical stability during exponent calculation
-                word_att_out = torch.exp(word_att_out - max_value)  # (n_words)
-
-                # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
-                word_att_out, _ = pad_packed_sequence(PackedSequence(data=word_att_out,
-                                                                     batch_sizes=word_gru_out.batch_sizes,
-                                                                     sorted_indices=word_gru_out.sorted_indices,
-                                                                     unsorted_indices=word_gru_out.unsorted_indices),
-                                                      batch_first=True)  # (n_sentences, max(words_per_sentence))
-
-                # Calculate softmax values as now words are arranged in their respective sentences
-                word_alphas = word_att_out / torch.sum(word_att_out, dim=1,
-                                                       keepdim=True)  # (n_sentences, max(words_per_sentence))
-
-                # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-                _sentence, _ = pad_packed_sequence(word_gru_out,
-                                                   batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
-
-                # Find sentence embeddings
-                # gets the representation for the sentence
-                _sentence = (_sentence.float() * word_alphas.unsqueeze(2)).sum(
-                    dim=1)  # (batch_size, self.word_gru_out_size)
-
-                sentences[:, paragraph_idx, sentence_idx] = _sentence
-
-            # attention over sentences
-            sentences_in_paragraph = sentences[:, paragraph_idx, :]
-
-            # pack padded sequence of sentences
-            packed_sentences = pack_padded_sequence(sentences_in_paragraph,
-                                                    lengths=sentences_per_paragraph_current_document[:,
-                                                            paragraph_idx].tolist(),
-                                                    batch_first=True, enforce_sorted=False)
-
-            sentence_gru_out, _ = self.sentence_gru(packed_sentences)
-
-            sent_att_out = torch.tanh(self.sentence_attention(sentence_gru_out.data))
-
-            # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
-            sent_att_out = self.sentence_context_vector(sent_att_out).squeeze(1)  # (n_words)
-
-            # Compute softmax over the dot-product manually
-            # Manually because they have to be computed only over words in the same sentence
-
-            # First, take the exponent
-            max_value = sent_att_out.max()  # scalar, for numerical stability during exponent calculation
-            sent_att_out = torch.exp(sent_att_out - max_value)  # (n_words)
-
-            # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
-            sent_att_out, _ = pad_packed_sequence(PackedSequence(data=sent_att_out,
-                                                                 batch_sizes=sentence_gru_out.batch_sizes,
-                                                                 sorted_indices=sentence_gru_out.sorted_indices,
-                                                                 unsorted_indices=sentence_gru_out.unsorted_indices),
-                                                  batch_first=True)  # (n_sentences, max(words_per_sentence))
-
-            # Calculate softmax values as now words are arranged in their respective sentences
-            sent_alphas = sent_att_out / torch.sum(sent_att_out, dim=1,
-                                                   keepdim=True)  # (n_sentences, max(words_per_sentence))
-
-            # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-            _paragraph, _ = pad_packed_sequence(sentence_gru_out,
-                                                batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
-
-            # Find sentence embeddings
-            # gets the representation for the sentence
-            _paragraph = (_paragraph.float() * sent_alphas.unsqueeze(2)).sum(
-                dim=1)  # (batch_size, self.word_gru_out_size)
-
-            paragraphs[:, paragraph_idx] = _paragraph
-        # attention over paragraphs
-        # paragraphs
-        # pack padded sequence of sentences
-        packed_paragraphs = pack_padded_sequence(paragraphs,
-                                                 lengths=paragraphs_per_document_current_document.tolist(),
-                                                 batch_first=True, enforce_sorted=False)
-        paragraph_gru_out, _ = self.paragraph_gru(packed_paragraphs)
-        # This implementation uses the feature sentence_embeddings. Paper uses hidden state
-        paragraph_att_out = torch.tanh(self.paragraph_attention(paragraph_gru_out.data))
-        # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
-        paragraph_att_out = self.paragraph_context_vector(paragraph_att_out).squeeze(1)  # (n_words)
-        # Compute softmax over the dot-product manually
-        # Manually because they have to be computed only over words in the same sentence
-        # First, take the exponent
-        max_value = paragraph_att_out.max()  # scalar, for numerical stability during exponent calculation
-        paragraph_att_out = torch.exp(paragraph_att_out - max_value)  # (n_words)
-        # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
-        paragraph_att_out, _ = pad_packed_sequence(PackedSequence(data=paragraph_att_out,
-                                                                  batch_sizes=paragraph_gru_out.batch_sizes,
-                                                                  sorted_indices=paragraph_gru_out.sorted_indices,
-                                                                  unsorted_indices=paragraph_gru_out.unsorted_indices),
-                                                   batch_first=True)  # (n_sentences, max(words_per_sentence))
-        # Calculate softmax values as now words are arranged in their respective sentences
-        paragraph_alphas = paragraph_att_out / torch.sum(paragraph_att_out, dim=1,
-                                                         keepdim=True)  # (n_sentences, max(words_per_sentence))
-        # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-        doc, _ = pad_packed_sequence(paragraph_gru_out,
-                                     batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
-        # Find document embeddings
-        doc = (doc.float() * paragraph_alphas.unsqueeze(2)).sum(dim=1)  # (batch_size, self.paragraph_gru_out_size)
-        return doc
+        return loss
 
     def get_padded_document_structures(self, words_ids_a):
         document_structures = [self.training_dataset.get_document_structure(document) for document in words_ids_a]
@@ -290,19 +167,24 @@ class SmashRNN:
 
         return words_per_sentences_tensor, sentences_per_paragraph_tensor, paragraphs_per_document_tensor
 
-    def train(self):
-        training_params = {'batch_size': self.batch_size,
-                           'shuffle': True,
-                           'drop_last': True}
+    def is_best_loss(self, loss):
+        return (loss + self.es_min_delta) < self.best_loss
 
-        training_generator = DataLoader(self.dataset, **training_params)
+    def save_model(self, loss, epoch):
+        self.best_loss = loss
+        self.best_epoch = epoch
 
-        for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-            self.forward(current_document, words_per_sentence_current_document,
-                         sentences_per_paragraph_current_document, paragraphs_per_document_current_document,
-                         previous_document, words_per_sentence_previous_document,
-                         sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document,
-                         click_rate_tensor)
+        torch.save(self.model.state_dict(), './model.pt')
+
+    def should_stop(self, epoch):
+        return epoch - self.best_epoch > self.es_patience > 0
+
+    def create_output_file(self):
+        output_file = open('trained_models' + os.sep + 'logs.txt', 'a+')
+        # TODO save all config values
+        # output_file.write('Model\'s parameters: {}'.format(vars(self.opt)))
+
+        return output_file
 
 
 if __name__ == '__main__':

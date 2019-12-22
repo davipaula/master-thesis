@@ -68,11 +68,13 @@ def generate_click_stream_dataset(click_stream_dump_path, dataset_path):
 
 
 def combine_wiki_click_stream_datasets(click_stream_dataset, wiki_documents_dataset):
-    combined_dataset = pd.merge(click_stream_dataset, wiki_documents_dataset, left_on=['previous_article'], right_on=['article'])
-    combined_dataset = pd.merge(combined_dataset, wiki_documents_dataset, left_on=['current_article'], right_on=['article'])
+    combined_dataset = pd.merge(click_stream_dataset, wiki_documents_dataset, left_on=['previous_article'],
+                                right_on=['article'])
+    combined_dataset = pd.merge(combined_dataset, wiki_documents_dataset, left_on=['current_article'],
+                                right_on=['article'])
     combined_dataset = combined_dataset.drop(columns=['article_x', 'article_y'])
     combined_dataset.columns = ['previous_article', 'current_article', 'number_of_clicks', 'click_rate',
-                         'previous_article_text', 'current_article_text']
+                                'previous_article_text', 'current_article_text']
     combined_dataset = combined_dataset[
         ['previous_article', 'previous_article_text', 'current_article', 'current_article_text', 'number_of_clicks',
          'click_rate']]
@@ -87,8 +89,18 @@ def get_wiki_documents_from_json(wiki_documents_path):
         json_list = list(json_file)
     for json_str in json_list:
         result = json.loads(json_str)
-        texts.append(result['sections'][0]['paragraphs'])
-        articles.append(result['title'])
+        introduction_json = result['sections'][0]['paragraphs']
+        # Cleaning empty paragraphs and sentences
+        sentences_to_append = [filtered_sentence for filtered_sentence in
+                               [[sentence for sentence in paragraph if sentence]
+                                for paragraph in introduction_json if paragraph] if filtered_sentence]
+
+        if result['title'] == 'Augsburg':
+            print('Augsburg')
+
+        if sentences_to_append:
+            texts.append(sentences_to_append)
+            articles.append(result['title'])
 
     wiki_documents_dataset = pd.DataFrame(list(zip(articles, texts)), columns=['article', 'text'])
 
@@ -130,9 +142,15 @@ if __name__ == '__main__':
     LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-    wiki_dataset = generate_dataset(click_stream_dump_path, wiki_documents_path)
+    # get_wiki_documents_from_json(wiki_documents_path)
 
-    print(wiki_dataset.sample(n=10))
+    wiki_dataset = generate_dataset(click_stream_dump_path, wiki_documents_path)
+    wiki_dataset.to_csv('../data/wiki_df.csv',
+                        index=False,
+                        header=['previous_article', 'previous_article_text', 'current_article',
+                                'current_article_text', 'number_of_clicks', 'click_rate'])
+
+    # print(wiki_dataset.sample(n=10))
 
     # LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
     # logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
