@@ -56,7 +56,7 @@ class WordAttNet(nn.Module):
         sentence_embeddings = self.lookup(sentence)
 
         packed_sentence_embeddings = pack_padded_sequence(sentence_embeddings,
-                                                          lengths=words_per_sentence.tolist(),
+                                                          lengths=words_per_sentence,
                                                           batch_first=True,
                                                           enforce_sorted=False)
 

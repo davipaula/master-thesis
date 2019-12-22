@@ -17,7 +17,7 @@ class SMASHDataset(Dataset):
         super(SMASHDataset, self).__init__()
 
         dataset = pd.read_csv(data_path)
-
+        self.df = dataset
         self.current_article_text = dataset['current_article_text']
         self.current_article_title = dataset['current_article']
         self.previous_article_text = dataset['previous_article_text']
@@ -53,7 +53,7 @@ class SMASHDataset(Dataset):
                current_article_structure, \
                current_article_title, \
                previous_article_text_padded, \
-               previous_article_structure,\
+               previous_article_structure, \
                previous_article_title, \
                click_rate
 
@@ -65,7 +65,7 @@ class SMASHDataset(Dataset):
             words_per_sentence_in_paragraph = []
             for sentence in paragraph:
                 words_per_sentence_in_paragraph.append(len(sentence))
-            words_per_sentence.append(torch.LongTensor(words_per_sentence_in_paragraph))
+            words_per_sentence.append(words_per_sentence_in_paragraph)
             sentences_per_paragraph.append(len(paragraph))
 
         document_structure = {
@@ -99,12 +99,35 @@ class SMASHDataset(Dataset):
             document.extend(extended_paragraphs)
 
         document = [sentences[:self.max_length_word] for sentences in document][
-                          :self.max_length_sentences]
+                   :self.max_length_sentences]
 
         document = np.stack(arrays=document, axis=0)
         document += 1
 
         return document
+
+    def get_padded_words_per_sentence(self, document_structure):
+        for paragraph in document_structure:
+            if len(paragraph) < self.max_length_sentences:
+                extended_sentences = [0 for _ in range(self.max_length_sentences - len(paragraph))]
+                paragraph.extend(extended_sentences)
+
+        if len(document_structure) < self.max_length_paragraph:
+            extended_paragraphs = [[0 for _ in range(self.max_length_sentences)]
+                                   for _ in range(self.max_length_paragraph - len(document_structure))]
+
+            document_structure.extend(extended_paragraphs)
+
+        document_structure = np.stack(arrays=document_structure, axis=0)
+
+        return document_structure
+
+    def get_padded_sentence_per_paragraph(self, document_structure):
+        if len(document_structure) < self.max_length_paragraph:
+            extended_paragraphs = [0 for _ in range(self.max_length_paragraph - len(document_structure))]
+            document_structure.extend(extended_paragraphs)
+
+        return document_structure
 
 
 if __name__ == '__main__':
@@ -114,4 +137,4 @@ if __name__ == '__main__':
                         max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
 
     document_structure = test.get_document_structure(test.get_document(10))
-    print(document_structure)
+    print(test.get_document(1))

@@ -73,6 +73,34 @@ def get_max_lengths(data_path):
     return max(word_length_list), max(sent_length_list), max(paragraph_length_list)
 
 
+def get_padded_document(document, max_length_word, max_length_sentences, max_length_paragraph):
+    for paragraph in document:
+        for sentences in paragraph:
+            if len(sentences) < max_length_word:
+                extended_words = [-1 for _ in range(max_length_word - len(sentences))]
+                sentences.extend(extended_words)
+
+        if len(paragraph) < max_length_sentences:
+            extended_sentences = [[-1 for _ in range(max_length_word)] for _ in
+                                  range(max_length_sentences - len(paragraph))]
+            paragraph.extend(extended_sentences)
+
+    if len(document) < max_length_paragraph:
+        extended_paragraphs = [[[-1 for _ in range(max_length_word)]
+                                for _ in range(max_length_sentences)]
+                               for _ in range(max_length_paragraph - len(document))]
+
+        document.extend(extended_paragraphs)
+
+    document = [sentences[:max_length_word] for sentences in document][
+               :max_length_sentences]
+
+    document = np.stack(arrays=document, axis=0)
+    document += 1
+
+    return document
+
+
 if __name__ == "__main__":
     word, sent, paragraph = get_max_lengths('../data/wiki_df_small.csv')
     print(word)
