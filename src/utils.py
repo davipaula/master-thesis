@@ -51,12 +51,12 @@ def element_wise_mul(input1, input2):
     return torch.sum(output, 0).unsqueeze(0)
 
 
-def get_max_lengths(data_path):
+def get_max_lengths(data_path, limit_rows=None):
     word_length_list = []
     sent_length_list = []
     paragraph_length_list = []
 
-    dataset = pd.read_csv(data_path)
+    dataset = pd.read_csv(data_path, nrows=limit_rows)
 
     document_encode = dataset['current_article_text']
     document_encode = pd.concat([document_encode, dataset['previous_article_text']])

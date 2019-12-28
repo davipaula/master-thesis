@@ -1,6 +1,13 @@
 import logging
 import json
+import torch
 import pandas as pd
+from ast import literal_eval
+from datetime import datetime
+from torch.utils.data import TensorDataset
+
+from smash_dataset import SMASHDataset
+from utils import get_max_lengths
 
 
 def get_click_stream_dump(click_stream_dump_path):
@@ -95,9 +102,6 @@ def get_wiki_documents_from_json(wiki_documents_path):
                                [[sentence for sentence in paragraph if sentence]
                                 for paragraph in introduction_json if paragraph] if filtered_sentence]
 
-        if result['title'] == 'Augsburg':
-            print('Augsburg')
-
         if sentences_to_append:
             texts.append(sentences_to_append)
             articles.append(result['title'])
@@ -127,6 +131,93 @@ def generate_dataset(click_stream_dump_path, wiki_documents_path):
     combined_dataset = combine_wiki_click_stream_datasets(click_stream_dataset, wiki_documents_dataset)
 
     return combined_dataset
+
+
+def create_tensor_dataset(dataset_path, word2vec_path, limit_rows_dataset):
+    print('Getting max lengths', datetime.now())
+    max_word_length, max_sent_length, max_paragraph_length = get_max_lengths(dataset_path, limit_rows_dataset)
+    print('Finished getting max lengths', datetime.now())
+
+    print('Loading complete dataset', datetime.now())
+    complete_dataset = SMASHDataset(dataset_path, word2vec_path, max_sent_length,
+                                    max_word_length,
+                                    max_paragraph_length, limit_rows_dataset)
+    print('Complete dataset loaded', datetime.now())
+
+    print('Reading word ids from documents', datetime.now())
+    words_ids_current_document = [literal_eval(text) for text in complete_dataset.current_article_text.values]
+    words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document = get_padded_document_structures(
+        words_ids_current_document)
+    print('Transforming dataset into tensors', datetime.now())
+    current_document_tensor = get_document_tensor(words_ids_current_document, max_word_length, max_sent_length,
+                                                  max_paragraph_length)
+    print('Finished Transforming dataset into tensors', datetime.now())
+
+    print('Reading word ids from documents - previous document', datetime.now())
+    words_ids_previous_document = [literal_eval(text) for text in
+                                   complete_dataset.previous_article_text.values]
+    words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document = get_padded_document_structures(
+        words_ids_previous_document)
+    print('Transforming dataset into tensors', datetime.now())
+    previous_document_tensor = get_document_tensor(words_ids_previous_document, max_word_length, max_sent_length,
+                                                   max_paragraph_length)
+    print('Finished Transforming dataset into tensors', datetime.now())
+
+    print('Transforming click_rate_tensor dataset into tensors', datetime.now())
+    click_rate_tensor = torch.Tensor([click_rate for click_rate in complete_dataset.click_rate])
+    print('Finished tensors creation', datetime.now())
+
+    dataset = TensorDataset(current_document_tensor, words_per_sentence_current_document,
+                            sentences_per_paragraph_current_document, paragraphs_per_document_current_document,
+                            previous_document_tensor, words_per_sentence_previous_document,
+                            sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document,
+                            click_rate_tensor
+                            )
+
+    torch.save(dataset, './data/complete_dataset.pth')
+    print('Saved TensorDataset {}'.format(datetime.now()))
+
+    del current_document_tensor, words_per_sentence_current_document, \
+        sentences_per_paragraph_current_document, paragraphs_per_document_current_document, \
+        previous_document_tensor, words_per_sentence_previous_document, \
+        sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, \
+        click_rate_tensor
+
+    print('Finished creating second dataset into tensors - previous', datetime.now())
+
+
+def get_document_tensor(documents, max_word_length, max_sent_length, max_paragraph_length):
+    __slot__ = ('document_placeholder')
+    num_documents = len(documents)
+
+    document_placeholder = torch.zeros((num_documents, max_paragraph_length, max_sent_length, max_word_length),
+                                       dtype=int)
+
+    print('Number of documents: {}'.format(num_documents))
+
+    for document_idx, document in enumerate(documents):
+        if (document_idx % 100) == 0:
+            print('Finished document {} of {}. {}'.format(document_idx, num_documents, datetime.now()))
+        for paragraph_idx, paragraph in enumerate(document):
+            for sentence_idx, sentence in enumerate(paragraph):
+                document_placeholder[document_idx, paragraph_idx, sentence_idx, 0:len(sentence)] = torch.LongTensor(
+                    sentence)
+
+    return document_placeholder
+
+
+def get_padded_document_structures(self, words_ids_a):
+    document_structures = [self.complete_dataset.get_document_structure(document) for document in words_ids_a]
+    words_per_sentences_tensor = torch.LongTensor([
+        SMASHDataset.get_padded_words_per_sentence(document_structure['words_per_sentence']) for document_structure in
+        document_structures])
+    sentences_per_paragraph_tensor = torch.LongTensor([
+        SMASHDataset.get_padded_sentences_per_paragraph(document_structure['sentences_per_paragraph']) for
+        document_structure in document_structures])
+    paragraphs_per_document_tensor = torch.LongTensor(
+        [document_structure['paragraphs_per_document'] for document_structure in document_structures])
+
+    return words_per_sentences_tensor, sentences_per_paragraph_tensor, paragraphs_per_document_tensor
 
 
 if __name__ == '__main__':

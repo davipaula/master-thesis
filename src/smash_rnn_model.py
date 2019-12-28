@@ -15,11 +15,12 @@ import csv
 
 
 class SmashRNNModel(nn.Module):
-    def __init__(self, dict, dict_len, embedding_size):
+    def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length, max_paragraph_length):
         super(SmashRNNModel, self).__init__()
 
-        train_dataset_path = './data/wiki_df_small.csv'
-        self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(train_dataset_path)
+        self.max_word_length = max_word_length
+        self.max_sent_length = max_sent_length
+        self.max_paragraph_length = max_paragraph_length
         self.batch_size = 1
 
         # Init embedding layer
@@ -199,7 +200,7 @@ class SmashRNNModel(nn.Module):
         # paragraphs
         # pack padded sequence of sentences
         packed_paragraphs = pack_padded_sequence(paragraphs,
-                                                 lengths=paragraphs_per_document.tolist(),
+                                                 lengths=[paragraphs_per_document.item()],
                                                  batch_first=True, enforce_sorted=False)
         paragraph_gru_out, _ = self.paragraph_gru(packed_paragraphs)
         # This implementation uses the feature sentence_embeddings. Paper uses hidden state
