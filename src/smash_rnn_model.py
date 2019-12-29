@@ -4,11 +4,6 @@
 import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
-from sent_att_model import SentAttNet
-from utils import get_max_lengths
-from word_att_model import WordAttNet
-from paragraph_att_model import ParagraphAttNet
-from siamese_lstm import SiameseLSTM
 import numpy as np
 import pandas as pd
 import csv

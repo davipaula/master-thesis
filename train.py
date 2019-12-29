@@ -3,17 +3,15 @@
 """
 import csv
 import os
-from ast import literal_eval
-import gensim
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset, random_split
-from utils import get_max_lengths
-from smash_rnn_model import SmashRNNModel
+from src.utils import get_max_lengths
+from src.smash_rnn_model import SmashRNNModel
 from tensorboardX import SummaryWriter
-from smash_dataset import SMASHDataset
+from src.smash_dataset import SMASHDataset
 from datetime import datetime
 
 
@@ -34,12 +32,12 @@ class SmashRNN:
         self.log_path = 'tensorboard/smash_rnn'
         self.early_stopping_minimum_delta = 0
         self.early_stopping_patience = 0
-        self.should_split_dataset = False
+        self.should_split_dataset = True
         self.train_dataset_split = 0.8
         # For development purposes. This limits the number of rows read from the dataset
-        limit_rows_dataset = 9999
+        limit_rows_dataset = 5000
 
-        train_dataset_path = './data/wiki_df_small.csv'
+        train_dataset_path = './data/wiki_df.csv'
         word2vec_path = './data/glove.6B.50d.txt'
         # End of configs
 
@@ -114,7 +112,7 @@ class SmashRNN:
 
     def train(self):
         training_generator = torch.load('./data/training.pth')
-        print('Starting training')
+        print('Starting training {}'.format(datetime.now()))
 
         # Trying to avoid TensorDataset. Didn't work
         # training_generator = torch.utils.data.DataLoader(self.complete_dataset, batch_size=self.batch_size)
@@ -164,11 +162,12 @@ class SmashRNN:
                     loss
                 ))
 
-            print('Epoch: {}/{}, Lr: {}, Loss: {}'.format(
+            print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
                 self.num_epoches,
                 self.optimizer.param_groups[0]['lr'],
-                loss
+                loss,
+                datetime.now()
             ))
 
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
@@ -177,6 +176,7 @@ class SmashRNN:
                 self.validate(int(epoch / self.validation_interval))
 
             torch.save(self.model.state_dict(), './model.pt')
+            print('Training finished {}'.format(datetime.now()))
 
     def validate(self, validation_step):
         validation_generator = torch.load('./data/validation.pth')

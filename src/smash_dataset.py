@@ -7,8 +7,7 @@ import pandas as pd
 from torch.utils.data.dataset import Dataset
 import csv
 import numpy as np
-import json
-import utils
+import src.utils as utils
 from ast import literal_eval
 import torch
 
