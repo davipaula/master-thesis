@@ -1,6 +1,7 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import argparse
 import csv
 import os
 import numpy as np
@@ -26,38 +27,34 @@ class SmashRNN:
         self.batch_size = 1
         self.learning_rate = 0.1
         self.momentum = 0.9
-        self.num_epoches = 6
-        self.validation_interval = 3
-        self.num_validations = int(self.num_epoches / self.validation_interval)
         self.log_path = 'tensorboard/smash_rnn'
         self.early_stopping_minimum_delta = 0
         self.early_stopping_patience = 0
-        self.should_split_dataset = True
-        self.train_dataset_split = 0.8
-        # For development purposes. This limits the number of rows read from the dataset
-        limit_rows_dataset = 5000
 
-        train_dataset_path = './data/wiki_df.csv'
-        word2vec_path = './data/glove.6B.50d.txt'
+        self.opt = self.get_args()
+        self.num_validations = int(self.opt.num_epoches / self.opt.validation_interval)
+
         # End of configs
 
         self.output_file = self.create_output_file()
         self.writer = SummaryWriter(self.log_path)
 
         print('Getting max lengths', datetime.now())
-        self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(train_dataset_path,
-                                                                                                limit_rows_dataset)
+        self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(
+            self.opt.full_dataset_path,
+            self.opt.limit_rows_dataset)
         print('Finished getting max lengths', datetime.now())
 
-        self.complete_dataset = SMASHDataset(train_dataset_path, word2vec_path, self.max_sent_length,
+        self.complete_dataset = SMASHDataset(self.opt.full_dataset_path, self.opt.word2vec_path, self.max_sent_length,
                                              self.max_word_length,
-                                             self.max_paragraph_length, limit_rows_dataset)
+                                             self.max_paragraph_length, self.opt.limit_rows_dataset)
 
-        if self.should_split_dataset:
-            self.split_dataset(self.train_dataset_split)
+        if self.opt.should_split_dataset:
+            self.split_dataset(self.opt.train_dataset_split)
 
         # Load from txt file (in word2vec format)
-        dict = pd.read_csv(filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE).values[:, 1:]
+        dict = pd.read_csv(filepath_or_buffer=self.opt.word2vec_path, header=None, sep=" ",
+                           quoting=csv.QUOTE_NONE).values[:, 1:]
         dict_len, embed_dim = dict.shape
         dict_len += 1
         unknown_word = np.zeros((1, embed_dim))
@@ -111,7 +108,7 @@ class SmashRNN:
         return document_placeholder
 
     def train(self):
-        training_generator = torch.load('./data/training.pth')
+        training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
 
         # Trying to avoid TensorDataset. Didn't work
@@ -119,7 +116,7 @@ class SmashRNN:
 
         step = 'train'
 
-        for epoch in range(self.num_epoches):
+        for epoch in range(self.opt.num_epoches):
             self.model.train()
 
             loss_list = []
@@ -157,14 +154,14 @@ class SmashRNN:
             self.output_file.write(
                 'Epoch: {}/{} \n{} loss: {}\n\n'.format(
                     epoch + 1,
-                    self.num_epoches,
+                    self.opt.num_epoches,
                     step.capitalize(),
                     loss
                 ))
 
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
-                self.num_epoches,
+                self.opt.num_epoches,
                 self.optimizer.param_groups[0]['lr'],
                 loss,
                 datetime.now()
@@ -173,21 +170,21 @@ class SmashRNN:
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
             if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.validation_interval))
+                self.validate(int(epoch / self.opt.validation_interval))
 
-            torch.save(self.model.state_dict(), './model.pt')
+            torch.save(self.model.state_dict(), self.opt.model_path)
             print('Training finished {}'.format(datetime.now()))
 
     def validate(self, validation_step):
-        validation_generator = torch.load('./data/validation.pth')
+        validation_generator = torch.load(self.opt.validation_dataset_path)
         validation_step = int(validation_step) + 1
 
         step = 'validation'
 
-        for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in validation_generator:
-            loss_list = []
-            predictions_list = []
+        loss_list = []
+        predictions_list = []
 
+        for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in validation_generator:
             if torch.cuda.is_available():
                 current_document = current_document.cuda()
                 words_per_sentence_current_document = words_per_sentence_current_document.cuda()
@@ -251,13 +248,13 @@ class SmashRNN:
         self.best_loss = loss
         self.best_epoch = epoch
 
-        torch.save(self.model.state_dict(), './model.pt')
+        torch.save(self.model.state_dict(), self.opt.model_path)
 
     def should_stop(self, epoch):
         return epoch - self.best_epoch > self.es_patience > 0
 
     def should_run_validation(self, epoch):
-        return ((epoch + 1) % self.validation_interval) == 0
+        return ((epoch + 1) % self.opt.validation_interval) == 0
 
     def create_output_file(self):
         output_file = open('trained_models' + os.sep + 'logs.txt', 'a+')
@@ -290,14 +287,33 @@ class SmashRNN:
                        'drop_last': False}
         test_loader = torch.utils.data.DataLoader(test_dataset, **test_params)
 
-        torch.save(train_loader, './data/training.pth')
+        torch.save(train_loader, self.opt.train_dataset_path)
         print('Training dataset saved', datetime.now())
 
-        torch.save(validation_loader, './data/validation.pth')
+        torch.save(validation_loader, self.opt.validation_dataset_path)
         print('Validation dataset saved', datetime.now())
 
-        torch.save(test_loader, './data/test.pth')
+        torch.save(test_loader, self.opt.test_dataset_path)
         print('Test dataset saved', datetime.now())
+
+    @staticmethod
+    def get_args():
+        parser = argparse.ArgumentParser(
+            """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
+        parser.add_argument("--model_path", type=str, default='./trained_models/model.pt')
+        parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
+        parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
+        parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
+        parser.add_argument("--validation_dataset_path", type=str, default='./data/validation.pth')
+        parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
+        parser.add_argument("--num_epoches", type=int, default=6)
+        parser.add_argument("--validation_interval", type=int, default=2)
+        parser.add_argument("--should_split_dataset", type=bool, default=False)
+        parser.add_argument("--train_dataset_split", type=float, default=0.8)
+        parser.add_argument("--limit_rows_dataset", type=int, default=9999,
+                            help='For development purposes. This limits the number of rows read from the dataset. Change to None to ignore it')
+
+        return parser.parse_args()
 
 
 if __name__ == '__main__':

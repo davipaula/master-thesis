@@ -1,31 +1,24 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import os
-
 import pandas as pd
 import torch
-import torch.nn.functional as F
 from torch import nn
-from torch.utils.data import DataLoader
-
-from smash_rnn_model import SmashRNNModel
-from src.utils import get_evaluation
-import argparse
-import shutil
+from src.smash_rnn_model import SmashRNNModel
 import csv
 import numpy as np
+import argparse
+from src.utils import get_max_lengths
 
 
-def test():
-    pre_trained_model_path = './model.pt'
-
-    test_generator = torch.load('./data/test.pth')
+def test(opt):
+    test_generator = torch.load(opt.test_dataset_path)
     output_file = open('trained_models' + os.sep + 'logs.txt', 'a+')
 
     criterion = nn.MSELoss()
 
-    model = load_model(pre_trained_model_path)
+    model = load_model(opt.model_path, opt.full_dataset_path)
 
     loss_list = []
     predictions_list = []
@@ -60,16 +53,15 @@ def test():
 
     print('Test: loss: {}\n\n'.format(loss))
 
-    # self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-
-def load_model(filepath):
+def load_model(model_path, full_dataset_path):
     if torch.cuda.is_available():
-        model_state_dict = torch.load(filepath)
+        model_state_dict = torch.load(model_path)
     else:
-        model_state_dict = torch.load(filepath, map_location=lambda storage, loc: storage)
+        model_state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
 
     word2vec_path = './data/glove.6B.50d.txt'
+
     # Load from txt file (in word2vec format)
     dict = pd.read_csv(filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE).values[:, 1:]
     dict_len, embed_dim = dict.shape
@@ -77,8 +69,13 @@ def load_model(filepath):
     unknown_word = np.zeros((1, embed_dim))
     dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
 
+    max_word_length, max_sent_length, max_paragraph_length = get_max_lengths(full_dataset_path)
+
     # Siamese + Attention model
-    model = SmashRNNModel(dict, dict_len, embed_dim)
+    model = SmashRNNModel(dict, dict_len, embed_dim, max_word_length, max_sent_length, max_paragraph_length)
+
+    # Overall model optimization and evaluation parameters
+    criterion = nn.MSELoss()
 
     model.load_state_dict(model_state_dict)
     for parameter in model.parameters():
@@ -92,5 +89,16 @@ def load_model(filepath):
     return model
 
 
+def get_args():
+    parser = argparse.ArgumentParser(
+        """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
+    parser.add_argument("--model_path", type=str, default='./trained_models/model.pt')
+    parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
+    parser.add_argument("--test_dataset_path", type=str, default='./data/validation.pth')
+
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    test()
+    opt = get_args()
+    test(opt)
