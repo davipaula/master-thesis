@@ -17,6 +17,9 @@ pip install -r requirements.txt
 
 ![Model architecure)](smash-rnn_architecture.png)
 
+### Datasets
+This project uses a combination of Simple English Wikipedia articles - to get the documents content - and Wikipedia English clickstream data. You can find a reduced version of this dataset [here](https://drive.google.com/open?id=1Ie_oa6FVW9o2hXjTmsm-x-I2DjHgtHwx).
+
 ### Training
 If you want to train a model with default parameters, you could run:
 
@@ -35,7 +38,7 @@ For testing a trained model with your test file, please run the following comman
 
 - **python test.py --word2vec_path path/to/your/word2vec**, with the word2vec file is the same as the one you use in training phase.
 
-You can trained models in the folder `./trained_models`
+You can find a trained model in this [link](https://drive.google.com/open?id=1W62KwmYUSUbRTfeyym6M22IonKRB-i27)
 
 ### Concepts
 
