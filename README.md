@@ -1,27 +1,6 @@
 # SMASH-RNN: Semantic Text Matching for Long-Form Documents
 
-In current implementation:
-
-**HAN model**
-The model taken from https://github.com/pandeykartikey/Hierarchical-Attention-Network/blob/master/HAN%20yelp.ipynb was refactored and is working with Yelp data.
-
-- Usage:
-  - Train: ```python han_davi.py --task=train```
-  - Test: ```python han_davi.py --task=test```
- 
-Please note that to build the Smash-RNN implementation, I will use the HAN model from https://github.com/vietnguyen1991/Hierarchical-attention-networks-pytorch/, once it seems to have a better implementation
-
-**Siamese-LSTM**
-Adapted to work with the Yelp polarized data. Still needs some code cleaning.
-
-- Usage:
-  - Data can be downloaded from https://drive.google.com/open?id=0Bz8a_Dbh9QhbNUpYQ2N3SGlFaDg
-  - Change the variables ```train_dataset_path``` and ```test_dataset_path``` in file ```siamese-config.yaml``` to point to the right path of the data
-  - Train: Change the variable ```task``` to ```train``` in ```siamese-config.yaml```
-  - Test: Change the variable ```task``` to ```inference``` in ```siamese-config.yaml```
-
-
-PyTorch implementation of the paper [Semantic Text Match for Long-Form Docuemnts (Jiang et al.)](https://pub-tools-public-publication-data.storage.googleapis.com/pdf/99357ca2ef0d89250e8d0aea47607fc4c556aa09.pdf).
+A PyTorch implementation of the paper [Semantic Text Match for Long-Form Docuemnts (Jiang et al.)](https://pub-tools-public-publication-data.storage.googleapis.com/pdf/99357ca2ef0d89250e8d0aea47607fc4c556aa09.pdf) is used to predict the number of clicks between Wikipedia articles.
 
 ## Install
 
@@ -34,18 +13,29 @@ conda activate smash-rnn
 pip install -r requirements.txt
 ```
 
-Start Jupyter with `jupyter notebook`.
-
 ### Model
 
 ![Model architecure)](smash-rnn_architecture.png)
 
-A stub can be found in `smash_models.py`.
+### Training
+If you want to train a model with default parameters, you could run:
 
-### Notebooks
+- **python train.py**
 
-- `HAN yelp.ipynb`: PyTorch implementation for Hierarchical Attention Networks
-- `lstm-siamese.ipynb`: PyTorch implementation for Siamese Text Similarity
+If you want to train a model with your preference parameters, like optimizer and learning rate, you could run:
+
+- **python train.py --num_epoches num_epoches --validation_interval validation_interval**: For example, python train.py --num_epoches 6 --validation_interval 2
+
+If you want to train a model with your preference word2vec model, you could run:
+
+- **python train.py --word2vec_path path/to/your/word2vec**
+
+### Test
+For testing a trained model with your test file, please run the following command:
+
+- **python test.py --word2vec_path path/to/your/word2vec**, with the word2vec file is the same as the one you use in training phase.
+
+You can trained models in the folder `./trained_models`
 
 ### Concepts
 
