@@ -94,7 +94,12 @@ class SmashRNNModel(nn.Module):
         sentences = torch.zeros(
             (self.batch_size, self.max_paragraph_length, self.max_sent_length, self.word_gru_out_size))
         paragraphs = torch.zeros((self.batch_size, self.max_paragraph_length, self.sentence_gru_out_size))
-        docs = torch.zeros((self.batch_size, self.paragraph_gru_out_size))
+
+        if torch.cuda.is_available():
+            sentences = sentences.cuda()
+            paragraphs = paragraphs.cuda()
+
+        # docs = torch.zeros((self.batch_size, self.paragraph_gru_out_size))
         # iterate over each hierarchy level
         for paragraph_idx in range(_paragraphs_per_doc):
             for sentence_idx in range(_sentences_per_paragraph[paragraph_idx]):

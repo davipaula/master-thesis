@@ -64,6 +64,9 @@ class SmashRNN:
         self.model = SmashRNNModel(dict, dict_len, embed_dim, self.max_word_length, self.max_sent_length,
                                    self.max_paragraph_length)
 
+        if torch.cuda.is_available():
+            self.model.cuda()
+
         # Overall model optimization and evaluation parameters
         self.criterion = nn.MSELoss()
         self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
@@ -306,8 +309,8 @@ class SmashRNN:
         parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
         parser.add_argument("--validation_dataset_path", type=str, default='./data/validation.pth')
         parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
-        parser.add_argument("--num_epoches", type=int, default=6)
-        parser.add_argument("--validation_interval", type=int, default=2)
+        parser.add_argument("--num_epoches", type=int, default=1)
+        parser.add_argument("--validation_interval", type=int, default=1)
         parser.add_argument("--should_split_dataset", type=bool, default=False)
         parser.add_argument("--train_dataset_split", type=float, default=0.8)
         parser.add_argument("--limit_rows_dataset", type=int, default=9999,

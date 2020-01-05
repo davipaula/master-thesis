@@ -10,7 +10,7 @@ import logging
 from sklearn import metrics
 from ast import literal_eval
 
-csv.field_size_limit(sys.maxsize)
+# csv.field_size_limit(sys.maxsize)
 
 
 def get_evaluation(y_true, y_prob, list_metrics):

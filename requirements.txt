@@ -1,8 +1,8 @@
-spacy==2.2.3
-fire==0.2.1
-torch==1.2.0
-numpy==1.17.2
-gensim==3.8.0
-pandas==0.25.1
-scikit_learn==0.22
-tensorboardX==1.9
+spacy
+fire
+torch
+numpy
+gensim
+pandas
+scikit_learn
+tensorboardX
