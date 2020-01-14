@@ -9,6 +9,8 @@ import pandas as pd
 import logging
 from sklearn import metrics
 from ast import literal_eval
+import itertools as it
+
 
 # csv.field_size_limit(sys.maxsize)
 
@@ -99,6 +101,35 @@ def get_padded_document(document, max_length_word, max_length_sentences, max_len
     document += 1
 
     return document
+
+
+def get_document_at_word_level(document, words_per_sentence):
+    word_level_document = []
+
+    for paragraph_idx, paragraph in enumerate(words_per_sentence[0]):
+        for sentence_idx, number_of_words in enumerate(paragraph):
+            if number_of_words > 0:
+                word_level_document.extend(document[0, paragraph_idx, sentence_idx, :number_of_words].tolist())
+
+    return torch.LongTensor([word_level_document])
+
+
+def get_document_at_sentence_level(document):
+    rearranged_tensor = list(it.chain.from_iterable(document[0].tolist()))
+
+    return torch.LongTensor([rearranged_tensor])
+
+
+def get_words_per_sentence_at_sentence_level(words_per_sentence):
+    words_per_sentence_at_sentence_level = []
+
+    for paragraph in words_per_sentence:
+        for sentence in paragraph:
+            for words in sentence:
+                if words > 0:
+                    words_per_sentence_at_sentence_level.append(words)
+
+    return torch.LongTensor(words_per_sentence_at_sentence_level)
 
 
 if __name__ == "__main__":

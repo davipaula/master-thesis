@@ -4,10 +4,9 @@ import torch
 import pandas as pd
 from ast import literal_eval
 from datetime import datetime
-from torch.utils.data import TensorDataset
-
-from smash_dataset import SMASHDataset
-from utils import get_max_lengths
+from torch.utils.data import TensorDataset, random_split
+from src.smash_dataset import SMASHDataset
+from src.utils import get_max_lengths
 
 
 def get_click_stream_dump(click_stream_dump_path):
@@ -218,6 +217,56 @@ def get_padded_document_structures(self, words_ids_a):
         [document_structure['paragraphs_per_document'] for document_structure in document_structures])
 
     return words_per_sentences_tensor, sentences_per_paragraph_tensor, paragraphs_per_document_tensor
+
+
+def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/training.pth',
+                  validation_dataset_path='../data/validation.pth', test_dataset_path='../data/test.pth'):
+    print('Beginning of dataset split')
+    dataset_size = len(dataset)
+    train_dataset_size = int(dataset_size * train_split)
+    validation_dataset_size = int((dataset_size - train_dataset_size) / 2)
+    test_dataset_size = dataset_size - train_dataset_size - validation_dataset_size
+
+    train_dataset, validation_dataset, test_dataset = random_split(dataset,
+                                                                   [train_dataset_size, validation_dataset_size,
+                                                                    test_dataset_size])
+
+    print('Datasets split. Starting saving them', datetime.now())
+
+    training_params = {'batch_size': batch_size,
+                       'shuffle': True,
+                       'drop_last': True}
+    train_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
+    validation_loader = torch.utils.data.DataLoader(validation_dataset, **training_params)
+
+    test_params = {'batch_size': batch_size,
+                   'shuffle': True,
+                   'drop_last': False}
+    test_loader = torch.utils.data.DataLoader(test_dataset, **test_params)
+
+    torch.save(train_loader, train_dataset_path)
+    print('Training dataset saved', datetime.now())
+
+    torch.save(validation_loader, validation_dataset_path)
+    print('Validation dataset saved', datetime.now())
+
+    torch.save(test_loader, test_dataset_path)
+    print('Test dataset saved', datetime.now())
+
+
+def save_tensor_dataset(words_ids, name):
+    words_per_sentence, sentences_per_paragraph, paragraphs_per_document = get_padded_document_structures(
+        words_ids)
+    print('Transforming dataset into tensors', datetime.now())
+    document_tensor = get_document_tensor(words_ids)
+    print('Finished Transforming dataset into tensors', datetime.now())
+    print('Beginning creation of TensorDataset', datetime.now())
+    dataset = TensorDataset(document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document)
+
+    torch.save(dataset, name + '.pth')
+    print('Saved TensorDataset {} {}'.format(name, datetime.now()))
+
+    del document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document, dataset
 
 
 if __name__ == '__main__':

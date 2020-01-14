@@ -1,5 +1,5 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import torch
 import torch.nn as nn
