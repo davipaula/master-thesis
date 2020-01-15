@@ -8,6 +8,8 @@ import pandas as pd
 import csv
 import torch.nn.functional as F
 
+from src.utils import get_document_at_word_level
+
 
 class WordLevelSmashRNNModel(nn.Module):
     def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length, max_paragraph_length):
@@ -43,6 +45,9 @@ class WordLevelSmashRNNModel(nn.Module):
     def forward(self, current_document, words_per_sentence_current_document,
                 previous_document, words_per_sentence_previous_document,
                 click_rate_tensor):
+        current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
+        previous_document = get_document_at_word_level(previous_document, words_per_sentence_previous_document)
+
         # This only works with self.batch_size = 1
         current_document_representation = self.get_document_representation(current_document)
         previous_document_representation = self.get_document_representation(previous_document)

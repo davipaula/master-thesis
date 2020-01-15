@@ -48,8 +48,8 @@ class SmashRNN:
         print('Finished getting max lengths', datetime.now())
 
         self.complete_dataset = SMASHDataset(self.opt.full_dataset_path, self.opt.word2vec_path, self.max_sent_length,
-                                             self.max_word_length,
-                                             self.max_paragraph_length, self.opt.limit_rows_dataset)
+                                             self.max_word_length, self.max_paragraph_length,
+                                             self.opt.limit_rows_dataset)
 
         if self.opt.should_split_dataset:
             split_dataset(self.complete_dataset, self.opt.train_dataset_split, self.batch_size,
@@ -63,31 +63,36 @@ class SmashRNN:
         unknown_word = np.zeros((1, embed_dim))
         dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
 
-        # Siamese + Attention model
-        self.model = SmashRNNModel(dict, dict_len, embed_dim, self.max_word_length, self.max_sent_length,
-                                   self.max_paragraph_length)
+        # Paragraph level model
+        self.paragraph_level_model = SmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
+                                                   self.max_sent_length,
+                                                   self.max_paragraph_length)
+
+        # Sentence level model
+        self.sentence_level_model = SentenceSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
+                                                          self.max_sent_length)
 
         # Word level model
         self.word_level_model = WordLevelSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
                                                        self.max_sent_length,
                                                        self.max_paragraph_length)
 
-        # Sentence level model
-        self.sentence_level_model = SentenceSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
-                                                          self.max_sent_length)
-
         if torch.cuda.is_available():
-            self.model.cuda()
+            self.paragraph_level_model.cuda()
+            self.sentence_level_model.cuda()
+            self.word_level_model.cuda()
 
         # Overall model optimization and evaluation parameters
         self.criterion = nn.MSELoss()
-        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
+        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.paragraph_level_model.parameters()),
                                          lr=self.learning_rate,
                                          momentum=self.momentum)
         self.best_loss = 1e5
         self.best_epoch = 0
-        self.model.train()
-        # self.num_iter_per_epoch = len(self.training_generator)
+
+        self.paragraph_level_model.train()
+        self.sentence_level_model.train()
+        self.word_level_model.train()
 
     def train(self):
         training_generator = torch.load(self.opt.train_dataset_path)
@@ -99,7 +104,7 @@ class SmashRNN:
         step = 'train'
 
         for epoch in range(self.opt.num_epoches):
-            self.model.train()
+            self.paragraph_level_model.train()
 
             loss_list = []
             predictions_list = []
@@ -117,13 +122,13 @@ class SmashRNN:
                     click_rate_tensor = click_rate_tensor.cuda()
 
                 self.optimizer.zero_grad()
-                predictions = self.model(current_document, words_per_sentence_current_document,
-                                         sentences_per_paragraph_current_document,
-                                         paragraphs_per_document_current_document,
-                                         previous_document, words_per_sentence_previous_document,
-                                         sentences_per_paragraph_previous_document,
-                                         paragraphs_per_document_previous_document,
-                                         click_rate_tensor)
+                predictions = self.paragraph_level_model(current_document, words_per_sentence_current_document,
+                                                         sentences_per_paragraph_current_document,
+                                                         paragraphs_per_document_current_document,
+                                                         previous_document, words_per_sentence_previous_document,
+                                                         sentences_per_paragraph_previous_document,
+                                                         paragraphs_per_document_previous_document,
+                                                         click_rate_tensor)
                 loss = self.criterion(predictions, click_rate_tensor)
                 loss.backward()
                 self.optimizer.step()
@@ -151,13 +156,13 @@ class SmashRNN:
 
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-            if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.opt.validation_interval))
+            # if self.should_run_validation(epoch):
+            #     self.validate(int(epoch / self.opt.validation_interval), 'paragraph')
 
-        torch.save(self.model.state_dict(), self.opt.model_path)
+        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
         print('Training finished {}'.format(datetime.now()))
 
-    def validate(self, validation_step):
+    def validate(self, validation_step, level):
         validation_generator = torch.load(self.opt.validation_dataset_path)
         validation_step = int(validation_step) + 1
 
@@ -179,13 +184,25 @@ class SmashRNN:
                 click_rate_tensor = click_rate_tensor.cuda()
 
             with torch.no_grad():
-                predictions = self.model(current_document, words_per_sentence_current_document,
-                                         sentences_per_paragraph_current_document,
-                                         paragraphs_per_document_current_document,
-                                         previous_document, words_per_sentence_previous_document,
-                                         sentences_per_paragraph_previous_document,
-                                         paragraphs_per_document_previous_document,
-                                         click_rate_tensor)
+                if level == 'paragraph':
+                    predictions = self.paragraph_level_model(current_document, words_per_sentence_current_document,
+                                                             sentences_per_paragraph_current_document,
+                                                             paragraphs_per_document_current_document,
+                                                             previous_document, words_per_sentence_previous_document,
+                                                             sentences_per_paragraph_previous_document,
+                                                             paragraphs_per_document_previous_document,
+                                                             click_rate_tensor)
+                elif level == 'sentence':
+                    predictions = self.sentence_level_model(current_document, words_per_sentence_current_document,
+                                                            sentences_per_paragraph_current_document,
+                                                            previous_document, words_per_sentence_previous_document,
+                                                            sentences_per_paragraph_previous_document,
+                                                            click_rate_tensor)
+                elif level == 'word':
+                    predictions = self.word_level_model(current_document, words_per_sentence_current_document,
+                                                        previous_document, words_per_sentence_previous_document,
+                                                        click_rate_tensor)
+
             loss = self.criterion(predictions, click_rate_tensor)
 
             loss_list.append(loss)
@@ -194,14 +211,16 @@ class SmashRNN:
         loss = sum(loss_list) / validation_generator.dataset.__len__()
 
         self.output_file.write(
-            'Validation: {}/{} \n{} loss: {}\n\n'.format(
+            '{} level\n Validation: {}/{} \n{} loss: {}\n\n'.format(
+                level.capitalize(),
                 validation_step,
                 self.num_validations,
                 step.capitalize(),
                 loss
             ))
 
-        print('Validation: {}/{}, Lr: {}, Loss: {}'.format(
+        print('{} level\n Validation: {}/{}, Lr: {}, Loss: {}'.format(
+            level.capitalize(),
             validation_step,
             self.num_validations,
             self.optimizer.param_groups[0]['lr'],
@@ -217,7 +236,7 @@ class SmashRNN:
         self.best_loss = loss
         self.best_epoch = epoch
 
-        torch.save(self.model.state_dict(), self.opt.model_path)
+        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
 
     def should_stop(self, epoch):
         return epoch - self.best_epoch > self.es_patience > 0
@@ -251,10 +270,9 @@ class SmashRNN:
             loss_list = []
             predictions_list = []
 
-
             for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-                current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
-                previous_document = get_document_at_word_level(previous_document, words_per_sentence_previous_document)
+                # current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
+                # previous_document = get_document_at_word_level(previous_document, words_per_sentence_previous_document)
 
                 if torch.cuda.is_available():
                     current_document = current_document.cuda()
@@ -294,10 +312,10 @@ class SmashRNN:
 
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-            # if self.should_run_validation(epoch):
-            #     self.validate(int(epoch / self.opt.validation_interval))
+            if self.should_run_validation(epoch):
+                self.validate(int(epoch / self.opt.validation_interval), 'word')
 
-        torch.save(self.model.state_dict(), self.opt.model_path)
+        torch.save(self.word_level_model.state_dict(), self.opt.model_path)
         print('Training finished {}'.format(datetime.now()))
 
     def train_sentence_level(self):
@@ -360,10 +378,10 @@ class SmashRNN:
 
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-            # if self.should_run_validation(epoch):
-            #     self.validate(int(epoch / self.opt.validation_interval))
+            if self.should_run_validation(epoch):
+                self.validate(int(epoch / self.opt.validation_interval), 'sentence')
 
-        torch.save(self.model.state_dict(), self.opt.model_path)
+        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
         print('Training finished {}'.format(datetime.now()))
 
     @staticmethod
@@ -388,6 +406,6 @@ class SmashRNN:
 
 if __name__ == '__main__':
     model = SmashRNN()
-    # model.train_word_level()
-    model.train_sentence_level()
+    model.train_word_level()
+    # model.train_sentence_level()
     # model.train()
