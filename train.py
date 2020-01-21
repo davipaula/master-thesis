@@ -98,9 +98,6 @@ class SmashRNN:
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
 
-        # Trying to avoid TensorDataset. Didn't work
-        # training_generator = torch.utils.data.DataLoader(self.complete_dataset, batch_size=self.batch_size)
-
         step = 'train'
 
         for epoch in range(self.opt.num_epoches):
@@ -156,8 +153,8 @@ class SmashRNN:
 
             self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
 
-            # if self.should_run_validation(epoch):
-            #     self.validate(int(epoch / self.opt.validation_interval), 'paragraph')
+            if self.should_run_validation(epoch):
+                self.validate(int(epoch / self.opt.validation_interval), 'paragraph')
 
         torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
         print('Training finished {}'.format(datetime.now()))
@@ -254,9 +251,6 @@ class SmashRNN:
     def train_word_level(self):
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
-
-        # Trying to avoid TensorDataset. Didn't work
-        # training_generator = torch.utils.data.DataLoader(self.complete_dataset, batch_size=self.batch_size)
 
         step = 'train'
 

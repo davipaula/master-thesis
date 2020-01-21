@@ -64,6 +64,9 @@ class WordLevelSmashRNNModel(nn.Module):
         return predicted_ctr
 
     def get_document_representation(self, word_ids_in_sent):
+        if torch.cuda.is_available():
+            word_ids_in_sent = word_ids_in_sent.cuda()
+
         # attention over words
         # 1st dim = batch, last dim = words
         # get word embeddings from ids
