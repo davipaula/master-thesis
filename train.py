@@ -6,9 +6,10 @@ import csv
 import os
 import numpy as np
 import pandas as pd
+from comet_ml import Experiment
 import torch
 import torch.nn as nn
-from src.utils import get_max_lengths, get_document_at_word_level
+from src.utils import get_max_lengths
 from src.smash_rnn_model import SmashRNNModel
 from src.word_smash_rnn_model import WordLevelSmashRNNModel
 from src.sentence_smash_rnn_model import SentenceSmashRNNModel
@@ -94,6 +95,10 @@ class SmashRNN:
         self.sentence_level_model.train()
         self.word_level_model.train()
 
+        self.experiment = Experiment(api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ",
+                                     project_name="thesis-davi",
+                                     workspace="davipaula")
+
     def train(self):
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
@@ -134,6 +139,8 @@ class SmashRNN:
                 predictions_list.append(predictions.clone().cpu())
 
             loss = sum(loss_list) / training_generator.dataset.__len__()
+
+            self.experiment.log_metric('train_paragraph_level_loss', loss.item(), epoch=epoch + 1)
 
             self.output_file.write(
                 'Epoch: {}/{} \n{} loss: {}\n\n'.format(
@@ -206,6 +213,8 @@ class SmashRNN:
             predictions_list.append(predictions.clone().cpu())
 
         loss = sum(loss_list) / validation_generator.dataset.__len__()
+
+        self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
 
         self.output_file.write(
             '{} level\n Validation: {}/{} \n{} loss: {}\n\n'.format(
@@ -288,6 +297,8 @@ class SmashRNN:
 
             loss = sum(loss_list) / training_generator.dataset.__len__()
 
+            self.experiment.log_metric('train_word_level_loss', loss.item(), epoch=epoch + 1)
+
             self.output_file.write(
                 'Epoch: {}/{} \n{} loss: {}\n\n'.format(
                     epoch + 1,
@@ -314,6 +325,7 @@ class SmashRNN:
 
     def train_sentence_level(self):
         training_generator = torch.load(self.opt.train_dataset_path)
+
         print('Starting training {}'.format(datetime.now()))
 
         # Trying to avoid TensorDataset. Didn't work
@@ -354,6 +366,8 @@ class SmashRNN:
 
             loss = sum(loss_list) / training_generator.dataset.__len__()
 
+            self.experiment.log_metric('train_sentence_level_loss', loss.item(), epoch=epoch + 1)
+
             self.output_file.write(
                 'Epoch: {}/{} \n{} loss: {}\n\n'.format(
                     epoch + 1,
@@ -382,24 +396,40 @@ class SmashRNN:
     def get_args():
         parser = argparse.ArgumentParser(
             """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
-        parser.add_argument("--model_path", type=str, default='./trained_models/model.pt')
-        parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
-        parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
-        parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
-        parser.add_argument("--validation_dataset_path", type=str, default='./data/validation.pth')
-        parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
+        parser.add_argument("--model_path", type=str, default='/home/dnascimento/thesis-davi/trained_models/model.pt')
+        parser.add_argument("--full_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/wiki_df.csv')
+        parser.add_argument("--word2vec_path", type=str, default='/home/dnascimento/thesis-davi/data/glove.6B.50d.txt')
+        parser.add_argument("--train_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/training.pth')
+        parser.add_argument("--validation_dataset_path", type=str,
+                            default='/home/dnascimento/thesis-davi/data/validation.pth')
+        parser.add_argument("--test_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/test.pth')
         parser.add_argument("--num_epoches", type=int, default=1)
         parser.add_argument("--validation_interval", type=int, default=1)
         parser.add_argument("--should_split_dataset", type=bool, default=False)
         parser.add_argument("--train_dataset_split", type=float, default=0.8)
-        parser.add_argument("--limit_rows_dataset", type=int, default=9999,
-                            help='For development purposes. This limits the number of rows read from the dataset. Change to None to ignore it')
+        parser.add_argument("--limit_rows_dataset", type=int, default=9999999,
+                            help='For development purposes. This limits the number of rows read from the dataset.')
+
+        # parser = argparse.ArgumentParser(
+        #     """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
+        # parser.add_argument("--model_path", type=str, default='./trained_models/model.pt')
+        # parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
+        # parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
+        # parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
+        # parser.add_argument("--validation_dataset_path", type=str, default='./data/validation.pth')
+        # parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
+        # parser.add_argument("--num_epoches", type=int, default=1)
+        # parser.add_argument("--validation_interval", type=int, default=1)
+        # parser.add_argument("--should_split_dataset", type=bool, default=False)
+        # parser.add_argument("--train_dataset_split", type=float, default=0.8)
+        # parser.add_argument("--limit_rows_dataset", type=int, default=9999,
+        #                     help='For development purposes. This limits the number of rows read from the dataset. Change to None to ignore it')
 
         return parser.parse_args()
 
 
 if __name__ == '__main__':
     model = SmashRNN()
-    model.train_word_level()
+    # model.train_word_level()
     # model.train_sentence_level()
-    # model.train()
+    model.train()
