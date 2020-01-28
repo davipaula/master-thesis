@@ -430,6 +430,6 @@ class SmashRNN:
 
 if __name__ == '__main__':
     model = SmashRNN()
-    # model.train_word_level()
+    model.train_word_level()
     # model.train_sentence_level()
-    model.train()
+    # model.train()
