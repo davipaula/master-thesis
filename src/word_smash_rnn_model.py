@@ -12,7 +12,7 @@ from src.utils import get_document_at_word_level
 
 
 class WordLevelSmashRNNModel(nn.Module):
-    def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length, max_paragraph_length):
+    def __init__(self, dict, dict_len, embedding_size):
         super(WordLevelSmashRNNModel, self).__init__()
 
         self.max_word_length = 500
@@ -106,4 +106,4 @@ if __name__ == '__main__':
     dict_len += 1
     unknown_word = np.zeros((1, embed_dim))
     dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
-    WordLevelSmashRNNModel(dict, dict_len, embed_dim, 38, 60, 90)
+    WordLevelSmashRNNModel(dict, dict_len, embed_dim)

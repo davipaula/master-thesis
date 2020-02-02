@@ -1,9 +1,7 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import torch
-import sys
-import csv
 import numpy as np
 import pandas as pd
 import logging
@@ -13,8 +11,6 @@ import itertools as it
 
 
 # csv.field_size_limit(sys.maxsize)
-
-
 def get_evaluation(y_true, y_prob, list_metrics):
     y_pred = np.argmax(y_prob, -1)
     output = {}

@@ -12,7 +12,7 @@ import torch.nn as nn
 from src.utils import get_max_lengths
 from src.smash_rnn_model import SmashRNNModel
 from src.word_smash_rnn_model import WordLevelSmashRNNModel
-from src.sentence_smash_rnn_model import SentenceSmashRNNModel
+from src.sentence_smash_rnn_model import SentenceLevelSmashRNNModel
 from tensorboardX import SummaryWriter
 from src.smash_dataset import SMASHDataset
 from datetime import datetime
@@ -38,9 +38,6 @@ class SmashRNN:
         self.num_validations = int(self.opt.num_epoches / self.opt.validation_interval)
 
         # End of configs
-
-        self.output_file = self.create_output_file()
-        self.writer = SummaryWriter(self.log_path)
 
         print('Getting max lengths', datetime.now())
         self.max_word_length, self.max_sent_length, self.max_paragraph_length = get_max_lengths(
@@ -70,13 +67,11 @@ class SmashRNN:
                                                    self.max_paragraph_length)
 
         # Sentence level model
-        self.sentence_level_model = SentenceSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
-                                                          self.max_sent_length)
+        self.sentence_level_model = SentenceLevelSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
+                                                               self.max_sent_length)
 
         # Word level model
-        self.word_level_model = WordLevelSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
-                                                       self.max_sent_length,
-                                                       self.max_paragraph_length)
+        self.word_level_model = WordLevelSmashRNNModel(dict, dict_len, embed_dim)
 
         if torch.cuda.is_available():
             self.paragraph_level_model.cuda()
@@ -142,14 +137,6 @@ class SmashRNN:
 
             self.experiment.log_metric('train_paragraph_level_loss', loss.item(), epoch=epoch + 1)
 
-            self.output_file.write(
-                'Epoch: {}/{} \n{} loss: {}\n\n'.format(
-                    epoch + 1,
-                    self.opt.num_epoches,
-                    step.capitalize(),
-                    loss
-                ))
-
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
                 self.opt.num_epoches,
@@ -158,12 +145,10 @@ class SmashRNN:
                 datetime.now()
             ))
 
-            self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
-
             if self.should_run_validation(epoch):
                 self.validate(int(epoch / self.opt.validation_interval), 'paragraph')
 
-        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
+        self.save_model(self.paragraph_level_model, loss, epoch)
         print('Training finished {}'.format(datetime.now()))
 
     def validate(self, validation_step, level):
@@ -216,15 +201,6 @@ class SmashRNN:
 
         self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
 
-        self.output_file.write(
-            '{} level\n Validation: {}/{} \n{} loss: {}\n\n'.format(
-                level.capitalize(),
-                validation_step,
-                self.num_validations,
-                step.capitalize(),
-                loss
-            ))
-
         print('{} level\n Validation: {}/{}, Lr: {}, Loss: {}'.format(
             level.capitalize(),
             validation_step,
@@ -233,29 +209,21 @@ class SmashRNN:
             loss
         ))
 
-        self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, validation_step)
-
     def is_best_loss(self, loss):
         return (loss + self.es_min_delta) < self.best_loss
 
-    def save_model(self, loss, epoch):
+    def save_model(self, model, loss, epoch):
         self.best_loss = loss
         self.best_epoch = epoch
 
-        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
+        model_path = self.opt.model_folder + os.sep + self.opt.level + '_level_model.pt'
+        torch.save(model.state_dict(), model_path)
 
     def should_stop(self, epoch):
         return epoch - self.best_epoch > self.es_patience > 0
 
     def should_run_validation(self, epoch):
         return ((epoch + 1) % self.opt.validation_interval) == 0
-
-    def create_output_file(self):
-        output_file = open('trained_models' + os.sep + 'logs.txt', 'a+')
-        # TODO save all config values
-        # output_file.write('Model\'s parameters: {}'.format(vars(self.opt)))
-
-        return output_file
 
     def train_word_level(self):
         training_generator = torch.load(self.opt.train_dataset_path)
@@ -274,9 +242,6 @@ class SmashRNN:
             predictions_list = []
 
             for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-                # current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
-                # previous_document = get_document_at_word_level(previous_document, words_per_sentence_previous_document)
-
                 if torch.cuda.is_available():
                     current_document = current_document.cuda()
                     words_per_sentence_current_document = words_per_sentence_current_document.cuda()
@@ -299,14 +264,6 @@ class SmashRNN:
 
             self.experiment.log_metric('train_word_level_loss', loss.item(), epoch=epoch + 1)
 
-            self.output_file.write(
-                'Epoch: {}/{} \n{} loss: {}\n\n'.format(
-                    epoch + 1,
-                    self.opt.num_epoches,
-                    step.capitalize(),
-                    loss
-                ))
-
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
                 self.opt.num_epoches,
@@ -315,21 +272,16 @@ class SmashRNN:
                 datetime.now()
             ))
 
-            self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
-
             if self.should_run_validation(epoch):
                 self.validate(int(epoch / self.opt.validation_interval), 'word')
 
-        torch.save(self.word_level_model.state_dict(), self.opt.model_path)
+        self.save_model(self.word_level_model, loss, epoch)
         print('Training finished {}'.format(datetime.now()))
 
     def train_sentence_level(self):
         training_generator = torch.load(self.opt.train_dataset_path)
 
         print('Starting training {}'.format(datetime.now()))
-
-        # Trying to avoid TensorDataset. Didn't work
-        # training_generator = torch.utils.data.DataLoader(self.complete_dataset, batch_size=self.batch_size)
 
         step = 'train'
 
@@ -368,14 +320,6 @@ class SmashRNN:
 
             self.experiment.log_metric('train_sentence_level_loss', loss.item(), epoch=epoch + 1)
 
-            self.output_file.write(
-                'Epoch: {}/{} \n{} loss: {}\n\n'.format(
-                    epoch + 1,
-                    self.opt.num_epoches,
-                    step.capitalize(),
-                    loss
-                ))
-
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
                 self.opt.num_epoches,
@@ -384,31 +328,30 @@ class SmashRNN:
                 datetime.now()
             ))
 
-            self.writer.add_scalar('{}/Loss'.format(step.capitalize()), loss, epoch)
-
             if self.should_run_validation(epoch):
                 self.validate(int(epoch / self.opt.validation_interval), 'sentence')
 
-        torch.save(self.paragraph_level_model.state_dict(), self.opt.model_path)
+        self.save_model(self.sentence_level_model, loss, epoch)
         print('Training finished {}'.format(datetime.now()))
 
     @staticmethod
     def get_args():
         parser = argparse.ArgumentParser(
             """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
-        parser.add_argument("--model_path", type=str, default='/home/dnascimento/thesis-davi/trained_models/model.pt')
-        parser.add_argument("--full_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/wiki_df.csv')
-        parser.add_argument("--word2vec_path", type=str, default='/home/dnascimento/thesis-davi/data/glove.6B.50d.txt')
-        parser.add_argument("--train_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/training.pth')
+        parser.add_argument("--model_folder", type=str, default='./trained_models/')
+        parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
+        parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
+        parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
         parser.add_argument("--validation_dataset_path", type=str,
-                            default='/home/dnascimento/thesis-davi/data/validation.pth')
-        parser.add_argument("--test_dataset_path", type=str, default='/home/dnascimento/thesis-davi/data/test.pth')
+                            default='./data/validation.pth')
+        parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
         parser.add_argument("--num_epoches", type=int, default=1)
         parser.add_argument("--validation_interval", type=int, default=1)
         parser.add_argument("--should_split_dataset", type=bool, default=False)
         parser.add_argument("--train_dataset_split", type=float, default=0.8)
         parser.add_argument("--limit_rows_dataset", type=int, default=9999999,
                             help='For development purposes. This limits the number of rows read from the dataset.')
+        parser.add_argument("--level", type=str, default='paragraph')
 
         # parser = argparse.ArgumentParser(
         #     """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
@@ -427,9 +370,17 @@ class SmashRNN:
 
         return parser.parse_args()
 
+    def run(self):
+        if self.opt.level == 'paragraph':
+            model.train()
+        elif self.opt.level == 'sentence':
+            model.train_sentence_level()
+        elif self.opt.level == 'word':
+            model.train_word_level()
+        else:
+            raise SystemExit(0)
+
 
 if __name__ == '__main__':
     model = SmashRNN()
-    model.train_word_level()
-    # model.train_sentence_level()
-    # model.train()
+    model.run()

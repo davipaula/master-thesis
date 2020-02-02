@@ -10,9 +10,9 @@ import csv
 from src.utils import get_document_at_sentence_level, get_words_per_sentence_at_sentence_level
 
 
-class SentenceSmashRNNModel(nn.Module):
+class SentenceLevelSmashRNNModel(nn.Module):
     def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length):
-        super(SentenceSmashRNNModel, self).__init__()
+        super(SentenceLevelSmashRNNModel, self).__init__()
 
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
@@ -89,7 +89,7 @@ class SentenceSmashRNNModel(nn.Module):
 
         # this only works with batch_size = 1
         _sentences_per_paragraph = np.sum([[words for words in paragraph if words > 0] for paragraph in
-                                    sentences_per_paragraph.tolist()][0])
+                                           sentences_per_paragraph.tolist()][0])
         # zero placeholders
         sentences = torch.zeros((self.batch_size, _sentences_per_paragraph, self.word_gru_out_size))
 
@@ -101,6 +101,10 @@ class SentenceSmashRNNModel(nn.Module):
         for sentence_idx in range(_sentences_per_paragraph):
             # attention over words
             word_ids_in_sent = document[:, sentence_idx, :]
+
+            if torch.cuda.is_available():
+                word_ids_in_sent = word_ids_in_sent.cuda()
+
             # 1st dim = batch, last dim = words
             words_in_sent = self.embedding(word_ids_in_sent)  # get word embeddings from ids
 
@@ -141,7 +145,8 @@ class SentenceSmashRNNModel(nn.Module):
 
             # Find sentence embeddings
             # gets the representation for the sentence
-            _sentence = (_sentence.float() * word_alphas.unsqueeze(2)).sum(dim=1)  # (batch_size, self.word_gru_out_size)
+            _sentence = (_sentence.float() * word_alphas.unsqueeze(2)).sum(
+                dim=1)  # (batch_size, self.word_gru_out_size)
 
             sentences[:, sentence_idx] = _sentence
 
@@ -222,5 +227,5 @@ if __name__ == '__main__':
     dict_len += 1
     unknown_word = np.zeros((1, embed_dim))
     dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
-    model = SentenceSmashRNNModel(dict, dict_len, embed_dim, 90, 50)
+    model = SentenceLevelSmashRNNModel(dict, dict_len, embed_dim, 90, 50)
     model.test_model()

@@ -1,7 +1,6 @@
 """
-@author: Viet Nguyen <nhviet1009@gmail.com>
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
-from datetime import datetime
 
 import pandas as pd
 from torch.utils.data.dataset import Dataset
