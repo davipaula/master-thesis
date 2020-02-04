@@ -27,7 +27,7 @@ class SmashRNN:
             torch.manual_seed(123)
 
         # Basic config. Should be customizable in the future
-        self.batch_size = 1
+        self.batch_size = 3
         self.learning_rate = 0.1
         self.momentum = 0.9
         self.log_path = './tensorboard/smash_rnn'

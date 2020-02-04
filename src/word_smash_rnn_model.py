@@ -6,8 +6,7 @@ import torch.nn as nn
 import numpy as np
 import pandas as pd
 import csv
-import torch.nn.functional as F
-
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence, PackedSequence
 from src.utils import get_document_at_word_level
 
 
@@ -45,12 +44,15 @@ class WordLevelSmashRNNModel(nn.Module):
     def forward(self, current_document, words_per_sentence_current_document,
                 previous_document, words_per_sentence_previous_document,
                 click_rate_tensor):
-        current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
-        previous_document = get_document_at_word_level(previous_document, words_per_sentence_previous_document)
+        current_document, words_in_current_document = get_document_at_word_level(current_document,
+                                                                                 words_per_sentence_current_document)
+        previous_document, words_in_previous_document = get_document_at_word_level(previous_document,
+                                                                                   words_per_sentence_previous_document)
 
         # This only works with self.batch_size = 1
-        current_document_representation = self.get_document_representation(current_document)
-        previous_document_representation = self.get_document_representation(previous_document)
+        current_document_representation = self.get_document_representation(current_document, words_in_current_document)
+        previous_document_representation = self.get_document_representation(previous_document,
+                                                                            words_in_previous_document)
 
         # Concatenates document representations. This is the siamese part of the model
         concatenated_documents_representation = torch.cat((current_document_representation,
@@ -63,40 +65,73 @@ class WordLevelSmashRNNModel(nn.Module):
 
         return predicted_ctr
 
-    def get_document_representation(self, word_ids_in_sent):
+    def get_document_representation(self, word_ids_in_sentence, words_in_sentence):
         if torch.cuda.is_available():
-            word_ids_in_sent = word_ids_in_sent.cuda()
+            word_ids_in_sentence = word_ids_in_sentence.cuda()
 
         # attention over words
         # 1st dim = batch, last dim = words
         # get word embeddings from ids
-        words_in_sent = self.embedding(word_ids_in_sent)
+        word_embeddings = self.embedding(word_ids_in_sentence)
 
-        word_gru_out, _ = self.word_gru(words_in_sent.float())
+        packed_word_embeddings = pack_padded_sequence(word_embeddings,
+                                                      lengths=words_in_sentence,
+                                                      batch_first=True,
+                                                      enforce_sorted=False)
+
+        word_gru_output, _ = self.word_gru(packed_word_embeddings.float())
 
         # This implementation uses the feature sentence_embeddings. Paper uses hidden state
-        word_att_out = torch.tanh(self.word_attention(word_gru_out.data))
+        word_attention_output = torch.tanh(self.word_attention(word_gru_output.data))
 
         # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
-        word_att_out = self.word_context_vector(word_att_out).squeeze(1)  # (n_words)
+        word_attention_output = self.word_context_vector(word_attention_output).squeeze(1)  # (n_words)
 
         # Compute softmax over the dot-product manually
         # Manually because they have to be computed only over words in the same sentence
 
         # First, take the exponent
-        max_value = word_att_out.max()  # scalar, for numerical stability during exponent calculation
-        word_att_out = torch.exp(word_att_out - max_value)  # (n_words)
+        max_value = word_attention_output.max()  # scalar, for numerical stability during exponent calculation
+        word_attention_output = torch.exp(word_attention_output - max_value)  # (n_words)
+
+        # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
+        word_attention_output, _ = pad_packed_sequence(PackedSequence(data=word_attention_output,
+                                                                      batch_sizes=word_gru_output.batch_sizes,
+                                                                      sorted_indices=word_gru_output.sorted_indices,
+                                                                      unsorted_indices=word_gru_output.unsorted_indices),
+                                                       batch_first=True)  # (n_sentences, max(words_per_sentence))
 
         # Calculate softmax values as now words are arranged in their respective sentences
-        word_alphas = word_att_out / torch.sum(word_att_out, dim=1,
-                                               keepdim=True)  # (n_sentences, max(words_per_sentence))
+        word_alphas = word_attention_output / torch.sum(word_attention_output, dim=1,
+                                                        keepdim=True)  # (n_sentences, max(words_per_sentence))
+
+        # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
+        _sentence, _ = pad_packed_sequence(word_gru_output,
+                                           batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
 
         # Find sentence embeddings
         # gets the representation for the sentence
-        sentence_representation = (word_gru_out.float() * word_alphas).sum(
-            dim=1)  # (batch_size, self.word_gru_out_size)
+        sentence_representation = (_sentence.float() * word_alphas.unsqueeze(2)).sum(dim=1)
+        # (batch_size, self.word_gru_out_size)
 
         return sentence_representation
+
+    def test_forward(self):
+        print('Test a forward step')
+
+        training_generator = torch.load('../data/training.pth')
+
+        for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
+            prediction = self.forward(current_document,
+                                      words_per_sentence_current_document,
+                                      previous_document,
+                                      words_per_sentence_previous_document,
+                                      click_rate_tensor)
+
+            print(prediction)
+            print(click_rate_tensor)
+
+            break
 
 
 if __name__ == '__main__':
@@ -106,4 +141,5 @@ if __name__ == '__main__':
     dict_len += 1
     unknown_word = np.zeros((1, embed_dim))
     dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
-    WordLevelSmashRNNModel(dict, dict_len, embed_dim)
+    word_level_model = WordLevelSmashRNNModel(dict, dict_len, embed_dim)
+    word_level_model.test_forward()

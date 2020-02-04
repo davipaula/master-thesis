@@ -284,11 +284,11 @@ if __name__ == '__main__':
 
     # get_wiki_documents_from_json(wiki_documents_path)
 
-    wiki_dataset = generate_dataset(click_stream_dump_path, wiki_documents_path)
-    wiki_dataset.to_csv('../data/wiki_df.csv',
-                        index=False,
-                        header=['previous_article', 'previous_article_text', 'current_article',
-                                'current_article_text', 'number_of_clicks', 'click_rate'])
+    # wiki_dataset = generate_dataset(click_stream_dump_path, wiki_documents_path)
+    # wiki_dataset.to_csv('../data/wiki_df.csv',
+    #                     index=False,
+    #                     header=['previous_article', 'previous_article_text', 'current_article',
+    #                             'current_article_text', 'number_of_clicks', 'click_rate'])
 
     # print(wiki_dataset.sample(n=10))
 

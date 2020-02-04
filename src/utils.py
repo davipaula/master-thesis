@@ -99,15 +99,27 @@ def get_padded_document(document, max_length_word, max_length_sentences, max_len
     return document
 
 
-def get_document_at_word_level(document, words_per_sentence):
-    word_level_document = []
+def get_document_at_word_level(document_batch, words_per_sentence):
+    words_per_document_in_batch = words_per_sentence.sum(dim=2).sum(dim=1)
+    max_words_per_document_in_batch = max(words_per_document_in_batch).item()
+    word_level_document_batch = torch.zeros((words_per_document_in_batch.shape[0], max_words_per_document_in_batch),
+                                            dtype=int)
 
-    for paragraph_idx, paragraph in enumerate(words_per_sentence[0]):
-        for sentence_idx, number_of_words in enumerate(paragraph):
-            if number_of_words > 0:
-                word_level_document.extend(document[0, paragraph_idx, sentence_idx, :number_of_words].tolist())
+    for document_idx, document in enumerate(words_per_sentence):
+        word_level_document = []
 
-    return torch.LongTensor([word_level_document])
+        for paragraph_idx, paragraph in enumerate(document):
+            for sentence_idx, number_of_words in enumerate(paragraph):
+                if number_of_words > 0:
+                    word_level_document.extend(document_batch[
+                                               document_idx,
+                                               paragraph_idx,
+                                               sentence_idx,
+                                               :number_of_words].tolist())
+
+        word_level_document_batch[document_idx, :len(word_level_document)] = torch.LongTensor(word_level_document)
+
+    return word_level_document_batch, words_per_document_in_batch  # (batch_size, max_words_per_document_in_batch)
 
 
 def get_document_at_sentence_level(document):
@@ -129,13 +141,18 @@ def get_words_per_sentence_at_sentence_level(words_per_sentence):
 
 
 if __name__ == "__main__":
-    word, sent, paragraph = get_max_lengths('../data/wiki_df_small.csv')
-    print(word)
-    print(sent)
-    print(paragraph)
+    torch.manual_seed(123)
+    # word, sent, paragraph = get_max_lengths('../data/wiki_df.csv')
+    word = 98
+    sent = 60
+    paragraph = 36
 
-    click_stream_dump_path = '../data/clickstream-enwiki-2019-08.tsv'
-    wiki_documents_path = '../data/simplewiki.jsonl'
+    training_generator = torch.load('../data/training.pth')
 
-    LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+    i = 0
+    for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
+        document_word_level, words_per_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
+        break
+
+    print(document_word_level.shape)
+    print(words_per_document.shape)
