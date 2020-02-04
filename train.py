@@ -13,7 +13,6 @@ from src.utils import get_max_lengths
 from src.smash_rnn_model import SmashRNNModel
 from src.word_smash_rnn_model import WordLevelSmashRNNModel
 from src.sentence_smash_rnn_model import SentenceLevelSmashRNNModel
-from tensorboardX import SummaryWriter
 from src.smash_dataset import SMASHDataset
 from datetime import datetime
 from src.dataset_creation import split_dataset
@@ -27,7 +26,6 @@ class SmashRNN:
             torch.manual_seed(123)
 
         # Basic config. Should be customizable in the future
-        self.batch_size = 3
         self.learning_rate = 0.1
         self.momentum = 0.9
         self.log_path = './tensorboard/smash_rnn'
@@ -35,6 +33,7 @@ class SmashRNN:
         self.early_stopping_patience = 0
 
         self.opt = self.get_args()
+        self.batch_size = self.opt.batch_size
         self.num_validations = int(self.opt.num_epoches / self.opt.validation_interval)
 
         # End of configs
@@ -352,6 +351,7 @@ class SmashRNN:
         parser.add_argument("--limit_rows_dataset", type=int, default=9999999,
                             help='For development purposes. This limits the number of rows read from the dataset.')
         parser.add_argument("--level", type=str, default='paragraph')
+        parser.add_argument("--batch_size", type=int, default=3)
 
         # parser = argparse.ArgumentParser(
         #     """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
