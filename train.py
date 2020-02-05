@@ -132,7 +132,7 @@ class SmashRNN:
                 loss_list.append(loss)
                 predictions_list.append(predictions.clone().cpu())
 
-            loss = sum(loss_list) / training_generator.dataset.__len__()
+            loss = self.calculate_loss(loss_list)
 
             self.experiment.log_metric('train_paragraph_level_loss', loss.item(), epoch=epoch + 1)
 
@@ -196,7 +196,7 @@ class SmashRNN:
             loss_list.append(loss)
             predictions_list.append(predictions.clone().cpu())
 
-        loss = sum(loss_list) / validation_generator.dataset.__len__()
+        loss = self.calculate_loss(loss_list)
 
         self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
 
@@ -240,6 +240,8 @@ class SmashRNN:
             loss_list = []
             predictions_list = []
 
+            i = 0
+
             for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
                 if torch.cuda.is_available():
                     current_document = current_document.cuda()
@@ -247,6 +249,8 @@ class SmashRNN:
                     previous_document = previous_document.cuda()
                     words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
                     click_rate_tensor = click_rate_tensor.cuda()
+
+                i = i + 1
 
                 optimizer.zero_grad()
                 predictions = self.word_level_model(current_document, words_per_sentence_current_document,
@@ -259,7 +263,7 @@ class SmashRNN:
                 loss_list.append(loss)
                 predictions_list.append(predictions.clone().cpu())
 
-            loss = sum(loss_list) / training_generator.dataset.__len__()
+            loss = self.calculate_loss(loss_list)
 
             self.experiment.log_metric('train_word_level_loss', loss.item(), epoch=epoch + 1)
 
@@ -276,6 +280,10 @@ class SmashRNN:
 
         self.save_model(self.word_level_model, loss, epoch)
         print('Training finished {}'.format(datetime.now()))
+
+    @staticmethod
+    def calculate_loss(loss_list):
+        return sum(loss_list) / len(loss_list)
 
     def train_sentence_level(self):
         training_generator = torch.load(self.opt.train_dataset_path)
@@ -315,7 +323,7 @@ class SmashRNN:
                 loss_list.append(loss)
                 predictions_list.append(predictions.clone().cpu())
 
-            loss = sum(loss_list) / training_generator.dataset.__len__()
+            loss = self.calculate_loss(loss_list)
 
             self.experiment.log_metric('train_sentence_level_loss', loss.item(), epoch=epoch + 1)
 

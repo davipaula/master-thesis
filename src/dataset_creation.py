@@ -237,12 +237,12 @@ def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/
                        'shuffle': True,
                        'drop_last': True}
     train_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
-    validation_loader = torch.utils.data.DataLoader(validation_dataset, **training_params)
 
-    test_params = {'batch_size': batch_size,
-                   'shuffle': True,
-                   'drop_last': False}
-    test_loader = torch.utils.data.DataLoader(test_dataset, **test_params)
+    validation_and_test_params = {'batch_size': batch_size,
+                                  'shuffle': True,
+                                  'drop_last': False}
+    validation_loader = torch.utils.data.DataLoader(validation_dataset, **validation_and_test_params)
+    test_loader = torch.utils.data.DataLoader(test_dataset, **validation_and_test_params)
 
     torch.save(train_loader, train_dataset_path)
     print('Training dataset saved', datetime.now())
