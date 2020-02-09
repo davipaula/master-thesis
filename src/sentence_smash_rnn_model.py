@@ -7,7 +7,9 @@ from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_
 import numpy as np
 import pandas as pd
 import csv
-from src.utils import get_document_at_sentence_level, get_words_per_sentence_at_sentence_level
+from src.utils import get_document_at_sentence_level, get_words_per_sentence_at_sentence_level, \
+    remove_zero_tensors_from_batch, \
+    remove_zeros_from_words_per_sentence, add_filtered_tensors_to_original_batch
 
 
 class SentenceLevelSmashRNNModel(nn.Module):
@@ -86,21 +88,23 @@ class SentenceLevelSmashRNNModel(nn.Module):
         return predicted_ctr
 
     def get_document_representation(self, document, sentences_per_paragraph, words_per_sentence):
-
-        # this only works with batch_size = 1
-        _sentences_per_paragraph = np.sum([[words for words in paragraph if words > 0] for paragraph in
-                                           sentences_per_paragraph.tolist()][0])
         # zero placeholders
-        sentences = torch.zeros((self.batch_size, _sentences_per_paragraph, self.word_gru_out_size))
+        batch_size = document.shape[0]
+        max_sentences_per_paragraph = max(sentences_per_paragraph.sum(dim=1))
+        sentences = torch.zeros((batch_size, max_sentences_per_paragraph, self.word_gru_out_size))
 
         if torch.cuda.is_available():
             sentences = sentences.cuda()
 
-        # docs = torch.zeros((self.batch_size, self.paragraph_gru_out_size))
         # iterate over each hierarchy level
-        for sentence_idx in range(_sentences_per_paragraph):
+        for sentence_idx in range(max_sentences_per_paragraph):
+            sentences_in_batch = document[:, sentence_idx, :]
+
             # attention over words
-            word_ids_in_sent = document[:, sentence_idx, :]
+            word_ids_in_sent = remove_zero_tensors_from_batch(sentences_in_batch)
+
+            words_per_sentence_in_batch = remove_zeros_from_words_per_sentence(
+                words_per_sentence[:, sentence_idx]).tolist()
 
             if torch.cuda.is_available():
                 word_ids_in_sent = word_ids_in_sent.cuda()
@@ -110,7 +114,7 @@ class SentenceLevelSmashRNNModel(nn.Module):
 
             # pack padded sequence
             packed_words = pack_padded_sequence(words_in_sent,
-                                                lengths=[words_per_sentence[sentence_idx].tolist()],
+                                                lengths=words_per_sentence_in_batch,
                                                 batch_first=True, enforce_sorted=False)
 
             word_gru_out, _ = self.word_gru(packed_words.float())
@@ -135,6 +139,8 @@ class SentenceLevelSmashRNNModel(nn.Module):
                                                                  unsorted_indices=word_gru_out.unsorted_indices),
                                                   batch_first=True)  # (n_sentences, max(words_per_sentence))
 
+            word_att_out = add_filtered_tensors_to_original_batch(word_att_out, sentences_in_batch)
+
             # Calculate softmax values as now words are arranged in their respective sentences
             word_alphas = word_att_out / torch.sum(word_att_out, dim=1,
                                                    keepdim=True)  # (n_sentences, max(words_per_sentence))
@@ -142,6 +148,8 @@ class SentenceLevelSmashRNNModel(nn.Module):
             # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
             _sentence, _ = pad_packed_sequence(word_gru_out,
                                                batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
+
+            _sentence = add_filtered_tensors_to_original_batch(_sentence, sentences_in_batch)
 
             # Find sentence embeddings
             # gets the representation for the sentence
@@ -156,7 +164,7 @@ class SentenceLevelSmashRNNModel(nn.Module):
         # pack padded sequence of sentences
         packed_sentences = pack_padded_sequence(sentences_in_paragraph,
                                                 # TODO refactor this monstruosity
-                                                lengths=[np.sum(sentences_per_paragraph.tolist())],
+                                                lengths=sentences_per_paragraph.sum(dim=1).tolist(),
                                                 batch_first=True, enforce_sorted=False)
 
         sentence_gru_out, _ = self.sentence_gru(packed_sentences)
@@ -196,6 +204,7 @@ class SentenceLevelSmashRNNModel(nn.Module):
     def test_model(self):
         training_generator = torch.load('../data/training.pth')
 
+        i = 0
         for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
             if torch.cuda.is_available():
                 current_document = current_document.cuda()
@@ -216,10 +225,13 @@ class SentenceLevelSmashRNNModel(nn.Module):
 
             print(predictions)
 
-            break
+            i += 1
+            if i > 30:
+                break
 
 
 if __name__ == '__main__':
+    torch.set_printoptions(threshold=5000)
     # torch.set_printoptions(profile="full")
     word2vec_path = '../data/glove.6B.50d.txt'
     dict = pd.read_csv(filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE).values[:, 1:]
