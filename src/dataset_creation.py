@@ -245,13 +245,10 @@ def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/
     test_loader = torch.utils.data.DataLoader(test_dataset, **validation_and_test_params)
 
     torch.save(train_loader, train_dataset_path)
-    print('Training dataset saved', datetime.now())
-
     torch.save(validation_loader, validation_dataset_path)
-    print('Validation dataset saved', datetime.now())
-
     torch.save(test_loader, test_dataset_path)
-    print('Test dataset saved', datetime.now())
+
+    print('Datasets saved successfully')
 
 
 def save_tensor_dataset(words_ids, name):

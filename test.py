@@ -17,7 +17,6 @@ from src.utils import get_max_lengths
 
 def test(opt):
     test_generator = torch.load(opt.test_dataset_path)
-    output_file = open('./trained_models' + os.sep + 'logs.txt', 'a+')
 
     experiment = Experiment(api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ",
                             project_name="thesis-davi",
@@ -29,6 +28,8 @@ def test(opt):
 
     loss_list = []
     predictions_list = []
+
+    print('Starting test')
 
     for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in test_generator:
         if torch.cuda.is_available():
@@ -66,7 +67,7 @@ def test(opt):
         loss_list.append(loss)
         predictions_list.append(predictions.clone().cpu())
 
-    loss = sum(loss_list) / test_generator.dataset.__len__()
+    loss = sum(loss_list) / len(loss_list)
 
     experiment.log_metric('test_{}_level_loss'.format(opt.level), loss.item())
 
