@@ -226,7 +226,7 @@ class SentenceLevelSmashRNNModel(nn.Module):
             print(predictions)
 
             i += 1
-            if i > 30:
+            if i > 2:
                 break
 
 

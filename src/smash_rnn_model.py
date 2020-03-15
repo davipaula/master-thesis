@@ -8,6 +8,9 @@ import numpy as np
 import pandas as pd
 import csv
 
+from utils import remove_zero_tensors_from_batch, remove_zeros_from_words_per_sentence, \
+    add_filtered_tensors_to_original_batch
+
 
 class SmashRNNModel(nn.Module):
     def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length, max_paragraph_length):
@@ -85,15 +88,17 @@ class SmashRNNModel(nn.Module):
     def get_document_representation(self, document, paragraphs_per_document, sentences_per_paragraph,
                                     words_per_sentence):
 
-        # this only works with batch_size = 1
-        _paragraphs_per_doc = paragraphs_per_document.item()
+        batch_size = document.shape[0]
+        max_paragraphs_per_document = max(paragraphs_per_document.sum(dim=1))
+        max_sentences_per_paragraph = max(sentences_per_paragraph.sum(dim=1))
+
         _sentences_per_paragraph = [[words for words in paragraph if words > 0] for paragraph in
                                     sentences_per_paragraph.tolist()][0]
         _words_per_sentence = words_per_sentence
+
         # zero placeholders
-        sentences = torch.zeros(
-            (self.batch_size, self.max_paragraph_length, self.max_sent_length, self.word_gru_out_size))
-        paragraphs = torch.zeros((self.batch_size, self.max_paragraph_length, self.sentence_gru_out_size))
+        sentences = torch.zeros((batch_size, max_sentences_per_paragraph, self.word_gru_out_size))
+        paragraphs = torch.zeros((batch_size, max_paragraphs_per_document, self.sentence_gru_out_size))
 
         if torch.cuda.is_available():
             sentences = sentences.cuda()
@@ -101,19 +106,27 @@ class SmashRNNModel(nn.Module):
 
         # docs = torch.zeros((self.batch_size, self.paragraph_gru_out_size))
         # iterate over each hierarchy level
-        for paragraph_idx in range(_paragraphs_per_doc):
-            for sentence_idx in range(_sentences_per_paragraph[paragraph_idx]):
+        for paragraph_idx in range(max_paragraphs_per_document - 1):
+            for sentence_idx in range(max(sentences_per_paragraph[:, paragraph_idx]) - 1):
+                sentences_in_batch = document[:, paragraph_idx, sentence_idx, :]
+
                 # attention over words
-                word_ids_in_sent = document[:, paragraph_idx, sentence_idx, :]
+                word_ids_in_sent = remove_zero_tensors_from_batch(sentences_in_batch)
+
+                words_per_sentence_in_paragraph = remove_zeros_from_words_per_sentence(
+                    words_per_sentence[:, paragraph_idx, sentence_idx])
+
+                if torch.cuda.is_available():
+                    word_ids_in_sent = word_ids_in_sent.cuda()
+
                 # 1st dim = batch, last dim = words
                 words_in_sent = self.embedding(word_ids_in_sent)  # get word embeddings from ids
 
                 # pack padded sequence
                 packed_words = pack_padded_sequence(words_in_sent,
-                                                    lengths=torch.LongTensor(
-                                                        words_per_sentence[:, paragraph_idx,
-                                                        sentence_idx].tolist()),
-                                                    batch_first=True, enforce_sorted=False)
+                                                    lengths=words_per_sentence_in_paragraph,
+                                                    batch_first=True,
+                                                    enforce_sorted=False)
 
                 word_gru_out, _ = self.word_gru(packed_words.float())
 
@@ -137,28 +150,34 @@ class SmashRNNModel(nn.Module):
                                                                      unsorted_indices=word_gru_out.unsorted_indices),
                                                       batch_first=True)  # (n_sentences, max(words_per_sentence))
 
+                word_att_out = add_filtered_tensors_to_original_batch(word_att_out, sentences_in_batch)
+
                 # Calculate softmax values as now words are arranged in their respective sentences
                 word_alphas = word_att_out / torch.sum(word_att_out, dim=1,
                                                        keepdim=True)  # (n_sentences, max(words_per_sentence))
 
+                word_alphas = torch.where(torch.isnan(word_alphas), torch.zeros_like(word_alphas), word_alphas)
+
                 # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
                 _sentence, _ = pad_packed_sequence(word_gru_out,
                                                    batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
+
+                _sentence = add_filtered_tensors_to_original_batch(_sentence, sentences_in_batch)
 
                 # Find sentence embeddings
                 # gets the representation for the sentence
                 _sentence = (_sentence.float() * word_alphas.unsqueeze(2)).sum(
                     dim=1)  # (batch_size, self.word_gru_out_size)
 
-                sentences[:, paragraph_idx, sentence_idx] = _sentence
+                sentences[:, sentence_idx] = _sentence
 
-            # attention over sentences
-            sentences_in_paragraph = sentences[:, paragraph_idx, :]
+                # attention over sentences
+            sentences_in_paragraph = sentences
 
             # pack padded sequence of sentences
             packed_sentences = pack_padded_sequence(sentences_in_paragraph,
-                                                    lengths=sentences_per_paragraph[:,
-                                                            paragraph_idx].tolist(),
+                                                    # TODO refactor this monstruosity
+                                                    lengths=sentences_per_paragraph.sum(dim=1).tolist(),
                                                     batch_first=True, enforce_sorted=False)
 
             sentence_gru_out, _ = self.sentence_gru(packed_sentences)
@@ -187,20 +206,19 @@ class SmashRNNModel(nn.Module):
                                                    keepdim=True)  # (n_sentences, max(words_per_sentence))
 
             # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-            _paragraph, _ = pad_packed_sequence(sentence_gru_out,
-                                                batch_first=True)  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
+            paragraph_representation, _ = pad_packed_sequence(sentence_gru_out, batch_first=True)
 
-            # Find sentence embeddings
-            # gets the representation for the sentence
-            _paragraph = (_paragraph.float() * sent_alphas.unsqueeze(2)).sum(
+            # gets the representation for the paragraph
+            paragraph_representation = (paragraph_representation * sent_alphas.unsqueeze(2)).sum(
                 dim=1)  # (batch_size, self.word_gru_out_size)
 
-            paragraphs[:, paragraph_idx] = _paragraph
+            paragraphs[:, paragraph_idx] = paragraph_representation
+
         # attention over paragraphs
         # paragraphs
         # pack padded sequence of sentences
         packed_paragraphs = pack_padded_sequence(paragraphs,
-                                                 lengths=[paragraphs_per_document.item()],
+                                                 lengths=paragraphs_per_document.squeeze(1),
                                                  batch_first=True, enforce_sorted=False)
         paragraph_gru_out, _ = self.paragraph_gru(packed_paragraphs)
         # This implementation uses the feature sentence_embeddings. Paper uses hidden state

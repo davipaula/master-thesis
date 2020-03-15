@@ -49,7 +49,6 @@ class WordLevelSmashRNNModel(nn.Module):
         previous_document, words_in_previous_document = get_document_at_word_level(previous_document,
                                                                                    words_per_sentence_previous_document)
 
-        # This only works with self.batch_size = 1
         current_document_representation = self.get_document_representation(current_document, words_in_current_document)
         previous_document_representation = self.get_document_representation(previous_document,
                                                                             words_in_previous_document)
