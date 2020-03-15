@@ -115,7 +115,8 @@ def get_document_at_word_level(document_batch, words_per_sentence_at_word_level)
     for document_idx, document in enumerate(document_batch):
         non_zero_indices = document.nonzero(as_tuple=True)
 
-        word_level_document_placeholder[document_idx, 0, 0, : len(document[non_zero_indices])] = document[non_zero_indices]
+        word_level_document_placeholder[document_idx, 0, 0, : len(document[non_zero_indices])] = document[
+            non_zero_indices]
 
     return word_level_document_placeholder
 
@@ -128,6 +129,9 @@ def remove_zero_tensors_from_batch(sentences_in_batch):
 
     for i, non_zero_index in enumerate(non_zero_indices):
         non_zero_tensor[i] = sentences_in_batch[non_zero_index]
+
+    if torch.cuda.is_available():
+        non_zero_tensor = non_zero_tensor.cuda()
 
     return non_zero_tensor
 

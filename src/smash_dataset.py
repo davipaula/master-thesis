@@ -34,10 +34,9 @@ class SMASHDataset(Dataset):
         return len(self.current_article_text)
 
     def __getitem__(self, index):
+
         current_article_text = literal_eval(self.current_article_text.iloc[index])
-        current_article_title = self.current_article_title.iloc[index]
         previous_article_text = literal_eval(self.previous_article_text.iloc[index])
-        previous_article_title = self.previous_article_title.iloc[index]
 
         current_article_structure = self.get_document_structure(current_article_text)
         current_article_words_per_sentence = torch.LongTensor(
@@ -59,19 +58,26 @@ class SMASHDataset(Dataset):
         previous_article_text_padded = torch.LongTensor(
             self.get_padded_document(previous_article_text).astype(np.int64))
 
+        current_article = {
+            'text': current_article_text_padded,
+            'words_per_sentence': current_article_words_per_sentence,
+            'sentences_per_paragraph': current_article_sentences_per_paragraph,
+            'paragraphs_per_document': current_article_paragraphs_per_document
+        }
+
+        previous_article = {
+            'text': previous_article_text_padded,
+            'words_per_sentence': previous_article_words_per_sentence,
+            'sentences_per_paragraph': previous_article_sentences_per_paragraph,
+            'paragraphs_per_document': previous_article_paragraphs_per_document
+        }
+
         click_rate = torch.FloatTensor([self.click_rate.iloc[index]])
 
-        return current_article_text_padded, \
-               current_article_words_per_sentence, \
-               current_article_sentences_per_paragraph, \
-               current_article_paragraphs_per_document, \
-               previous_article_text_padded, \
-               previous_article_words_per_sentence, \
-               previous_article_sentences_per_paragraph, \
-               previous_article_paragraphs_per_document, \
-               click_rate
+        return current_article, previous_article, click_rate
 
-    def get_document_structure(self, document):
+    @staticmethod
+    def get_document_structure(document):
         paragraphs_per_document = len(document)
         sentences_per_paragraph = []
         words_per_sentence = []
@@ -124,22 +130,6 @@ class SMASHDataset(Dataset):
         if len(document_structure) < self.max_length_paragraph:
             extended_paragraphs = [list([0] * self.max_length_sentences)] * (
                     self.max_length_paragraph - len(document_structure))
-
-            document_structure.extend(extended_paragraphs)
-
-        document_structure = np.stack(arrays=document_structure, axis=0)
-
-        return document_structure
-
-    def get_padded_words_per_sentence_refactor(self, document_structure):
-        for paragraph in document_structure:
-            if len(paragraph) < self.max_length_sentences:
-                extended_sentences = list([0] * (self.max_length_sentences - len(paragraph)))
-                paragraph.extend(extended_sentences)
-
-        if len(document_structure) < self.max_length_paragraph:
-            extended_paragraphs = [[0 for _ in range(self.max_length_sentences)]
-                                   for _ in range(self.max_length_paragraph - len(document_structure))]
 
             document_structure.extend(extended_paragraphs)
 

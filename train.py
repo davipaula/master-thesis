@@ -63,33 +63,22 @@ class SmashRNN:
         dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
 
         # Paragraph level model
-        self.paragraph_level_model = SmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
-                                                   self.max_sent_length,
-                                                   self.max_paragraph_length)
-
-        # Sentence level model
-        self.sentence_level_model = SentenceLevelSmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
-                                                               self.max_sent_length)
-
-        # Word level model
-        self.word_level_model = WordLevelSmashRNNModel(dict, dict_len, embed_dim)
+        self.model = SmashRNNModel(dict, dict_len, embed_dim, self.max_word_length,
+                                   self.max_sent_length,
+                                   self.max_paragraph_length)
 
         if torch.cuda.is_available():
-            self.paragraph_level_model.cuda()
-            self.sentence_level_model.cuda()
-            self.word_level_model.cuda()
+            self.model.cuda()
 
         # Overall model optimization and evaluation parameters
         self.criterion = nn.MSELoss()
-        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.paragraph_level_model.parameters()),
+        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
                                          lr=self.learning_rate,
                                          momentum=self.momentum)
         self.best_loss = 1e5
         self.best_epoch = 0
 
-        self.paragraph_level_model.train()
-        self.sentence_level_model.train()
-        self.word_level_model.train()
+        self.model.train()
 
         self.is_debug_mode = getattr(sys, 'gettrace', None) is None
 
@@ -102,70 +91,44 @@ class SmashRNN:
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
 
-        step = 'train'
-
         for epoch in range(self.opt.num_epoches):
-            self.paragraph_level_model.train()
+            self.model.train()
 
             loss_list = []
             predictions_list = []
 
-            for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
+            for current_document, previous_document, click_rate_tensor in training_generator:
                 if torch.cuda.is_available():
-                    current_document = current_document.cuda()
-                    words_per_sentence_current_document = words_per_sentence_current_document.cuda()
-                    sentences_per_paragraph_current_document = sentences_per_paragraph_current_document.cuda()
-                    paragraphs_per_document_current_document = paragraphs_per_document_current_document.cuda()
-                    previous_document = previous_document.cuda()
-                    words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
-                    sentences_per_paragraph_previous_document = sentences_per_paragraph_previous_document.cuda()
-                    paragraphs_per_document_previous_document = paragraphs_per_document_previous_document.cuda()
+                    current_document['text'] = current_document['text'].cuda()
+                    current_document['words_per_sentence'] = current_document['words_per_sentence'].cuda()
+                    current_document['sentences_per_paragraph'] = current_document['sentences_per_paragraph'].cuda()
+                    current_document['paragraphs_per_document'] = current_document['paragraphs_per_document'].cuda()
+                    previous_document['text'] = previous_document['text'].cuda()
+                    previous_document['words_per_sentence'] = previous_document['words_per_sentence'].cuda()
+                    previous_document['sentences_per_paragraph'] = previous_document['sentences_per_paragraph'].cuda()
+                    previous_document['paragraphs_per_document'] = previous_document['paragraphs_per_document'].cuda()
                     click_rate_tensor = click_rate_tensor.cuda()
 
                 self.optimizer.zero_grad()
 
                 if level == 'sentence':
-                    current_document = get_document_at_sentence_level(current_document)
-                    previous_document = get_document_at_sentence_level(previous_document)
-
-                    words_per_sentence_current_document = get_words_per_sentence_at_sentence_level(
-                        words_per_sentence_current_document)
-                    words_per_sentence_previous_document = get_words_per_sentence_at_sentence_level(
-                        words_per_sentence_previous_document)
-
-                    sentences_per_paragraph_current_document = get_sentences_per_paragraph_at_sentence_level(
-                        sentences_per_paragraph_current_document)
-                    sentences_per_paragraph_previous_document = get_sentences_per_paragraph_at_sentence_level(
-                        sentences_per_paragraph_previous_document)
-
-                    paragraphs_per_document_current_document = torch.ones((self.batch_size, 1), dtype=int)
-                    paragraphs_per_document_previous_document = torch.ones((self.batch_size, 1), dtype=int)
+                    current_document = self.transform_to_sentence_level(current_document)
+                    previous_document = self.transform_to_sentence_level(previous_document)
 
                 elif level == 'word':
-                    words_per_sentence_current_document = get_words_per_document_at_word_level(
-                        words_per_sentence_current_document)
-                    words_per_sentence_previous_document = get_words_per_document_at_word_level(
-                        words_per_sentence_previous_document)
+                    current_document = self.transform_to_word_level(current_document)
+                    previous_document = self.transform_to_word_level(previous_document)
 
-                    current_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
-                    previous_document = get_document_at_word_level(previous_document,
-                                                                   words_per_sentence_previous_document)
+                predictions = self.model(current_document['text'],
+                                         current_document['words_per_sentence'],
+                                         current_document['sentences_per_paragraph'],
+                                         current_document['paragraphs_per_document'],
+                                         previous_document['text'],
+                                         previous_document['words_per_sentence'],
+                                         previous_document['sentences_per_paragraph'],
+                                         previous_document['paragraphs_per_document'],
+                                         click_rate_tensor)
 
-                    sentences_per_paragraph_current_document = get_sentences_per_paragraph_at_sentence_level(
-                        sentences_per_paragraph_current_document)
-                    sentences_per_paragraph_previous_document = get_sentences_per_paragraph_at_sentence_level(
-                        sentences_per_paragraph_previous_document)
-
-                    paragraphs_per_document_current_document = torch.ones((self.batch_size, 1), dtype=int)
-                    paragraphs_per_document_previous_document = torch.ones((self.batch_size, 1), dtype=int)
-
-                predictions = self.paragraph_level_model(current_document, words_per_sentence_current_document,
-                                                         sentences_per_paragraph_current_document,
-                                                         paragraphs_per_document_current_document,
-                                                         previous_document, words_per_sentence_previous_document,
-                                                         sentences_per_paragraph_previous_document,
-                                                         paragraphs_per_document_previous_document,
-                                                         click_rate_tensor)
                 loss = self.criterion(predictions, click_rate_tensor)
                 loss.backward()
                 self.optimizer.step()
@@ -187,51 +150,69 @@ class SmashRNN:
             ))
 
             if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.opt.validation_interval), 'paragraph')
+                self.validate(int(epoch / self.opt.validation_interval), level)
 
-        self.save_model(self.paragraph_level_model, loss, epoch)
-        print('Training finished {}'.format(datetime.now()))
+            self.save_model(self.model, loss, epoch)
+            print('Training finished {}'.format(datetime.now()))
+
+    def transform_to_word_level(self, document):
+        batch_size = document['text'].shape[0]
+
+        document['words_per_sentence'] = get_words_per_document_at_word_level(document['words_per_sentence'])
+        document['text'] = get_document_at_word_level(document['text'], document['words_per_sentence'])
+        document['sentences_per_paragraph'] = torch.ones((batch_size, 1), dtype=int)
+        document['paragraphs_per_document'] = torch.ones((batch_size, 1), dtype=int)
+
+        return document
+
+    def transform_to_sentence_level(self, document):
+        batch_size = document['text'].shape[0]
+
+        document['text'] = get_document_at_sentence_level(document['text'])
+        document['words_per_sentence'] = get_words_per_sentence_at_sentence_level(document['words_per_sentence'])
+        document['sentences_per_paragraph'] = get_sentences_per_paragraph_at_sentence_level(
+            document['sentences_per_paragraph'])
+        document['paragraphs_per_document'] = torch.ones((batch_size, 1), dtype=int)
+
+        return document
 
     def validate(self, validation_step, level):
         validation_generator = torch.load(self.opt.validation_dataset_path)
         validation_step = int(validation_step) + 1
 
-        step = 'validation'
-
         loss_list = []
         predictions_list = []
 
-        for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in validation_generator:
+        for current_document, previous_document, click_rate_tensor in validation_generator:
             if torch.cuda.is_available():
-                current_document = current_document.cuda()
-                words_per_sentence_current_document = words_per_sentence_current_document.cuda()
-                sentences_per_paragraph_current_document = sentences_per_paragraph_current_document.cuda()
-                paragraphs_per_document_current_document = paragraphs_per_document_current_document.cuda()
-                previous_document = previous_document.cuda()
-                words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
-                sentences_per_paragraph_previous_document = sentences_per_paragraph_previous_document.cuda()
-                paragraphs_per_document_previous_document = paragraphs_per_document_previous_document.cuda()
+                current_document['text'] = current_document['text'].cuda()
+                current_document['words_per_sentence'] = current_document['words_per_sentence'].cuda()
+                current_document['sentences_per_paragraph'] = current_document['sentences_per_paragraph'].cuda()
+                current_document['paragraphs_per_document'] = current_document['paragraphs_per_document'].cuda()
+                previous_document['text'] = previous_document['text'].cuda()
+                previous_document['words_per_sentence'] = previous_document['words_per_sentence'].cuda()
+                previous_document['sentences_per_paragraph'] = previous_document['sentences_per_paragraph'].cuda()
+                previous_document['paragraphs_per_document'] = previous_document['paragraphs_per_document'].cuda()
                 click_rate_tensor = click_rate_tensor.cuda()
 
             with torch.no_grad():
-                if level == 'paragraph':
-                    predictions = self.paragraph_level_model(current_document, words_per_sentence_current_document,
-                                                             sentences_per_paragraph_current_document,
-                                                             paragraphs_per_document_current_document,
-                                                             previous_document, words_per_sentence_previous_document,
-                                                             sentences_per_paragraph_previous_document,
-                                                             paragraphs_per_document_previous_document,
-                                                             click_rate_tensor)
-                elif level == 'sentence':
-                    predictions = self.sentence_level_model(current_document, words_per_sentence_current_document,
-                                                            sentences_per_paragraph_current_document,
-                                                            previous_document, words_per_sentence_previous_document,
-                                                            sentences_per_paragraph_previous_document,
-                                                            click_rate_tensor)
+                if level == 'sentence':
+                    current_document = self.transform_to_sentence_level(current_document)
+                    previous_document = self.transform_to_sentence_level(previous_document)
+
                 elif level == 'word':
-                    predictions = self.word_level_model(current_document, words_per_sentence_current_document,
-                                                        previous_document, words_per_sentence_previous_document,
-                                                        click_rate_tensor)
+                    current_document = self.transform_to_word_level(current_document)
+                    previous_document = self.transform_to_word_level(previous_document)
+
+                predictions = self.model(current_document['text'],
+                                         current_document['words_per_sentence'],
+                                         current_document['sentences_per_paragraph'],
+                                         current_document['paragraphs_per_document'],
+                                         previous_document['text'],
+                                         previous_document['words_per_sentence'],
+                                         previous_document['sentences_per_paragraph'],
+                                         previous_document['paragraphs_per_document'],
+                                         click_rate_tensor)
 
             loss = self.criterion(predictions, click_rate_tensor)
 
@@ -267,119 +248,9 @@ class SmashRNN:
     def should_run_validation(self, epoch):
         return ((epoch + 1) % self.opt.validation_interval) == 0
 
-    def train_word_level(self):
-        training_generator = torch.load(self.opt.train_dataset_path)
-        print('Starting training {}'.format(datetime.now()))
-
-        step = 'train'
-
-        optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.word_level_model.parameters()),
-                                    lr=self.learning_rate,
-                                    momentum=self.momentum)
-
-        for epoch in range(self.opt.num_epoches):
-            self.word_level_model.train()
-
-            loss_list = []
-            predictions_list = []
-
-            for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-                if torch.cuda.is_available():
-                    current_document = current_document.cuda()
-                    words_per_sentence_current_document = words_per_sentence_current_document.cuda()
-                    previous_document = previous_document.cuda()
-                    words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
-                    click_rate_tensor = click_rate_tensor.cuda()
-
-                optimizer.zero_grad()
-                predictions = self.word_level_model(current_document, words_per_sentence_current_document,
-                                                    previous_document, words_per_sentence_previous_document,
-                                                    click_rate_tensor)
-                loss = self.criterion(predictions, click_rate_tensor)
-                loss.backward()
-                optimizer.step()
-
-                loss_list.append(loss)
-                predictions_list.append(predictions.clone().cpu())
-
-            loss = self.calculate_loss(loss_list)
-
-            if not self.is_debug_mode:
-                self.experiment.log_metric('train_word_level_loss', loss.item(), epoch=epoch + 1)
-
-            print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
-                epoch + 1,
-                self.opt.num_epoches,
-                optimizer.param_groups[0]['lr'],
-                loss,
-                datetime.now()
-            ))
-
-            if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.opt.validation_interval), 'word')
-
-        self.save_model(self.word_level_model, loss, epoch)
-        print('Training finished {}'.format(datetime.now()))
-
     @staticmethod
     def calculate_loss(loss_list):
         return sum(loss_list) / len(loss_list)
-
-    def train_sentence_level(self):
-        training_generator = torch.load(self.opt.train_dataset_path)
-
-        print('Starting training {}'.format(datetime.now()))
-
-        step = 'train'
-
-        optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.sentence_level_model.parameters()),
-                                    lr=self.learning_rate,
-                                    momentum=self.momentum)
-
-        for epoch in range(self.opt.num_epoches):
-            self.sentence_level_model.train()
-
-            loss_list = []
-            predictions_list = []
-
-            for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-                if torch.cuda.is_available():
-                    current_document = current_document.cuda()
-                    words_per_sentence_current_document = words_per_sentence_current_document.cuda()
-                    previous_document = previous_document.cuda()
-                    words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
-                    click_rate_tensor = click_rate_tensor.cuda()
-
-                optimizer.zero_grad()
-                predictions = self.sentence_level_model(current_document, words_per_sentence_current_document,
-                                                        sentences_per_paragraph_current_document,
-                                                        previous_document, words_per_sentence_previous_document,
-                                                        sentences_per_paragraph_previous_document,
-                                                        click_rate_tensor)
-                loss = self.criterion(predictions, click_rate_tensor)
-                loss.backward()
-                optimizer.step()
-
-                loss_list.append(loss)
-                predictions_list.append(predictions.clone().cpu())
-
-            loss = self.calculate_loss(loss_list)
-
-            self.experiment.log_metric('train_sentence_level_loss', loss.item(), epoch=epoch + 1)
-
-            print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
-                epoch + 1,
-                self.opt.num_epoches,
-                optimizer.param_groups[0]['lr'],
-                loss,
-                datetime.now()
-            ))
-
-            if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.opt.validation_interval), 'sentence')
-
-        self.save_model(self.sentence_level_model, loss, epoch)
-        print('Training finished {}'.format(datetime.now()))
 
     @staticmethod
     def get_args():
@@ -400,21 +271,6 @@ class SmashRNN:
                             help='For development purposes. This limits the number of rows read from the dataset.')
         parser.add_argument("--level", type=str, default='paragraph')
         parser.add_argument("--batch_size", type=int, default=3)
-
-        # parser = argparse.ArgumentParser(
-        #     """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles""")
-        # parser.add_argument("--model_path", type=str, default='./trained_models/model.pt')
-        # parser.add_argument("--full_dataset_path", type=str, default='./data/wiki_df.csv')
-        # parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
-        # parser.add_argument("--train_dataset_path", type=str, default='./data/training.pth')
-        # parser.add_argument("--validation_dataset_path", type=str, default='./data/validation.pth')
-        # parser.add_argument("--test_dataset_path", type=str, default='./data/test.pth')
-        # parser.add_argument("--num_epoches", type=int, default=1)
-        # parser.add_argument("--validation_interval", type=int, default=1)
-        # parser.add_argument("--should_split_dataset", type=bool, default=False)
-        # parser.add_argument("--train_dataset_split", type=float, default=0.8)
-        # parser.add_argument("--limit_rows_dataset", type=int, default=9999,
-        #                     help='For development purposes. This limits the number of rows read from the dataset. Change to None to ignore it')
 
         return parser.parse_args()
 

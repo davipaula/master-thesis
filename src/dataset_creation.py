@@ -254,14 +254,10 @@ def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/
 def save_tensor_dataset(words_ids, name):
     words_per_sentence, sentences_per_paragraph, paragraphs_per_document = get_padded_document_structures(
         words_ids)
-    print('Transforming dataset into tensors', datetime.now())
     document_tensor = get_document_tensor(words_ids)
-    print('Finished Transforming dataset into tensors', datetime.now())
-    print('Beginning creation of TensorDataset', datetime.now())
     dataset = TensorDataset(document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document)
 
     torch.save(dataset, name + '.pth')
-    print('Saved TensorDataset {} {}'.format(name, datetime.now()))
 
     del document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document, dataset
 
