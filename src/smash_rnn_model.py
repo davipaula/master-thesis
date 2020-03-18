@@ -104,13 +104,14 @@ class SmashRNNModel(nn.Module):
         for paragraph_idx in range(max_paragraphs_per_document):
             for sentence_idx in range(max(sentences_per_paragraph[:, paragraph_idx])):
                 sentences_in_batch = document[:, paragraph_idx, sentence_idx, :]
-                sentences_in_batch = remove_zero_tensors_from_batch(sentences_in_batch)
+
+                word_ids_in_sentences = remove_zero_tensors_from_batch(sentences_in_batch)
 
                 words_per_sentence_in_paragraph = remove_zeros_from_words_per_sentence(
                     words_per_sentence[:, paragraph_idx, sentence_idx])
 
                 # get word embeddings from ids
-                word_embeddings = self.embedding(sentences_in_batch)
+                word_embeddings = self.embedding(word_ids_in_sentences)
 
                 packed_word_embeddings = pack_padded_sequence(word_embeddings,
                                                               lengths=words_per_sentence_in_paragraph,
@@ -135,9 +136,16 @@ class SmashRNNModel(nn.Module):
 
                 # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
                 word_level_gru, _ = pad_packed_sequence(word_level_gru, batch_first=True)
-                word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
 
-                sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
+                try:
+                    word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
+                except:
+                    print('problem')
+
+                try:
+                    sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
+                except:
+                    print('problem')
 
             # pack padded sequence of sentences
             packed_sentences = pack_padded_sequence(sentences,
