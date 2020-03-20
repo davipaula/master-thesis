@@ -12,7 +12,9 @@ from src.sentence_smash_rnn_model import SentenceLevelSmashRNNModel
 import csv
 import numpy as np
 import argparse
-from src.utils import get_max_lengths
+from src.utils import get_max_lengths, get_words_per_document_at_word_level, get_document_at_word_level, \
+    get_document_at_sentence_level, get_words_per_sentence_at_sentence_level, \
+    get_sentences_per_paragraph_at_sentence_level
 
 
 def test(opt):
@@ -31,36 +33,35 @@ def test(opt):
 
     print('Starting test')
 
-    for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in test_generator:
+    for current_document, previous_document, click_rate_tensor in test_generator:
         if torch.cuda.is_available():
-            current_document = current_document.cuda()
-            words_per_sentence_current_document = words_per_sentence_current_document.cuda()
-            sentences_per_paragraph_current_document = sentences_per_paragraph_current_document.cuda()
-            paragraphs_per_document_current_document = paragraphs_per_document_current_document.cuda()
-            previous_document = previous_document.cuda()
-            words_per_sentence_previous_document = words_per_sentence_previous_document.cuda()
-            sentences_per_paragraph_previous_document = sentences_per_paragraph_previous_document.cuda()
-            paragraphs_per_document_previous_document = paragraphs_per_document_previous_document.cuda()
+            current_document['text'] = current_document['text'].cuda()
+            current_document['words_per_sentence'] = current_document['words_per_sentence'].cuda()
+            current_document['sentences_per_paragraph'] = current_document['sentences_per_paragraph'].cuda()
+            current_document['paragraphs_per_document'] = current_document['paragraphs_per_document'].cuda()
+            previous_document['text'] = previous_document['text'].cuda()
+            previous_document['words_per_sentence'] = previous_document['words_per_sentence'].cuda()
+            previous_document['sentences_per_paragraph'] = previous_document['sentences_per_paragraph'].cuda()
+            previous_document['paragraphs_per_document'] = previous_document['paragraphs_per_document'].cuda()
             click_rate_tensor = click_rate_tensor.cuda()
 
-        if opt.level == 'paragraph':
-            predictions = model(current_document, words_per_sentence_current_document,
-                                sentences_per_paragraph_current_document,
-                                paragraphs_per_document_current_document,
-                                previous_document, words_per_sentence_previous_document,
-                                sentences_per_paragraph_previous_document,
-                                paragraphs_per_document_previous_document,
-                                click_rate_tensor)
-        elif opt.level == 'sentence':
-            predictions = model(current_document, words_per_sentence_current_document,
-                                sentences_per_paragraph_current_document,
-                                previous_document, words_per_sentence_previous_document,
-                                sentences_per_paragraph_previous_document,
-                                click_rate_tensor)
+        if opt.level == 'sentence':
+            current_document = transform_to_sentence_level(current_document)
+            previous_document = transform_to_sentence_level(previous_document)
+
         elif opt.level == 'word':
-            predictions = model(current_document, words_per_sentence_current_document,
-                                previous_document, words_per_sentence_previous_document,
-                                click_rate_tensor)
+            current_document = transform_to_word_level(current_document)
+            previous_document = transform_to_word_level(previous_document)
+
+        predictions = model(current_document['text'],
+                            current_document['words_per_sentence'],
+                            current_document['sentences_per_paragraph'],
+                            current_document['paragraphs_per_document'],
+                            previous_document['text'],
+                            previous_document['words_per_sentence'],
+                            previous_document['sentences_per_paragraph'],
+                            previous_document['paragraphs_per_document'],
+                            click_rate_tensor)
 
         loss = criterion(predictions, click_rate_tensor)
 
@@ -122,6 +123,29 @@ def get_args():
     parser.add_argument("--word2vec_path", type=str, default='./data/glove.6B.50d.txt')
 
     return parser.parse_args()
+
+
+def transform_to_word_level(document):
+    batch_size = document['text'].shape[0]
+
+    document['words_per_sentence'] = get_words_per_document_at_word_level(document['words_per_sentence'])
+    document['text'] = get_document_at_word_level(document['text'], document['words_per_sentence'])
+    document['sentences_per_paragraph'] = torch.ones((batch_size, 1), dtype=int)
+    document['paragraphs_per_document'] = torch.ones((batch_size, 1), dtype=int)
+
+    return document
+
+
+def transform_to_sentence_level(document):
+    batch_size = document['text'].shape[0]
+
+    document['text'] = get_document_at_sentence_level(document['text'])
+    document['words_per_sentence'] = get_words_per_sentence_at_sentence_level(document['words_per_sentence'])
+    document['sentences_per_paragraph'] = get_sentences_per_paragraph_at_sentence_level(
+        document['sentences_per_paragraph'])
+    document['paragraphs_per_document'] = torch.ones((batch_size, 1), dtype=int)
+
+    return document
 
 
 if __name__ == "__main__":
