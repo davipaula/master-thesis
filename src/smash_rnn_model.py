@@ -118,7 +118,10 @@ class SmashRNNModel(nn.Module):
                                                               batch_first=True,
                                                               enforce_sorted=False).float()
 
-                word_level_gru, _ = self.word_gru(packed_word_embeddings)
+                try:
+                    word_level_gru, _ = self.word_gru(packed_word_embeddings)
+                except:
+                    print('error')
 
                 word_level_attention = self.get_word_attention(word_level_gru)
 
