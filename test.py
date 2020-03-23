@@ -86,14 +86,7 @@ def load_model(model_folder, full_dataset_path, level, word2vec_path):
     max_word_length, max_sent_length, max_paragraph_length = get_max_lengths(full_dataset_path)
 
     # Siamese + Attention model
-    if level == 'paragraph':
-        model = SmashRNNModel(dict, dict_len, embed_dim, max_word_length, max_sent_length, max_paragraph_length)
-    elif level == 'sentence':
-        model = SentenceLevelSmashRNNModel(dict, dict_len, embed_dim, max_word_length, max_sent_length)
-    elif level == 'word':
-        model = WordLevelSmashRNNModel(dict, dict_len, embed_dim)
-    else:
-        raise SystemExit(0)
+    model = SmashRNNModel(dict, dict_len, embed_dim, max_word_length, max_sent_length, max_paragraph_length)
 
     model_path = model_folder + os.sep + level + '_level_model.pt'
     if torch.cuda.is_available():

@@ -12,8 +12,6 @@ import torch.nn as nn
 from src.utils import get_max_lengths, get_document_at_sentence_level, get_words_per_sentence_at_sentence_level, \
     get_document_at_word_level, get_sentences_per_paragraph_at_sentence_level, get_words_per_document_at_word_level
 from src.smash_rnn_model import SmashRNNModel
-from src.word_smash_rnn_model import WordLevelSmashRNNModel
-from src.sentence_smash_rnn_model import SentenceLevelSmashRNNModel
 from src.smash_dataset import SMASHDataset
 from datetime import datetime
 from src.dataset_creation import split_dataset
