@@ -144,3 +144,4 @@ def transform_to_sentence_level(document):
 if __name__ == "__main__":
     opt = get_args()
     test(opt)
+    print(opt.level)

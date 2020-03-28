@@ -1,18 +1,16 @@
 import logging
 import re
 import spacy
-from xml.etree import cElementTree
-
 from gensim.corpora.wikicorpus import get_namespace, filter_wiki
 from gensim.scripts.segment_wiki import extract_page_xmls
-
+from spacy.lang.en.stop_words import STOP_WORDS
 from wiki_processing.extractor_utils import dropNested, replaceInternalLinks, replaceExternalLinks
-
+from xml.etree import cElementTree
 
 logger = logging.getLogger(__name__)
 
 
-def clean_text(text):
+def convert_to_plain_text(text):
     """
     Convert Wikitext to plain text
 
@@ -30,6 +28,26 @@ def clean_text(text):
 
     return text.strip()
 
+
+def remove_special_characters(text):
+    text = re.sub(r"[^A-Za-z0-9(),!.?\'`]", " ", text)
+    text = re.sub(r"\'s", " 's ", text)
+    text = re.sub(r"\'ve", " 've ", text)
+    text = re.sub(r"n\'t", " 't ", text)
+    text = re.sub(r"\'re", " 're ", text)
+    text = re.sub(r"\'d", " 'd ", text)
+    text = re.sub(r"\'ll", " 'll ", text)
+    text = re.sub(r",", " ", text)
+    text = re.sub(r"\.", " ", text)
+    text = re.sub(r"!", " ", text)
+    text = re.sub(r"\(", " ( ", text)
+    text = re.sub(r"\)", " ) ", text)
+    text = re.sub(r"\?", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+
+    return text
+
+
 def process_paragraph(nlp, w2v_model, text):
     """
     Split plain paragraph text into sentences and tokens, and find their word vectors (with Gensim)
@@ -38,22 +56,38 @@ def process_paragraph(nlp, w2v_model, text):
     :param text:
     :return: sentences -> word indexes
     """
+    text = remove_special_characters(text)
     pg = nlp(text)
-    sentences = []
 
-    for sent in pg.sents:
+    tokenized_sentences = []
+    normalized_sentences = []
+
+    for sentence in pg.sents:
         token_ids = []
+        normalized_words = []
 
-        for token in sent:
-            if token.is_alpha:
+        for token in sentence:
+            normalized_word = token.lemma_.lower()  # norm_
 
-                word = token.lemma_.lower()  # norm_
-                if word in w2v_model.vocab:
-                    token_ids.append(w2v_model.vocab[word].index)  # TODO: Add special index for UNKNOWN + PADDING
+            if is_valid_token(token, w2v_model):
+                # TODO: Add special index for UNKNOWN + PADDING
+                token_ids.append(w2v_model.vocab[normalized_word].index)
+                normalized_words.append(normalized_word)
 
-        sentences.append(token_ids)
+        if token_ids:
+            tokenized_sentences.append(token_ids)
 
-    return sentences
+        if normalized_words:
+            normalized_sentences.append(normalized_words)
+
+    return tokenized_sentences, normalized_sentences
+
+
+def is_valid_token(token, w2v_model):
+    normalized_word = token.lemma_.lower()
+
+    return token.is_alpha and not token.is_stop and normalized_word in w2v_model.vocab
+
 
 def process_text(nlp, w2v_model, text):
     """
@@ -71,7 +105,7 @@ def process_text(nlp, w2v_model, text):
         if len(sects) == 0:
             sects.append({
                 'title': 'Introduction',
-                'text': clean_text(text[:match.start()])
+                'text': convert_to_plain_text(text[:match.start()])
             })
         title = match.group(2).strip()
         level = len(match.group(1).strip()) - 1  # ignore subsection hierarchy for now
@@ -90,29 +124,31 @@ def process_text(nlp, w2v_model, text):
 
         sects.append({
             'title': title,
-            'text': clean_text(sect_text),
+            'text': convert_to_plain_text(sect_text),
         })
 
     # no sections found -> article consists of only a single section
     if len(sects) == 0:
         sects.append({
             'title': 'Introduction',
-            'text': clean_text(text),
+            'text': convert_to_plain_text(text),
         })
 
     # Tokenize + find word indexes for tokens
     for i, sect in enumerate(sects):
         sects[i]['paragraphs'] = []
+        sects[i]['normalized_paragraphs'] = []
 
         for paragraph_text in sect['text'].split('\n\n'):
-            paragraph_sents = process_paragraph(nlp, w2v_model, paragraph_text)
+            paragraph_tokens, normalized_paragraph = process_paragraph(nlp, w2v_model, paragraph_text)
 
-            sects[i]['paragraphs'].append(paragraph_sents)
+            sects[i]['paragraphs'].append(paragraph_tokens)
+            sects[i]['normalized_paragraphs'].append(normalized_paragraph)
 
     return sects
 
 
-def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, log_every = 1000):
+def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, log_every=1000):
     """
 
     :param log_every: Print process every X docs
@@ -167,5 +203,4 @@ def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, log_every
                 logger.debug(f'Documents completed: {doc_counter}')
 
             if 0 < max_doc_count < doc_counter:
-
                 break

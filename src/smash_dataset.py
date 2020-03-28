@@ -1,12 +1,12 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import timeit
 
 import pandas as pd
 from torch.utils.data.dataset import Dataset
 import csv
 import numpy as np
-import src.utils as utils
 from ast import literal_eval
 import torch
 
@@ -145,17 +145,43 @@ class SMASHDataset(Dataset):
         return document_structure
 
 
+def measure_get_padded_document():
+    setup = """
+from __main__ import SMASHDataset
+import pandas as pd
+from torch.utils.data.dataset import Dataset
+import csv
+import numpy as np
+import src.utils as utils
+from ast import literal_eval
+import torch
+
+wiki_data_path = '../data/wiki_df_small.csv'
+max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
+test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
+                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
+
+current_article_text = literal_eval(test.current_article_text.iloc[0])
+        """
+
+    f = "test.get_padded_document(current_article_text)"
+
+    print(timeit.timeit(f, setup=setup, number=100000))
+
+
 if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
 
-    torch.set_printoptions(profile="full")
+    # torch.set_printoptions(profile="full")
+    #
+    # wiki_data_path = '../data/wiki_df_small.csv'
+    # max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
+    # test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
+    #                     max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
+    #
+    # print(test.__getitem__(1)[1]['text'])
 
-    wiki_data_path = '../data/wiki_df_small.csv'
-    max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
-    test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
-                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
-
-    print(test.__getitem__(1)[2])
+    measure_get_padded_document()
