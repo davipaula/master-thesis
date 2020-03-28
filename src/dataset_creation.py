@@ -88,7 +88,7 @@ def combine_wiki_click_stream_datasets(click_stream_dataset, wiki_documents_data
     return combined_dataset
 
 
-def get_wiki_documents_from_json(wiki_documents_path):
+def extract_documents_as_vectors_from_source(wiki_documents_path):
     texts, labels, articles = [], [], []
 
     with open(wiki_documents_path, 'r') as json_file:
@@ -103,6 +103,25 @@ def get_wiki_documents_from_json(wiki_documents_path):
 
         if sentences_to_append:
             texts.append(sentences_to_append)
+            articles.append(result['title'])
+
+    wiki_documents_dataset = pd.DataFrame(list(zip(articles, texts)), columns=['article', 'text'])
+
+    return wiki_documents_dataset
+
+
+def extract_documents_as_text_from_source(wiki_documents_path):
+    texts, labels, articles = [], [], []
+
+    with open(wiki_documents_path, 'r') as json_file:
+        json_list = list(json_file)
+
+    for json_str in json_list:
+        result = json.loads(json_str)
+        introduction_json = result['sections'][0]['text'].replace('\n', ' ').replace('\r', '')
+
+        if introduction_json:
+            texts.append(introduction_json)
             articles.append(result['title'])
 
     wiki_documents_dataset = pd.DataFrame(list(zip(articles, texts)), columns=['article', 'text'])
@@ -125,7 +144,29 @@ def generate_dataset(click_stream_dump_path, wiki_documents_path):
     print('Generating dataset')
 
     click_stream_dataset = generate_click_stream_dataset(click_stream_dump_path, wiki_documents_path)
-    wiki_documents_dataset = get_wiki_documents_from_json(wiki_documents_path)
+    wiki_documents_dataset = extract_documents_as_vectors_from_source(wiki_documents_path)
+
+    combined_dataset = combine_wiki_click_stream_datasets(click_stream_dataset, wiki_documents_dataset)
+
+    return combined_dataset
+
+
+def generate_text_dataset(click_stream_dump_path, wiki_documents_path):
+    """
+    Process:
+        - Download Simple English data XML (not implemented)
+        - Transform to JSON using wiki_cli.py (not implemented)
+        - Download click stream (not implemented)
+        - Generate click stream dataset for titles available on Simple English - ok
+        - Combine click stream dataset with JSON dataset
+        - Save result as CSV
+
+    :return: void
+    """
+    print('Generating dataset')
+
+    click_stream_dataset = generate_click_stream_dataset(click_stream_dump_path, wiki_documents_path)
+    wiki_documents_dataset = extract_documents_as_text_from_source(wiki_documents_path)
 
     combined_dataset = combine_wiki_click_stream_datasets(click_stream_dataset, wiki_documents_dataset)
 
@@ -254,14 +295,10 @@ def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/
 def save_tensor_dataset(words_ids, name):
     words_per_sentence, sentences_per_paragraph, paragraphs_per_document = get_padded_document_structures(
         words_ids)
-    print('Transforming dataset into tensors', datetime.now())
     document_tensor = get_document_tensor(words_ids)
-    print('Finished Transforming dataset into tensors', datetime.now())
-    print('Beginning creation of TensorDataset', datetime.now())
     dataset = TensorDataset(document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document)
 
     torch.save(dataset, name + '.pth')
-    print('Saved TensorDataset {} {}'.format(name, datetime.now()))
 
     del document_tensor, words_per_sentence, sentences_per_paragraph, paragraphs_per_document, dataset
 
@@ -276,10 +313,12 @@ if __name__ == '__main__':
     click_stream_dump_path = '../data/clickstream-enwiki-2019-08.tsv'
     wiki_documents_path = '../data/simplewiki.jsonl'
 
-    LOG_FORMAT = '[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)'
-    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-    # get_wiki_documents_from_json(wiki_documents_path)
+    text_documents = generate_text_dataset(click_stream_dump_path, wiki_documents_path)
+    text_documents.to_csv('../data/wiki_df_text.csv',
+                          index=False,
+                          header=['previous_article', 'previous_article_text', 'current_article',
+                                  'current_article_text', 'number_of_clicks', 'click_rate']
+                          )
 
     # wiki_dataset = generate_dataset(click_stream_dump_path, wiki_documents_path)
     # wiki_dataset.to_csv('../data/wiki_df.csv',

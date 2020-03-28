@@ -4,10 +4,9 @@
 import torch
 import numpy as np
 import pandas as pd
-import logging
 from sklearn import metrics
 from ast import literal_eval
-import itertools as it
+import timeit
 
 
 # csv.field_size_limit(sys.maxsize)
@@ -99,60 +98,161 @@ def get_padded_document(document, max_length_word, max_length_sentences, max_len
     return document
 
 
-def get_document_at_word_level(document_batch, words_per_sentence):
-    words_per_document_in_batch = words_per_sentence.sum(dim=2).sum(dim=1)
-    max_words_per_document_in_batch = max(words_per_document_in_batch).item()
-    word_level_document_batch = torch.zeros((words_per_document_in_batch.shape[0], max_words_per_document_in_batch),
-                                            dtype=int)
+def remove_zero_tensors_from_batch(sentences_in_batch):
+    non_zero_indices = torch.nonzero(sentences_in_batch, as_tuple=True)[0].unique().tolist()
 
-    for document_idx, document in enumerate(words_per_sentence):
-        word_level_document = []
+    max_sentence_length = sentences_in_batch.shape[1]
+    non_zero_tensor = torch.zeros((len(non_zero_indices), max_sentence_length), dtype=sentences_in_batch.dtype)
 
-        for paragraph_idx, paragraph in enumerate(document):
-            for sentence_idx, number_of_words in enumerate(paragraph):
-                if number_of_words > 0:
-                    word_level_document.extend(document_batch[
-                                               document_idx,
-                                               paragraph_idx,
-                                               sentence_idx,
-                                               :number_of_words].tolist())
+    for i, non_zero_index in enumerate(non_zero_indices):
+        non_zero_tensor[i] = sentences_in_batch[non_zero_index]
 
-        word_level_document_batch[document_idx, :len(word_level_document)] = torch.LongTensor(word_level_document)
+    if torch.cuda.is_available():
+        non_zero_tensor = non_zero_tensor.cuda()
 
-    return word_level_document_batch, words_per_document_in_batch  # (batch_size, max_words_per_document_in_batch)
+    return non_zero_tensor
 
 
-def get_document_at_sentence_level(document):
-    rearranged_tensor = list(it.chain.from_iterable(document[0].tolist()))
+def add_filtered_tensors_to_original_batch(filtered_batch, original_batch):
+    non_zero_indices = torch.nonzero(original_batch, as_tuple=True)[0].unique().tolist()
 
-    return torch.LongTensor([rearranged_tensor])
+    batch_size = original_batch.shape[0]
+    sequence_length = filtered_batch.shape[1]
+    tensor_size = [batch_size, sequence_length]
+
+    if len(filtered_batch.shape) > 2:
+        tensor_size.append(filtered_batch.shape[2])
+
+    original_batch_reshaped = torch.zeros(tuple(tensor_size),
+                                          dtype=filtered_batch.dtype)
+
+    for i, non_zero_tensor_index in enumerate(non_zero_indices):
+        original_batch_reshaped[non_zero_tensor_index] = filtered_batch[i]
+
+    return original_batch_reshaped
+
+
+def remove_zeros_from_words_per_sentence(words_per_sentence):
+    non_zero_indices = words_per_sentence.nonzero().squeeze(1)
+
+    return words_per_sentence[non_zero_indices].tolist()
+
+
+def get_words_per_document_at_word_level(words_per_sentence):
+    return words_per_sentence.sum(dim=2).sum(dim=1).unsqueeze(1).unsqueeze(1)
 
 
 def get_words_per_sentence_at_sentence_level(words_per_sentence):
-    words_per_sentence_at_sentence_level = []
+    batch_size = words_per_sentence.shape[0]
+    paragraph_length = words_per_sentence.shape[1]
+    sentence_length = words_per_sentence.shape[2]
 
-    for paragraph in words_per_sentence:
-        for sentence in paragraph:
-            for words in sentence:
-                if words > 0:
-                    words_per_sentence_at_sentence_level.append(words)
+    words_per_sentence_placeholder = torch.zeros((batch_size, 1, paragraph_length * sentence_length), dtype=int)
 
-    return torch.LongTensor(words_per_sentence_at_sentence_level)
+    flat_words_per_sentence = words_per_sentence.flatten(start_dim=1)
+
+    for document_index, document in enumerate(flat_words_per_sentence):
+        non_zero_indices = document.nonzero(as_tuple=True)
+        non_zero_sentences = document[non_zero_indices]
+
+        words_per_sentence_placeholder[document_index, 0, : len(non_zero_sentences)] = non_zero_sentences
+
+    return words_per_sentence_placeholder
+
+
+def get_sentences_per_paragraph_at_sentence_level(sentences_per_paragraph):
+    return sentences_per_paragraph.sum(dim=1).unsqueeze(1)
+
+
+def get_document_at_word_level(document_batch, words_per_sentence_at_word_level):
+    batch_size = document_batch.shape[0]
+    paragraph_length = 1
+    sentence_length = 1
+    word_length = max(words_per_sentence_at_word_level).item()
+
+    word_level_document_placeholder = torch.zeros((batch_size, paragraph_length, sentence_length, word_length),
+                                                  dtype=int)
+
+    for document_index, document in enumerate(document_batch):
+        non_zero_indices = document.nonzero(as_tuple=True)
+
+        word_level_document_placeholder[document_index, 0, 0, : len(document[non_zero_indices])] = document[
+            non_zero_indices]
+
+    return word_level_document_placeholder
+
+
+def get_document_at_sentence_level(documents_in_batch):
+    batch_size = documents_in_batch.shape[0]
+    paragraph_length = documents_in_batch.shape[1]
+    sentence_length = documents_in_batch.shape[2]
+    word_length = documents_in_batch.shape[3]
+
+    document_at_sentence_level_tensor = torch.zeros(
+        (batch_size, 1, paragraph_length * sentence_length, word_length),
+        dtype=int)
+
+    for document_index, document_in_batch in enumerate(documents_in_batch):
+        non_zero_sentences = document_in_batch[document_in_batch.sum(dim=2) > 0]
+
+        document_at_sentence_level_tensor[document_index, 0, : len(non_zero_sentences), :] = non_zero_sentences
+
+    return document_at_sentence_level_tensor
+
+
+def measure_document():
+    setup = """
+from __main__ import get_document_at_sentence_level
+import torch
+import numpy as np
+import pandas as pd
+from sklearn import metrics
+from ast import literal_eval
+
+training_generator = torch.load('../data/training.pth')
+current_document = next(iter(training_generator))[0]
+        """
+
+    print('starting')
+    print(timeit.timeit("get_document_at_sentence_level(current_document['text'])", setup=setup, number=100))
+    print('finished')
+
+
+def measure_words_per_sentence():
+    setup = """
+from __main__ import get_words_per_sentence_at_sentence_level
+import torch
+import numpy as np
+import pandas as pd
+from sklearn import metrics
+from ast import literal_eval
+
+training_generator = torch.load('../data/training.pth')
+current_document = next(iter(training_generator))[0]
+        """
+
+    print('starting')
+    print(timeit.timeit("get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup, number=100))
+    print('finished')
+
+
+def test_sentence_level():
+    training_generator = torch.load('../data/training.pth')
+
+    for current_document, previous_document, click_rate_tensor in training_generator:
+        current_document_ = get_document_at_sentence_level(current_document['text'])
+        words_per_sentence = get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])
+
+        break
+
+    print(current_document_.shape)
+    # print(words_per_sentence)
 
 
 if __name__ == "__main__":
     torch.manual_seed(123)
-    # word, sent, paragraph = get_max_lengths('../data/wiki_df.csv')
-    word = 98
-    sent = 60
-    paragraph = 36
+    torch.set_printoptions(profile="full")
 
-    training_generator = torch.load('../data/training.pth')
+    # test_sentence_level()
 
-    i = 0
-    for current_document, words_per_sentence_current_document, sentences_per_paragraph_current_document, paragraphs_per_document_current_document, previous_document, words_per_sentence_previous_document, sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document, click_rate_tensor in training_generator:
-        document_word_level, words_per_document = get_document_at_word_level(current_document, words_per_sentence_current_document)
-        break
-
-    print(document_word_level.shape)
-    print(words_per_document.shape)
+    measure_document()

@@ -1,12 +1,12 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import timeit
 
 import pandas as pd
 from torch.utils.data.dataset import Dataset
 import csv
 import numpy as np
-import src.utils as utils
 from ast import literal_eval
 import torch
 
@@ -34,10 +34,9 @@ class SMASHDataset(Dataset):
         return len(self.current_article_text)
 
     def __getitem__(self, index):
+
         current_article_text = literal_eval(self.current_article_text.iloc[index])
-        current_article_title = self.current_article_title.iloc[index]
         previous_article_text = literal_eval(self.previous_article_text.iloc[index])
-        previous_article_title = self.previous_article_title.iloc[index]
 
         current_article_structure = self.get_document_structure(current_article_text)
         current_article_words_per_sentence = torch.LongTensor(
@@ -59,19 +58,26 @@ class SMASHDataset(Dataset):
         previous_article_text_padded = torch.LongTensor(
             self.get_padded_document(previous_article_text).astype(np.int64))
 
+        current_article = {
+            'text': current_article_text_padded,
+            'words_per_sentence': current_article_words_per_sentence,
+            'sentences_per_paragraph': current_article_sentences_per_paragraph,
+            'paragraphs_per_document': current_article_paragraphs_per_document
+        }
+
+        previous_article = {
+            'text': previous_article_text_padded,
+            'words_per_sentence': previous_article_words_per_sentence,
+            'sentences_per_paragraph': previous_article_sentences_per_paragraph,
+            'paragraphs_per_document': previous_article_paragraphs_per_document
+        }
+
         click_rate = torch.FloatTensor([self.click_rate.iloc[index]])
 
-        return current_article_text_padded, \
-               current_article_words_per_sentence, \
-               current_article_sentences_per_paragraph, \
-               current_article_paragraphs_per_document, \
-               previous_article_text_padded, \
-               previous_article_words_per_sentence, \
-               previous_article_sentences_per_paragraph, \
-               previous_article_paragraphs_per_document, \
-               click_rate
+        return current_article, previous_article, click_rate
 
-    def get_document_structure(self, document):
+    @staticmethod
+    def get_document_structure(document):
         paragraphs_per_document = len(document)
         sentences_per_paragraph = []
         words_per_sentence = []
@@ -131,22 +137,6 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    def get_padded_words_per_sentence_refactor(self, document_structure):
-        for paragraph in document_structure:
-            if len(paragraph) < self.max_length_sentences:
-                extended_sentences = list([0] * (self.max_length_sentences - len(paragraph)))
-                paragraph.extend(extended_sentences)
-
-        if len(document_structure) < self.max_length_paragraph:
-            extended_paragraphs = [[0 for _ in range(self.max_length_sentences)]
-                                   for _ in range(self.max_length_paragraph - len(document_structure))]
-
-            document_structure.extend(extended_paragraphs)
-
-        document_structure = np.stack(arrays=document_structure, axis=0)
-
-        return document_structure
-
     def get_padded_sentences_per_paragraph(self, document_structure):
         if len(document_structure) < self.max_length_paragraph:
             extended_paragraphs = [0 for _ in range(self.max_length_paragraph - len(document_structure))]
@@ -155,17 +145,43 @@ class SMASHDataset(Dataset):
         return document_structure
 
 
+def measure_get_padded_document():
+    setup = """
+from __main__ import SMASHDataset
+import pandas as pd
+from torch.utils.data.dataset import Dataset
+import csv
+import numpy as np
+import src.utils as utils
+from ast import literal_eval
+import torch
+
+wiki_data_path = '../data/wiki_df_small.csv'
+max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
+test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
+                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
+
+current_article_text = literal_eval(test.current_article_text.iloc[0])
+        """
+
+    f = "test.get_padded_document(current_article_text)"
+
+    print(timeit.timeit(f, setup=setup, number=100000))
+
+
 if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123)
     else:
         torch.manual_seed(123)
 
-    torch.set_printoptions(profile="full")
+    # torch.set_printoptions(profile="full")
+    #
+    # wiki_data_path = '../data/wiki_df_small.csv'
+    # max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
+    # test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
+    #                     max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
+    #
+    # print(test.__getitem__(1)[1]['text'])
 
-    wiki_data_path = '../data/wiki_df_small.csv'
-    max_word_length, max_sent_length, max_paragraph_length = utils.get_max_lengths(wiki_data_path)
-    test = SMASHDataset(data_path=wiki_data_path, dict_path="../data/glove.6B.50d.txt", max_length_word=max_word_length,
-                        max_length_sentences=max_sent_length, max_length_paragraph=max_paragraph_length)
-
-    print(test.__getitem__(1)[2])
+    measure_get_padded_document()
