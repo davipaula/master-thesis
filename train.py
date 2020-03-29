@@ -93,7 +93,6 @@ class SmashRNN:
             self.model.train()
 
             loss_list = []
-            predictions_list = []
 
             for current_document, previous_document, click_rate_tensor in training_generator:
                 if torch.cuda.is_available():
@@ -117,22 +116,20 @@ class SmashRNN:
                     current_document = self.transform_to_word_level(current_document)
                     previous_document = self.transform_to_word_level(previous_document)
 
-                predictions = self.model(current_document['text'],
-                                         current_document['words_per_sentence'],
-                                         current_document['sentences_per_paragraph'],
-                                         current_document['paragraphs_per_document'],
-                                         previous_document['text'],
-                                         previous_document['words_per_sentence'],
-                                         previous_document['sentences_per_paragraph'],
-                                         previous_document['paragraphs_per_document'],
-                                         click_rate_tensor)
+                documents_similarity = self.model(current_document['text'],
+                                                  current_document['words_per_sentence'],
+                                                  current_document['sentences_per_paragraph'],
+                                                  current_document['paragraphs_per_document'],
+                                                  previous_document['text'],
+                                                  previous_document['words_per_sentence'],
+                                                  previous_document['sentences_per_paragraph'],
+                                                  previous_document['paragraphs_per_document'])
 
-                loss = self.criterion(predictions, click_rate_tensor)
+                loss = self.criterion(documents_similarity, click_rate_tensor)
                 loss.backward()
                 self.optimizer.step()
 
                 loss_list.append(loss)
-                predictions_list.append(predictions.clone().cpu())
 
             loss = self.calculate_loss(loss_list)
 
@@ -202,20 +199,20 @@ class SmashRNN:
                     current_document = self.transform_to_word_level(current_document)
                     previous_document = self.transform_to_word_level(previous_document)
 
-                predictions = self.model(current_document['text'],
-                                         current_document['words_per_sentence'],
-                                         current_document['sentences_per_paragraph'],
-                                         current_document['paragraphs_per_document'],
-                                         previous_document['text'],
-                                         previous_document['words_per_sentence'],
-                                         previous_document['sentences_per_paragraph'],
-                                         previous_document['paragraphs_per_document'],
-                                         click_rate_tensor)
+                documents_similarity = self.model(current_document['text'],
+                                                  current_document['words_per_sentence'],
+                                                  current_document['sentences_per_paragraph'],
+                                                  current_document['paragraphs_per_document'],
+                                                  previous_document['text'],
+                                                  previous_document['words_per_sentence'],
+                                                  previous_document['sentences_per_paragraph'],
+                                                  previous_document['paragraphs_per_document'],
+                                                  click_rate_tensor)
 
-            loss = self.criterion(predictions, click_rate_tensor)
+            loss = self.criterion(documents_similarity, click_rate_tensor)
 
             loss_list.append(loss)
-            predictions_list.append(predictions.clone().cpu())
+            predictions_list.append(documents_similarity.clone().cpu())
 
         loss = self.calculate_loss(loss_list)
 

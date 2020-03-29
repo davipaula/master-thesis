@@ -62,8 +62,7 @@ class SmashRNNModel(nn.Module):
     def forward(self, current_document, words_per_sentence_current_document,
                 sentences_per_paragraph_current_document, paragraphs_per_document_current_document,
                 previous_document, words_per_sentence_previous_document,
-                sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document,
-                click_rate_tensor):
+                sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document):
         # This only works with self.batch_size = 1
         current_document_representation = self.get_document_representation(current_document,
                                                                            paragraphs_per_document_current_document,
@@ -81,9 +80,9 @@ class SmashRNNModel(nn.Module):
                                                                current_document_representation - previous_document_representation),
                                                            ), 1)
 
-        predicted_ctr = self.classifier(concatenated_documents_representation)
+        documents_similarity = self.classifier(concatenated_documents_representation)
 
-        return predicted_ctr
+        return documents_similarity
 
     def get_document_representation(self, document, paragraphs_per_document, sentences_per_paragraph,
                                     words_per_sentence):
@@ -118,10 +117,7 @@ class SmashRNNModel(nn.Module):
                                                               batch_first=True,
                                                               enforce_sorted=False).float()
 
-                try:
-                    word_level_gru, _ = self.word_gru(packed_word_embeddings)
-                except:
-                    print('error')
+                word_level_gru, _ = self.word_gru(packed_word_embeddings)
 
                 word_level_attention = self.get_word_attention(word_level_gru)
 
@@ -140,15 +136,9 @@ class SmashRNNModel(nn.Module):
                 # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
                 word_level_gru, _ = pad_packed_sequence(word_level_gru, batch_first=True)
 
-                try:
-                    word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
-                except:
-                    print('problem')
+                word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
 
-                try:
-                    sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
-                except:
-                    print('problem')
+                sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
 
             # pack padded sequence of sentences
             packed_sentences = pack_padded_sequence(sentences,
@@ -214,7 +204,8 @@ class SmashRNNModel(nn.Module):
                                                           batch_first=True)  # (n_sentences, max(words_per_sentence))
         return sentence_level_attention
 
-    def softmax(self, sentence_level_attention):
+    @staticmethod
+    def softmax(sentence_level_attention):
         # Compute softmax over the dot-product manually
         # Manually because they have to be computed only over words in the same sentence
         # First, take the exponent
