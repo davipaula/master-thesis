@@ -200,6 +200,14 @@ def get_document_at_sentence_level(documents_in_batch):
     return document_at_sentence_level_tensor
 
 
+def cosine_similarity(vector_a, vector_b):
+    dot_product = np.dot(vector_a, vector_b)
+    norm_a = np.linalg.norm(vector_a)
+    norm_b = np.linalg.norm(vector_b)
+
+    return round(dot_product / (norm_a * norm_b), 8)
+
+
 def measure_document():
     setup = """
 from __main__ import get_document_at_sentence_level
@@ -232,7 +240,8 @@ current_document = next(iter(training_generator))[0]
         """
 
     print('starting')
-    print(timeit.timeit("get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup, number=100))
+    print(timeit.timeit("get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup,
+                        number=100))
     print('finished')
 
 
