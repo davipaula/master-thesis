@@ -59,6 +59,7 @@ class SMASHDataset(Dataset):
             self.get_padded_document(previous_article_text).astype(np.int64))
 
         current_article = {
+            'title': self.current_article_title.iloc[index],
             'text': current_article_text_padded,
             'words_per_sentence': current_article_words_per_sentence,
             'sentences_per_paragraph': current_article_sentences_per_paragraph,
@@ -66,6 +67,7 @@ class SMASHDataset(Dataset):
         }
 
         previous_article = {
+            'title': self.previous_article_title.iloc[index],
             'text': previous_article_text_padded,
             'words_per_sentence': previous_article_words_per_sentence,
             'sentences_per_paragraph': previous_article_sentences_per_paragraph,

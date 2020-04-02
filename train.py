@@ -147,8 +147,8 @@ class SmashRNN:
             if self.should_run_validation(epoch):
                 self.validate(int(epoch / self.opt.validation_interval), level)
 
-            self.save_model(self.model, loss, epoch)
-            print('Training finished {}'.format(datetime.now()))
+        self.save_model(self.model, loss, epoch)
+        print('Training finished {}'.format(datetime.now()))
 
     def transform_to_word_level(self, document):
         batch_size = document['text'].shape[0]
@@ -176,7 +176,6 @@ class SmashRNN:
         validation_step = int(validation_step) + 1
 
         loss_list = []
-        predictions_list = []
 
         for current_document, previous_document, click_rate_tensor in validation_generator:
             if torch.cuda.is_available():
@@ -206,13 +205,11 @@ class SmashRNN:
                                                   previous_document['text'],
                                                   previous_document['words_per_sentence'],
                                                   previous_document['sentences_per_paragraph'],
-                                                  previous_document['paragraphs_per_document'],
-                                                  click_rate_tensor)
+                                                  previous_document['paragraphs_per_document'])
 
             loss = self.criterion(documents_similarity, click_rate_tensor)
 
             loss_list.append(loss)
-            predictions_list.append(documents_similarity.clone().cpu())
 
         loss = self.calculate_loss(loss_list)
 

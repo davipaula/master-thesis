@@ -7,14 +7,13 @@ from comet_ml import Experiment
 import torch
 from torch import nn
 from src.smash_rnn_model import SmashRNNModel
-from src.word_smash_rnn_model import WordLevelSmashRNNModel
-from src.sentence_smash_rnn_model import SentenceLevelSmashRNNModel
 import csv
 import numpy as np
 import argparse
 from src.utils import get_max_lengths, get_words_per_document_at_word_level, get_document_at_word_level, \
     get_document_at_sentence_level, get_words_per_sentence_at_sentence_level, \
     get_sentences_per_paragraph_at_sentence_level
+from datetime import datetime
 
 
 def test(opt):
@@ -29,7 +28,8 @@ def test(opt):
     model = load_model(opt.model_folder, opt.full_dataset_path, opt.level, opt.word2vec_path)
 
     loss_list = []
-    predictions_list = []
+    columns_names = ['previous_document', 'current_document', 'actual_click_rate', 'predicted_click_rate']
+    predictions_list = pd.DataFrame(columns=columns_names)
 
     print('Starting test')
 
@@ -60,19 +60,27 @@ def test(opt):
                             previous_document['text'],
                             previous_document['words_per_sentence'],
                             previous_document['sentences_per_paragraph'],
-                            previous_document['paragraphs_per_document'],
-                            click_rate_tensor)
+                            previous_document['paragraphs_per_document'])
 
         loss = criterion(predictions, click_rate_tensor)
-
         loss_list.append(loss)
-        predictions_list.append(predictions.clone().cpu())
 
-    loss = sum(loss_list) / len(loss_list)
+        batch_results = pd.DataFrame(
+            zip(current_document['title'],
+                previous_document['title'],
+                click_rate_tensor.squeeze(1).tolist(),
+                predictions.squeeze(1).tolist()),
+            columns=columns_names
+        )
 
-    experiment.log_metric('test_{}_level_loss'.format(opt.level), loss.item())
+        predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
-    print('Test: loss: {}\n\n'.format(loss))
+        loss = sum(loss_list) / len(loss_list)
+
+        experiment.log_metric('test_{}_level_loss'.format(opt.level), loss.item())
+
+        print('Test: loss: {}\n\n'.format(loss))
+        predictions_list.to_csv('results_{}_level_{}.csv'.format(opt.level, datetime.now()), index=False)
 
 
 def load_model(model_folder, full_dataset_path, level, word2vec_path):
@@ -144,4 +152,3 @@ def transform_to_sentence_level(document):
 if __name__ == "__main__":
     opt = get_args()
     test(opt)
-    print(opt.level)
