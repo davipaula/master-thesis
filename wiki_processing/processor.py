@@ -6,6 +6,7 @@ from gensim.scripts.segment_wiki import extract_page_xmls
 from spacy.lang.en.stop_words import STOP_WORDS
 from wiki_processing.extractor_utils import dropNested, replaceInternalLinks, replaceExternalLinks
 from xml.etree import cElementTree
+from gensim.scripts.segment_wiki import segment
 
 logger = logging.getLogger(__name__)
 
@@ -183,18 +184,23 @@ def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, log_every
             text = elem.find(text_path).text
             ns = elem.find(ns_path).text
 
+            # Get the article name of the links in the document
+            links_in_document = list(segment(page_xml, include_interlinks=True)[2])
+
             # Filter invalid namespaces (user pages, etc)
             if ns not in filter_namespaces:
                 continue
 
             # Ignore redirects
-            if '#REDIRECT' in text or '#redirect' in text:
+            # TODO test text.lower(). I've found #Redirect in the text
+            if '#REDIRECT' in text or '#redirect' in text or '#Redirect':
                 continue
 
             yield {
                 'title': title,
                 # 'text': text,
                 'sections': process_text(nlp, w2v_model, text),
+                'links': links_in_document,
             }
 
             doc_counter += 1

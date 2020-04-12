@@ -69,7 +69,7 @@ class SmashRNN:
             self.model.cuda()
 
         # Overall model optimization and evaluation parameters
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()
         self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
                                          lr=self.learning_rate,
                                          momentum=self.momentum)
@@ -86,6 +86,14 @@ class SmashRNN:
                                          workspace="davipaula")
 
     def train(self, level='paragraph'):
+        """
+        TODO change implementation to calculate all documents similarities before iterating over the
+        document pairs (previous_document, current_document):
+         - Get unique documents (previous and current)
+         - Calculate their document representations
+         - Store it somehow (tensors? save in disk?)
+         - Use the stored representations to calculate predictions
+        """
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
 
@@ -176,6 +184,8 @@ class SmashRNN:
         validation_step = int(validation_step) + 1
 
         loss_list = []
+        columns_names = ['previous_document', 'current_document', 'actual_click_rate', 'predicted_click_rate']
+        predictions_list = pd.DataFrame(columns=columns_names)
 
         for current_document, previous_document, click_rate_tensor in validation_generator:
             if torch.cuda.is_available():
@@ -198,23 +208,37 @@ class SmashRNN:
                     current_document = self.transform_to_word_level(current_document)
                     previous_document = self.transform_to_word_level(previous_document)
 
-                documents_similarity = self.model(current_document['text'],
-                                                  current_document['words_per_sentence'],
-                                                  current_document['sentences_per_paragraph'],
-                                                  current_document['paragraphs_per_document'],
-                                                  previous_document['text'],
-                                                  previous_document['words_per_sentence'],
-                                                  previous_document['sentences_per_paragraph'],
-                                                  previous_document['paragraphs_per_document'])
+                predictions = self.model(current_document['text'],
+                                         current_document['words_per_sentence'],
+                                         current_document['sentences_per_paragraph'],
+                                         current_document['paragraphs_per_document'],
+                                         previous_document['text'],
+                                         previous_document['words_per_sentence'],
+                                         previous_document['sentences_per_paragraph'],
+                                         previous_document['paragraphs_per_document'])
 
-            loss = self.criterion(documents_similarity, click_rate_tensor)
+            loss = self.criterion(predictions, click_rate_tensor)
 
             loss_list.append(loss)
+
+            batch_results = pd.DataFrame(
+                zip(current_document['title'],
+                    previous_document['title'],
+                    click_rate_tensor.squeeze(1).tolist(),
+                    predictions.squeeze(1).tolist()),
+                columns=columns_names
+            )
+
+            predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
         loss = self.calculate_loss(loss_list)
 
         if not self.is_debug_mode:
             self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
+
+        predictions_list.to_csv(
+            '{}results_{}_level_validation_{}.csv'.format(self.opt.results_path, level, datetime.now()),
+            index=False)
 
         print('{} level\n Validation: {}/{}, Lr: {}, Loss: {}'.format(
             level.capitalize(),
@@ -263,6 +287,7 @@ class SmashRNN:
                             help='For development purposes. This limits the number of rows read from the dataset.')
         parser.add_argument("--level", type=str, default='paragraph')
         parser.add_argument("--batch_size", type=int, default=3)
+        parser.add_argument("--results_path", type=str, default='./')
 
         return parser.parse_args()
 

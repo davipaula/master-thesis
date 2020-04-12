@@ -75,12 +75,12 @@ def test(opt):
 
         predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
-        loss = sum(loss_list) / len(loss_list)
+    loss = sum(loss_list) / len(loss_list)
 
-        experiment.log_metric('test_{}_level_loss'.format(opt.level), loss.item())
+    experiment.log_metric('test_{}_level_loss'.format(opt.level), loss.item())
 
-        print('Test: loss: {}\n\n'.format(loss))
-        predictions_list.to_csv('results_{}_level_{}.csv'.format(opt.level, datetime.now()), index=False)
+    print('Test: loss: {}\n\n'.format(loss))
+    predictions_list.to_csv('/home/dnascimento/thesis-davi/results_{}_level_{}.csv'.format(opt.level, datetime.now()), index=False)
 
 
 def load_model(model_folder, full_dataset_path, level, word2vec_path):

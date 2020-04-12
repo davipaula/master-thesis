@@ -7,7 +7,6 @@ from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_
 import numpy as np
 import pandas as pd
 import csv
-
 from src.utils import remove_zero_tensors_from_batch, remove_zeros_from_words_per_sentence, \
     add_filtered_tensors_to_original_batch
 
@@ -63,7 +62,7 @@ class SmashRNNModel(nn.Module):
                 sentences_per_paragraph_current_document, paragraphs_per_document_current_document,
                 previous_document, words_per_sentence_previous_document,
                 sentences_per_paragraph_previous_document, paragraphs_per_document_previous_document):
-        # This only works with self.batch_size = 1
+
         current_document_representation = self.get_document_representation(current_document,
                                                                            paragraphs_per_document_current_document,
                                                                            sentences_per_paragraph_current_document,

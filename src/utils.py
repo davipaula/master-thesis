@@ -1,6 +1,8 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import re
+
 import torch
 import numpy as np
 import pandas as pd
@@ -256,6 +258,37 @@ def test_sentence_level():
 
     print(current_document_.shape)
     # print(words_per_sentence)
+
+
+def remove_special_characters(text):
+    try:
+        text = re.sub(r"[^A-Za-z0-9(),!.?\'`]", " ", text)
+        text = re.sub(r"\'s", " 's ", text)
+        text = re.sub(r"\'ve", " 've ", text)
+        text = re.sub(r"n\'t", " 't ", text)
+        text = re.sub(r"\'re", " 're ", text)
+        text = re.sub(r"\'d", " 'd ", text)
+        text = re.sub(r"\'ll", " 'll ", text)
+        text = re.sub(r",", " ", text)
+        text = re.sub(r"\.", " ", text)
+        text = re.sub(r"!", " ", text)
+        text = re.sub(r"\(", " ( ", text)
+        text = re.sub(r"\)", " ) ", text)
+        text = re.sub(r"\?", " ", text)
+        text = re.sub(r"\s{2,}", " ", text)
+        text = text.lower()
+    except:
+        pass
+
+    return text
+
+
+def remove_special_characters_df(text_column: pd.Series):
+    # text_column = text_column.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
+    text_column = text_column.str.replace(r"_", " ")
+    # text_column = text_column.str.lower()
+
+    return text_column
 
 
 if __name__ == "__main__":
