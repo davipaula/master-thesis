@@ -10,10 +10,15 @@ import csv
 from src.utils import remove_zero_tensors_from_batch, remove_zeros_from_words_per_sentence, \
     add_filtered_tensors_to_original_batch
 
+HIDDEN_LAYER_SIZE = 50
+
 
 class SmashRNNModel(nn.Module):
     def __init__(self, dict, dict_len, embedding_size, max_word_length, max_sent_length, max_paragraph_length):
         super(SmashRNNModel, self).__init__()
+
+        GRU_HIDDEN_SIZE = 128
+        HIDDEN_LAYER_SIZE = 128
 
         self.max_word_length = max_word_length
         self.max_sent_length = max_sent_length
@@ -24,25 +29,25 @@ class SmashRNNModel(nn.Module):
         self.embedding = nn.Embedding(num_embeddings=dict_len, embedding_dim=embedding_size).from_pretrained(dict)
 
         # RNN + attention layers
-        word_gru_hidden_size = 100
+        word_gru_hidden_size = GRU_HIDDEN_SIZE
         self.word_gru_out_size = word_gru_hidden_size * 2
         self.word_gru = nn.GRU(embedding_size, word_gru_hidden_size, bidirectional=True, batch_first=True)
-        self.word_attention = nn.Linear(self.word_gru_out_size, 50)
-        self.word_context_vector = nn.Linear(50, 1, bias=False)  # Word context vector to take dot-product with
+        self.word_attention = nn.Linear(self.word_gru_out_size, HIDDEN_LAYER_SIZE)
+        self.word_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False)  # Word context vector to take dot-product with
 
-        sentence_gru_hidden_size = 200
+        sentence_gru_hidden_size = GRU_HIDDEN_SIZE
         self.sentence_gru_out_size = sentence_gru_hidden_size * 2
         self.sentence_gru = nn.GRU(self.word_gru_out_size, sentence_gru_hidden_size, bidirectional=True,
                                    batch_first=True)
-        self.sentence_attention = nn.Linear(self.sentence_gru_out_size, 50)
-        self.sentence_context_vector = nn.Linear(50, 1, bias=False)
+        self.sentence_attention = nn.Linear(self.sentence_gru_out_size, HIDDEN_LAYER_SIZE)
+        self.sentence_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False)
 
-        paragraph_gru_hidden_size = 300
+        paragraph_gru_hidden_size = GRU_HIDDEN_SIZE
         self.paragraph_gru_out_size = paragraph_gru_hidden_size * 2
         self.paragraph_gru = nn.GRU(self.sentence_gru_out_size, paragraph_gru_hidden_size, bidirectional=True,
                                     batch_first=True)
-        self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, 50)
-        self.paragraph_context_vector = nn.Linear(50, 1, bias=False)
+        self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, HIDDEN_LAYER_SIZE)
+        self.paragraph_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False)
 
         self.input_dim = 2 * paragraph_gru_hidden_size * 3  # 3 = number of concatenations
 

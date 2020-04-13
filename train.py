@@ -26,9 +26,7 @@ class SmashRNN:
             torch.manual_seed(123)
 
         # Basic config. Should be customizable in the future
-        self.learning_rate = 0.1
-        self.momentum = 0.9
-        self.log_path = './tensorboard/smash_rnn'
+        self.learning_rate = 10e-5
         self.early_stopping_minimum_delta = 0
         self.early_stopping_patience = 0
 
@@ -70,17 +68,14 @@ class SmashRNN:
 
         # Overall model optimization and evaluation parameters
         self.criterion = nn.SmoothL1Loss()
-        self.optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, self.model.parameters()),
-                                         lr=self.learning_rate,
-                                         momentum=self.momentum)
+        self.optimizer = torch.optim.Adam(self.model.parameters(),
+                                          lr=self.learning_rate)
         self.best_loss = 1e5
         self.best_epoch = 0
 
         self.model.train()
 
-        self.is_debug_mode = getattr(sys, 'gettrace', None) is None
-
-        if not self.is_debug_mode:
+        if torch.cuda.is_available():
             self.experiment = Experiment(api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ",
                                          project_name="thesis-davi",
                                          workspace="davipaula")
@@ -141,7 +136,7 @@ class SmashRNN:
 
             loss = self.calculate_loss(loss_list)
 
-            if not self.is_debug_mode:
+            if torch.cuda.is_available():
                 self.experiment.log_metric('train_paragraph_level_loss', loss.item(), epoch=epoch + 1)
 
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
@@ -233,7 +228,7 @@ class SmashRNN:
 
         loss = self.calculate_loss(loss_list)
 
-        if not self.is_debug_mode:
+        if torch.cuda.is_available():
             self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
 
         predictions_list.to_csv(
