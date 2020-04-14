@@ -15,7 +15,6 @@ from src.smash_rnn_model import SmashRNNModel
 from src.smash_dataset import SMASHDataset
 from datetime import datetime
 from src.dataset_creation import split_dataset
-import sys
 
 
 class SmashRNN:
@@ -27,8 +26,7 @@ class SmashRNN:
 
         # Basic config. Should be customizable in the future
         self.learning_rate = 10e-5
-        self.early_stopping_minimum_delta = 0
-        self.early_stopping_patience = 0
+        self.patience = 3
 
         self.opt = self.get_args()
         self.batch_size = self.opt.batch_size
@@ -70,8 +68,6 @@ class SmashRNN:
         self.criterion = nn.SmoothL1Loss()
         self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=self.learning_rate)
-        self.best_loss = 1e5
-        self.best_epoch = 0
 
         self.model.train()
 
@@ -81,16 +77,13 @@ class SmashRNN:
                                          workspace="davipaula")
 
     def train(self, level='paragraph'):
-        """
-        TODO change implementation to calculate all documents similarities before iterating over the
-        document pairs (previous_document, current_document):
-         - Get unique documents (previous and current)
-         - Calculate their document representations
-         - Store it somehow (tensors? save in disk?)
-         - Use the stored representations to calculate predictions
-        """
         training_generator = torch.load(self.opt.train_dataset_path)
         print('Starting training {}'.format(datetime.now()))
+
+        num_epochs_without_improvement = 0
+        best_loss = 1
+        best_weights = None
+        best_epoch = 0
 
         for epoch in range(self.opt.num_epoches):
             self.model.train()
@@ -147,11 +140,22 @@ class SmashRNN:
                 datetime.now()
             ))
 
-            if self.should_run_validation(epoch):
-                self.validate(int(epoch / self.opt.validation_interval), level)
+            current_loss = self.validate(int(epoch / self.opt.validation_interval), level)
 
-        self.save_model(self.model, loss, epoch)
-        print('Training finished {}'.format(datetime.now()))
+            if current_loss < best_loss:
+                best_loss = current_loss
+                best_weights = {k: v.to('cpu').clone() for k, v in self.model.state_dict().items()}
+                best_epoch = epoch
+                num_epochs_without_improvement = 0
+            else:
+                num_epochs_without_improvement += 1
+
+            if num_epochs_without_improvement >= self.patience:
+                self.model.load_state_dict(best_weights)
+                break
+
+        self.save_model()
+        print('Training finished {}. Best epoch {}'.format(datetime.now(), best_epoch))
 
     def transform_to_word_level(self, document):
         batch_size = document['text'].shape[0]
@@ -243,15 +247,11 @@ class SmashRNN:
             loss
         ))
 
-    def is_best_loss(self, loss):
-        return (loss + self.es_min_delta) < self.best_loss
+        return round(loss, 8)
 
-    def save_model(self, model, loss, epoch):
-        self.best_loss = loss
-        self.best_epoch = epoch
-
+    def save_model(self):
         model_path = self.opt.model_folder + os.sep + self.opt.level + '_level_model.pt'
-        torch.save(model.state_dict(), model_path)
+        torch.save(self.model.state_dict(), model_path)
 
     def should_stop(self, epoch):
         return epoch - self.best_epoch > self.es_patience > 0
