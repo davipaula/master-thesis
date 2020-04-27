@@ -1,307 +1,257 @@
-import json
+import os
 import random
+from ast import literal_eval
 from datetime import datetime
 
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import TensorDataset, random_split
 
-from src.utils import remove_special_characters_df
+from click_stream_dataset import ClickStreamDataset
+from wiki_articles_dataset import WikiArticlesDataset
+from click_stream_pre_processed import ClickStreamPreProcessed
 
 
 class DatasetCreation:
-    def __init__(self, click_stream_dump_path: str, wiki_documents_path: str):
-        self.click_stream_dump_path = click_stream_dump_path
-        self.wiki_documents_path = wiki_documents_path
+    def __init__(self):
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+        else:
+            torch.manual_seed(123)
+
+        self.wiki_articles_pre_processed = pd.read_csv(
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles.csv"
+        )
+
+        self.click_stream_pre_processed = ClickStreamPreProcessed(
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/click_stream.csv"
+        )
+
+        self.dataset = self.generate_dataset()
+
+    def generate_dataset(self):
+        click_stream = self.get_click_stream_dataset_with_negative_sampling()
+        click_stream = self.filter_click_stream_data(
+            click_stream, self.get_available_titles_in_wiki_articles()
+        )
+
+        return click_stream
+
+    def get_available_titles_in_wiki_articles(self):
+        return self.wiki_articles_pre_processed["article"].unique()
+
+    @staticmethod
+    def filter_click_stream_data(click_stream, available_titles):
+        filtered_dataset = click_stream[
+            (click_stream["source_article"].isin(available_titles))
+            & (click_stream["target_article"].isin(available_titles))
+        ].copy()
+
+        return filtered_dataset
+
+    def get_click_stream_dataset_with_negative_sampling(self):
+        click_stream_pre_processed_dataset = self.click_stream_pre_processed.dataset
+
+        # Removing bad data. Should be fixed in the json parser
+        wiki_dataset = self.wiki_articles_pre_processed[
+            self.wiki_articles_pre_processed["text_ids"].str.find("#Redirect") == -1
+        ].reset_index(drop=True)
+
+        source_articles = (
+            pd.merge(
+                click_stream_pre_processed_dataset[["source_article"]],
+                wiki_dataset[["article", "links"]],
+                left_on=["source_article"],
+                right_on=["article"],
+            )
+            .drop(["article"], axis=1)
+            .drop_duplicates(subset="source_article")
+        )
+
+        source_articles["links"] = source_articles["links"].map(literal_eval)
+        source_articles = source_articles.explode("links")
+        visited_articles = click_stream_pre_processed_dataset[
+            ["source_article", "target_article"]
+        ]
+
+        non_visited_articles = pd.merge(
+            source_articles,
+            visited_articles,
+            left_on=["source_article", "links"],
+            right_on=["source_article", "target_article"],
+            how="left",
+        )
+        non_visited_articles = non_visited_articles[
+            ~non_visited_articles["target_article"].isna()
+        ]
+
+        # Adds the non visited links data
+        negative_sampling = non_visited_articles.drop(["target_article"], axis=1)
+        negative_sampling.columns = ["source_article", "target_article"]
+
+        negative_sampling.insert(len(negative_sampling.columns), "number_of_clicks", 0)
+        negative_sampling.insert(len(negative_sampling.columns), "click_rate", 0)
+
+        combined_dataset = click_stream_pre_processed_dataset.append(
+            negative_sampling, ignore_index=True
+        )
+
+        return combined_dataset
+
+    def split_dataset(
+        self,
+        train_split=0.8,
+        batch_size=32,
+        save_folder="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/",
+    ):
+        print("Beginning of dataset split")
 
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
         else:
             torch.manual_seed(123)
 
-    def get_click_stream_dump(self):
-        df = pd.read_csv(self.click_stream_dump_path,
-                         sep='\t',
-                         quoting=3,
-                         header=None,
-                         names=['source_article', 'target_article', 'type', 'n'],
-                         dtype={'type': 'category',
-                                'n': 'uint32'}
-                         )
+        click_stream_data = self.generate_dataset_sample()
+
+        click_stream_size = len(click_stream_data)
+        train_dataset_size = int(click_stream_size * train_split)
+        validation_dataset_size = int((click_stream_size - train_dataset_size) / 2)
+        test_dataset_size = (
+            click_stream_size - train_dataset_size - validation_dataset_size
+        )
+
+        train_dataset, validation_dataset, test_dataset = random_split(
+            click_stream_data,
+            [train_dataset_size, validation_dataset_size, test_dataset_size],
+        )
+
+        train_articles = np.unique(
+            train_dataset.dataset[["source_article", "target_article"]]
+            .iloc[train_dataset.indices]
+            .astype(str)
+        )
+        train_wiki = self.wiki_articles_pre_processed[
+            self.wiki_articles_pre_processed["article"].isin(train_articles)
+        ]
+
+        validation_articles = np.unique(
+            validation_dataset.dataset[["source_article", "target_article"]]
+            .iloc[validation_dataset.indices]
+            .astype(str)
+        )
+        validation_wiki = self.wiki_articles_pre_processed[
+            self.wiki_articles_pre_processed["article"].isin(validation_articles)
+        ]
+
+        test_articles = np.unique(
+            validation_dataset.dataset[["source_article", "target_article"]]
+            .iloc[test_dataset.indices]
+            .astype(str)
+        )
+        test_wiki = self.wiki_articles_pre_processed[
+            self.wiki_articles_pre_processed["article"].isin(test_articles)
+        ]
+
+        train_wiki["fold"] = "train"
+        validation_wiki["fold"] = "validation"
+        test_wiki["fold"] = "test"
+
+        wiki_dataset = pd.concat([train_wiki, validation_wiki, test_wiki])
+
+        print("Datasets split. Starting saving them", datetime.now())
+
+        training_params = {"batch_size": batch_size, "shuffle": True, "drop_last": True}
+        train_dataset = ClickStreamDataset(train_dataset.dataset)
+        train_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
+
+        validation_and_test_params = {
+            "batch_size": batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        validation_dataset = ClickStreamDataset(validation_dataset.dataset)
+        validation_loader = torch.utils.data.DataLoader(
+            validation_dataset, **validation_and_test_params
+        )
+
+        test_dataset = ClickStreamDataset(test_dataset.dataset)
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset, **validation_and_test_params
+        )
+
+        # train_wiki_loader = torch.utils.data.DataLoader(train_wiki, **training_params)
+        # validation_wiki_loader = torch.utils.data.DataLoader(
+        #     validation_wiki, **validation_and_test_params
+        # )
+        # test_wiki_loader = torch.utils.data.DataLoader(
+        #     test_wiki, **validation_and_test_params
+        # )
+
+        torch.save(
+            train_loader, os.path.join(save_folder, "dataset", "click_stream_train.pth")
+        )
+        torch.save(
+            validation_loader,
+            os.path.join(save_folder, "dataset", "click_stream_validation.pth"),
+        )
+        torch.save(
+            test_loader, os.path.join(save_folder, "dataset", "click_stream_test.pth")
+        )
+
+        wiki_dataset.to_csv(
+            os.path.join(save_folder, "dataset", "wiki_articles.csv"),
+            index=False,
+        )
+        print("Datasets saved successfully")
+
+    def generate_dataset_sample(
+        self,
+        sample_size=0.1,
+        destination_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_random_sample.csv",
+    ):
+        random.seed(123)
+
+        unique_source_articles = (
+            self.dataset["source_article"].drop_duplicates().reset_index(drop=True)
+        )
 
-        df = df[df['type'] == 'link']
-        df = df.drop(['type'], axis=1)
+        num_articles = len(unique_source_articles)
+        sample_dataset_size = int(num_articles * sample_size)
 
-        return df
+        selected_indices = random.sample(range(num_articles), sample_dataset_size)
 
-    def get_available_titles(self):
-        # Load preprocessed
-        title2sects = {}
+        selected_articles = unique_source_articles[
+            unique_source_articles.index.isin(selected_indices)
+        ]
 
-        with open(self.wiki_documents_path, 'r') as f:
-            for i, line in enumerate(f):
-                doc = json.loads(line)
-                title = doc['title'].replace(' ', '_')
-                title2sects[title] = [sect['paragraphs'] for sect in doc['sections']]
+        dataset_sample = self.dataset[
+            self.dataset["source_article"].isin(selected_articles)
+        ].reset_index(drop=True)
+        dataset_sample.to_csv(destination_path, index=False)
 
-        return set(title2sects.keys())
+        return dataset_sample
 
-    def add_metrics(self, click_stream_dataset):
-        if self.available_titles is not None:
-            click_stream_dataset = filter_available_titles(click_stream_dataset, self.available_titles)
 
-        total_clicks = click_stream_dataset.groupby(['source_article']).agg({'number_of_clicks': 'sum'})
-        total_clicks.columns = ['total_clicks']
+if __name__ == "__main__":
+    pd.set_option("display.max_rows", 500)
+    pd.set_option("display.max_columns", 500)
+    pd.set_option("display.width", 1000)
 
-        click_stream_dataset = click_stream_dataset.merge(total_clicks, on='source_article')
-        click_stream_dataset['click_rate'] = round(
-            click_stream_dataset['number_of_clicks'] / click_stream_dataset['total_clicks'], 6)
-        click_stream_dataset = click_stream_dataset.drop(['total_clicks'], axis=1)
+    creator = DatasetCreation()
 
-        return click_stream_dataset
-
-    def filter_available_titles(self, click_stream):
-        filtered_dataset = click_stream[
-            (click_stream['source_article'].isin(self.available_titles)) & (
-                click_stream['target_article'].isin(self.available_titles))].copy()
-
-        return filtered_dataset
-
-    def extract_click_stream_data(self):
-        click_stream_dataset = self.get_click_stream_dump()
-
-        # TODO fix data issues in the processor.py
-        click_stream_dataset['source_article'] = remove_special_characters_df(click_stream_dataset['source_article'])
-        click_stream_dataset['target_article'] = remove_special_characters_df(click_stream_dataset['target_article'])
-
-        click_stream_dataset['click_rate'] = 0
-
-        click_stream_dataset.columns = ['source_article', 'target_article', 'number_of_clicks', 'click_rate']
-
-        click_stream_dataset = self.add_metrics(click_stream_dataset)
-
-        return click_stream_dataset
-
-    def add_negative_sampling(self, combined_dataset, wiki_articles):
-        # Removing bad data. Should be fixed in the json parser
-        wiki_articles = wiki_articles[wiki_articles['text_ids'].str.find('#Redirect') == -1].reset_index(drop=True)
-
-        source_articles = combined_dataset[
-            ['source_article', 'source_article_links']
-        ].drop_duplicates(subset='source_article')
-
-        source_articles = source_articles.explode('source_article_links')
-        visited_articles = combined_dataset[['source_article', 'target_article']]
-
-        non_visited_articles = pd.merge(source_articles,
-                                        visited_articles,
-                                        left_on=['source_article', 'source_article_links'],
-                                        right_on=['source_article', 'target_article'])
-
-        # Adds the non visited links data
-        negative_sampling = pd.merge(non_visited_articles,
-                                     wiki_articles,
-                                     left_on=['source_article_links'],
-                                     right_on=['article'])
-        negative_sampling.drop(['target_article'], axis=1, inplace=True)
-        negative_sampling.columns = ['source_article', 'source_article_links',
-                                     'target_article', 'target_article_text_ids', 'target_article_raw_text',
-                                     'target_article_links']
-
-        # Adds the previous_article text data. This is done in a separate step to reduce memory consumption
-        negative_sampling = pd.merge(negative_sampling,
-                                     wiki_articles[['article', 'text_ids', 'raw_text']],
-                                     how='left',
-                                     left_on=['source_article'],
-                                     right_on=['article'])
-
-        negative_sampling.drop(['article'], axis=1, inplace=True)
-        negative_sampling.rename({'text_ids': 'source_article_text_ids'}, axis=1, inplace=True)
-
-        # Reorganizing columns to match combined_dataset
-        negative_sampling = negative_sampling[['source_article', 'source_article_text_ids', 'source_article_links',
-                                               'target_article', 'target_article_text_ids', 'target_article_links']]
-
-        negative_sampling.insert(len(negative_sampling.columns), 'number_of_clicks', 0)
-        negative_sampling.insert(len(negative_sampling.columns), 'click_rate', 0)
-
-        combined_dataset = combined_dataset.append(negative_sampling, ignore_index=True)
-
-        return combined_dataset
-
-
-def combine_wiki_and_click_stream_data(click_stream_dataset, wiki_documents_dataset):
-    combined_dataset = pd.merge(click_stream_dataset,
-                                wiki_documents_dataset,
-                                left_on=['source_article'],
-                                right_on=['article'])
-
-    combined_dataset = pd.merge(combined_dataset,
-                                wiki_documents_dataset,
-                                left_on=['target_article'],
-                                right_on=['article'])
-
-    combined_dataset = combined_dataset.drop(columns=['article_x', 'article_y'])
-
-    combined_dataset.columns = ['source_article', 'target_article', 'number_of_clicks', 'click_rate',
-                                'source_article_text_ids', 'source_article_raw_text', 'source_article_links',
-                                'target_article_text_ids', 'target_article_raw_text', 'target_article_links']
-
-    # Rearranging columns
-    combined_dataset = combined_dataset[
-        ['source_article', 'source_article_text_ids', 'source_article_raw_text', 'source_article_links',
-         'target_article', 'target_article_text_ids', 'target_article_raw_text', 'target_article_links',
-         'number_of_clicks', 'click_rate']
-    ]
-
-    return combined_dataset
-
-
-def extract_wiki_articles(wiki_documents_path):
-    text_ids = []
-    text_string = []
-    links = []
-    articles = []
-
-    with open(wiki_documents_path, 'r') as json_file:
-        json_list = list(json_file)
-    for json_str in json_list:
-        result = json.loads(json_str)
-        introduction_ids = result['sections'][0]['paragraphs']
-        # Cleaning empty paragraphs and sentences
-        sentences_to_append = [filtered_sentence for filtered_sentence in
-                               [[sentence for sentence in paragraph if sentence]
-                                for paragraph in introduction_ids if paragraph] if filtered_sentence]
-        introduction_string = result['sections'][0]['normalized_paragraphs']
-
-        if sentences_to_append:
-            text_ids.append(sentences_to_append)
-            text_string.append(introduction_string)
-            articles.append(clean_title(result['title']))
-            links.append(result['links'])
-
-    wiki_documents_dataset = pd.DataFrame(list(zip(articles, text_ids, text_string, links)),
-                                          columns=['article', 'text_ids', 'raw_text', 'links'])
-
-    return wiki_documents_dataset
-
-
-def clean_title(title: str):
-    title = title.replace(r"_", " ")
-
-    return title
-
-
-def generate_dataset(click_stream_dump_path, wiki_documents_path):
-    """
-    Process:
-        - Download Simple English data XML (not implemented)
-        - Transform to JSON using wiki_cli.py (not implemented)
-        - Download click stream (not implemented)
-        - Generate click stream dataset for titles available on Simple English - ok
-        - Combine click stream dataset with JSON dataset
-        - Save result as CSV
-
-    :return: pandas.DataFrame
-    """
-    print('Generating Wiki dataset')
-    wiki_articles = extract_wiki_articles(wiki_documents_path)
-
-    print('Generating click stream dataset')
-    available_titles = wiki_articles['article'].drop_duplicates()
-    # available_titles = None
-    click_stream = extract_click_stream_data(click_stream_dump_path, available_titles)
-
-    print('Combining both datasets')
-    combined_dataset = combine_wiki_and_click_stream_data(click_stream, wiki_articles)
-
-    print('Adding negative sampling')
-    combined_dataset = add_negative_sampling(combined_dataset, wiki_articles)
-
-    print('Finished dataset creation')
-
-    wiki_articles.to_csv('../data/wiki_articles.csv', index=False)
-    click_stream.to_csv('../data/click_stream.csv', index=False)
-    combined_dataset.to_csv('../data/wiki_df.csv', index=False)
-
-    return combined_dataset
-
-
-def split_dataset(dataset, train_split, batch_size, train_dataset_path='../data/training.pth',
-                  validation_dataset_path='../data/validation.pth', test_dataset_path='../data/test.pth'):
-    print('Beginning of dataset split')
-    dataset_size = len(dataset)
-    train_dataset_size = int(dataset_size * train_split)
-    validation_dataset_size = int((dataset_size - train_dataset_size) / 2)
-    test_dataset_size = dataset_size - train_dataset_size - validation_dataset_size
-
-    train_dataset, validation_dataset, test_dataset = random_split(dataset,
-                                                                   [train_dataset_size, validation_dataset_size,
-                                                                    test_dataset_size])
-
-    print('Datasets split. Starting saving them', datetime.now())
-
-    training_params = {'batch_size': batch_size,
-                       'shuffle': True,
-                       'drop_last': True}
-    train_loader = torch.utils.data.DataLoader(train_dataset, **training_params)
-
-    validation_and_test_params = {'batch_size': batch_size,
-                                  'shuffle': True,
-                                  'drop_last': False}
-    validation_loader = torch.utils.data.DataLoader(validation_dataset, **validation_and_test_params)
-    test_loader = torch.utils.data.DataLoader(test_dataset, **validation_and_test_params)
-
-    torch.save(train_loader, train_dataset_path)
-    torch.save(validation_loader, validation_dataset_path)
-    torch.save(test_loader, test_dataset_path)
-
-    print('Datasets saved successfully')
-
-
-def split_dataset_new(wiki_articles):
-    print('Splitting datasets')
-
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(123)
-    else:
-        torch.manual_seed(123)
-
-
-def generate_dataset_sample(df: pd.DataFrame, sample_size=0.1, destination_path='../data/wiki_df.csv'):
-    random.seed(123)
-
-    unique_source_articles = df['source_article'].drop_duplicates().reset_index(drop=True)
-
-    num_articles = len(unique_source_articles)
-    sample_dataset_size = int(num_articles * sample_size)
-
-    selected_indices = random.sample(range(num_articles), sample_dataset_size)
-
-    selected_articles = unique_source_articles[unique_source_articles.index.isin(selected_indices)]
-
-    dataset_sample = df[df['source_article'].isin(selected_articles)].reset_index(drop=True)
-    dataset_sample.to_csv(destination_path, index=False)
-
-
-if __name__ == '__main__':
-    pd.set_option('display.max_rows', 500)
-    pd.set_option('display.max_columns', 500)
-    pd.set_option('display.width', 1000)
-
-    click_stream_dump_path = '../data/clickstream-enwiki-2019-12.tsv'
-    wiki_documents_path = '../data/simplewiki3.jsonl'
-
-    wiki_documents_dataset = extract_wiki_articles(wiki_documents_path)
-
-    wiki_documents_dataset.to_csv('../data/complete_wiki_dataset.csv')
+    # wiki_documents_dataset = creator.extract_wiki_articles()
+    #
+    # wiki_documents_dataset.to_csv('../data/complete_wiki_dataset.csv')
 
     # generate_click_stream_dataset(click_stream_dump_path, wiki_documents_path)
 
-    text_documents = generate_dataset(click_stream_dump_path, wiki_documents_path)
-    text_documents.to_csv('../data/wiki_df.csv',
-                          index=False
-                          )
+    creator.split_dataset()
+
+    # text_documents = creator.generate_dataset()
+    # text_documents.to_csv('../data/wiki_df.csv',
+    #                       index=False
+    #                       )
 
     # df = pd.read_csv('../data/wiki_df_complete.csv')
     # get_dataset_sample(df, sample_size=0.05)

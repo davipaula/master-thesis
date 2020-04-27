@@ -2,13 +2,13 @@
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import re
+import timeit
+from ast import literal_eval
 
-import torch
 import numpy as np
 import pandas as pd
+import torch
 from sklearn import metrics
-from ast import literal_eval
-import timeit
 
 
 # csv.field_size_limit(sys.maxsize)
@@ -284,11 +284,16 @@ def remove_special_characters(text):
 
 
 def remove_special_characters_df(text_column: pd.Series):
-    # text_column = text_column.str.normalize('NFKD').str.encode('ascii', errors='ignore').str.decode('utf-8')
     text_column = text_column.str.replace(r"_", " ")
-    # text_column = text_column.str.lower()
 
     return text_column
+
+
+def clean_title(title):
+    if isinstance(title, str):
+        title = title.replace(r"_", " ")
+
+    return title
 
 
 if __name__ == "__main__":

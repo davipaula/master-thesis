@@ -1,3 +1,5 @@
+from typing import List
+
 import torch
 from wikipedia2vec import Wikipedia2Vec
 
@@ -10,11 +12,16 @@ class Wikipedia2VecModel:
 
         self.model = Wikipedia2Vec.load(model_file)
 
-    def get_entity_vector(self, article: str):
-        try:
-            return torch.Tensor(self.model.get_entity_vector(article))
-        except:
-            return torch.zeros(100)
+    def get_entity_vector(self, articles: List[str]):
+        entity_vectors = torch.Tensor(len(articles), 100)
+
+        for article_index, article in enumerate(articles):
+            try:
+                entity_vectors[article_index] = torch.from_numpy(self.model.get_entity_vector(article))
+            except:
+                entity_vectors[article_index] = torch.zeros(100)
+
+        return entity_vectors
 
     def get_hidden_size(self):
         return 100
