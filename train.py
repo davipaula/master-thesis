@@ -130,7 +130,7 @@ class SmashRNN:
             loss = self.calculate_loss(loss_list)
 
             if torch.cuda.is_available():
-                self.experiment.log_metric('train_paragraph_level_loss', loss.item(), epoch=epoch + 1)
+                self.experiment.log_metric('train_loss', loss.item(), epoch=epoch + 1)
 
             print('Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}'.format(
                 epoch + 1,
@@ -140,10 +140,10 @@ class SmashRNN:
                 datetime.now()
             ))
 
-            current_loss = self.validate(int(epoch / self.opt.validation_interval), level)
+            validation_loss = self.validate(int(epoch / self.opt.validation_interval), level)
 
-            if current_loss < best_loss:
-                best_loss = current_loss
+            if validation_loss < best_loss:
+                best_loss = validation_loss
                 best_weights = {k: v.to('cpu').clone() for k, v in self.model.state_dict().items()}
                 best_epoch = epoch
                 num_epochs_without_improvement = 0
@@ -230,10 +230,10 @@ class SmashRNN:
 
             predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
-        loss = self.calculate_loss(loss_list)
+        final_loss = self.calculate_loss(loss_list)
 
         if torch.cuda.is_available():
-            self.experiment.log_metric('validation_loss', loss.item(), epoch=validation_step)
+            self.experiment.log_metric('validation_loss', final_loss.item(), epoch=validation_step)
 
         predictions_list.to_csv(
             '{}results_{}_level_validation_{}.csv'.format(self.opt.results_path, level, datetime.now()),
@@ -244,10 +244,10 @@ class SmashRNN:
             validation_step,
             self.num_validations,
             self.optimizer.param_groups[0]['lr'],
-            loss
+            final_loss
         ))
 
-        return round(loss, 8)
+        return round(final_loss, 8)
 
     def save_model(self):
         model_path = self.opt.model_folder + os.sep + self.opt.level + '_level_model.pt'

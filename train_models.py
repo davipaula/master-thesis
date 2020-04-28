@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pandas as pd
 import torch
 from torch import nn
@@ -11,8 +13,11 @@ class TrainModels:
         self.articles = torch.load(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_train.pth"
         )
-        self.click_stream = torch.load(
+        self.click_stream_train = torch.load(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_train.pth"
+        )
+        self.click_stream_validation = torch.load(
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_validation.pth"
         )
         self.doc2vec = Doc2VecModel()
         self.wikipedia2vec = Wikipedia2VecModel()
@@ -23,6 +28,14 @@ class TrainModels:
         self.num_epochs = 5
 
         self.criterion = nn.SmoothL1Loss()
+
+        self.column_names = [
+            "model",
+            "source_article",
+            "target_article",
+            "actual_click_rate",
+            "predicted_click_rate",
+        ]
 
     def get_optimizer(self, regression_model):
         learning_rate = 10e-5
@@ -51,7 +64,7 @@ class TrainModels:
 
                 i = 0
 
-                for row in self.click_stream:
+                for row in self.click_stream_train:
                     source_article_vector = model.get_entity_vector(
                         row["source_article"]
                     )
@@ -67,20 +80,70 @@ class TrainModels:
 
                     prediction = regression_model(siamese_representation)
 
-                    loss = self.criterion(prediction, row["click_rate"])
+                    loss = self.criterion(prediction.squeeze(1), row["click_rate"])
                     loss.backward()
                     optimizer.step()
 
-                    if i == 2:
-                        print(loss)
+                    if i == 5:
                         break
 
                     i += 1
 
+                self.validation(model_name, model, regression_model)
+
+            # This code may throw the warning UserWarning: Couldn't retrieve source code for container of type Sigmoid.
+            # This warning is not problematic https://discuss.pytorch.org/t/got-warning-couldnt-retrieve-source-code-for-container/7689/13
             torch.save(
                 regression_model,
                 "./trained_models/{}_regression_model".format(str(model_name)),
             )
+
+    def validation(self, model_name, model, regression_model):
+        loss_list = []
+        predictions_list = pd.DataFrame(columns=self.column_names)
+
+        i = 0
+        for row in self.click_stream_validation:
+            source_article_vector = model.get_entity_vector(row["source_article"])
+            target_article_vector = model.get_entity_vector(row["target_article"])
+
+            with torch.no_grad():
+                siamese_representation = self.get_siamese_representation(
+                    source_article_vector, target_article_vector
+                )
+
+                prediction = regression_model(siamese_representation)
+
+            loss = self.criterion(prediction.squeeze(1), row["click_rate"])
+            loss_list.append(loss)
+
+            if i == 10:
+                break
+
+            i += 1
+
+            batch_results = pd.DataFrame(
+                zip(
+                    [model_name] * 32,
+                    row["source_article"],
+                    row["target_article"],
+                    row["click_rate"].tolist(),
+                    prediction.squeeze(1).tolist(),
+                ),
+                columns=self.column_names,
+            )
+
+            predictions_list = predictions_list.append(batch_results, ignore_index=True)
+
+        predictions_list.to_csv(
+            "./results/results_{}_level_validation_{}.csv".format(
+                model_name, datetime.now()
+            ),
+            index=False,
+        )
+
+        final_loss = sum(loss_list) / len(loss_list)
+        print("Loss {}".format(final_loss))
 
     @staticmethod
     def get_siamese_representation(source_document, target_document):
