@@ -10,9 +10,6 @@ from wikipedia2vec_model import Wikipedia2VecModel
 
 class TrainModels:
     def __init__(self):
-        self.articles = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_train.pth"
-        )
         self.click_stream_train = torch.load(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_train.pth"
         )

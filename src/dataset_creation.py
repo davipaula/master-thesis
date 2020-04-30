@@ -180,14 +180,6 @@ class DatasetCreation:
             test_dataset, **validation_and_test_params
         )
 
-        # train_wiki_loader = torch.utils.data.DataLoader(train_wiki, **training_params)
-        # validation_wiki_loader = torch.utils.data.DataLoader(
-        #     validation_wiki, **validation_and_test_params
-        # )
-        # test_wiki_loader = torch.utils.data.DataLoader(
-        #     test_wiki, **validation_and_test_params
-        # )
-
         torch.save(
             train_loader, os.path.join(save_folder, "dataset", "click_stream_train.pth")
         )
