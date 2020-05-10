@@ -1,3 +1,6 @@
+"""
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
+"""
 import itertools
 import pandas as pd
 from ast import literal_eval

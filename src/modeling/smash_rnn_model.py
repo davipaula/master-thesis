@@ -3,11 +3,11 @@
 """
 import torch
 import torch.nn as nn
-from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
 import numpy as np
 import pandas as pd
 import csv
-from src.utils import (
+from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
+from src.utils.utils import (
     remove_zero_tensors_from_batch,
     remove_zeros_from_words_per_sentence,
     add_filtered_tensors_to_original_batch,

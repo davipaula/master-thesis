@@ -1,23 +1,18 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
-import timeit
 
 import pandas as pd
-from torch.utils.data.dataset import Dataset
 import numpy as np
-from ast import literal_eval
 import torch
+from ast import literal_eval
+from torch.utils.data.dataset import Dataset
 from typing import List
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
-
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
-
 WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
-
 TEXT_IDS_COLUMN = "text_ids"
-
 TITLE_COLUMN = "title"
 
 

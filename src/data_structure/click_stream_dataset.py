@@ -22,3 +22,7 @@ class ClickStreamDataset(Dataset):
             "click_rate": self.dataset["click_rate"].iloc[index],
         }
         return return_item
+
+    def get_titles(self):
+        titles = pd.Series.append(self.dataset["source_article"], self.dataset["target_article"])
+        return titles.unique()

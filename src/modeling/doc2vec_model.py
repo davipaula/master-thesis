@@ -2,15 +2,13 @@
 import itertools
 import multiprocessing
 import os
-from ast import literal_eval
-from typing import List
-
-import pandas as pd
 import torch
+from ast import literal_eval
+from data_structure.wiki_articles_dataset import WikiArticlesDataset
 from gensim.models import Doc2Vec
 from gensim.models.doc2vec import TaggedDocument
 from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
-from wiki_articles_dataset import WikiArticlesDataset
+from typing import List
 
 
 class Doc2VecModel:
@@ -20,7 +18,7 @@ class Doc2VecModel:
         dm_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/trained_models/doc2vec_dm_model",
     ):
 
-        self.train_articles = WikiArticlesDataset().get_train_articles(level='word')
+        self.train_articles = WikiArticlesDataset().get_train_articles(level="word")
 
         self.dbow_path = dbow_path
         self.dm_path = dm_path
@@ -29,13 +27,7 @@ class Doc2VecModel:
 
     def create_models(self):
         common_model_arguments = dict(
-            vector_size=100,
-            epochs=20,
-            min_count=2,
-            sample=0,
-            workers=multiprocessing.cpu_count(),
-            negative=5,
-            hs=0,
+            vector_size=100, epochs=20, min_count=2, sample=0, workers=multiprocessing.cpu_count(), negative=5, hs=0,
         )
 
         dbow_model = Doc2Vec(dm=0, **common_model_arguments)
@@ -62,9 +54,7 @@ class Doc2VecModel:
         entity_vectors = torch.Tensor(len(articles), self.get_hidden_size())
 
         for article_index, article in enumerate(articles):
-            entity_vectors[article_index] = torch.from_numpy(
-                self.model.docvecs[article]
-            )
+            entity_vectors[article_index] = torch.from_numpy(self.model.docvecs[article])
 
         return entity_vectors
 
@@ -72,9 +62,7 @@ class Doc2VecModel:
         inferred_vectors = torch.Tensor(len(articles), self.get_hidden_size())
 
         for article_index, article in enumerate(articles):
-            inferred_vectors[article_index] = torch.from_numpy(
-                self.model.infer_vector(article)
-            )
+            inferred_vectors[article_index] = torch.from_numpy(self.model.infer_vector(article))
 
         return inferred_vectors
 
@@ -93,9 +81,7 @@ class Doc2VecModel:
 
         for i in range(len(self.train_articles)):
             tagged_documents.append(
-                TaggedDocument(
-                    self.train_articles["raw_text"][i].split(), [self.train_articles["article"][i]]
-                )
+                TaggedDocument(self.train_articles["raw_text"][i].split(), [self.train_articles["article"][i]])
             )
 
         return tagged_documents

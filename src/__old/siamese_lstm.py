@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-from old.lstm_encoder import LSTMEncoder
+from __old.lstm_encoder import LSTMEncoder
 
 
 class SiameseLSTM(nn.Module):

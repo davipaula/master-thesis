@@ -105,7 +105,7 @@ def test_model():
 
     sentence = sentence.view(1, 54)
 
-    word_model = WordAttNet("../data/glove.6B.50d.txt")
+    word_model = WordAttNet("../preparation/glove.6B.50d.txt")
 
     output = word_model(sentence, [16])
 

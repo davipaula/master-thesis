@@ -233,7 +233,7 @@ class SentenceLevelSmashRNNModel(nn.Module):
 if __name__ == '__main__':
     torch.set_printoptions(threshold=5000)
     # torch.set_printoptions(profile="full")
-    word2vec_path = '../data/glove.6B.50d.txt'
+    word2vec_path = '../preparation/glove.6B.50d.txt'
     dict = pd.read_csv(filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE).values[:, 1:]
     dict_len, embed_dim = dict.shape
     dict_len += 1

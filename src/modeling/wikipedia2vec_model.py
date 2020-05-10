@@ -1,14 +1,15 @@
-from typing import List
-
+"""
+@author: Davi Nascimento de Paula <davi.paula@gmail.com>
+"""
 import torch
+from typing import List
 from wikipedia2vec import Wikipedia2Vec
-
-from utils import cosine_similarity
+from src.utils.utils import cosine_similarity
 
 
 class Wikipedia2VecModel:
     def __init__(self):
-        model_file = './trained_models/wikipedia2vec_model'
+        model_file = "./trained_models/wikipedia2vec_model"
 
         self.model = Wikipedia2Vec.load(model_file)
 
@@ -33,5 +34,5 @@ class Wikipedia2VecModel:
         return cosine_similarity(current_article_vector, previous_article_vector)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     model = Wikipedia2VecModel()
