@@ -176,6 +176,8 @@ def process_text(nlp, w2v_model, text):
                 sects[i]["paragraphs"].append(paragraph_tokens)
                 sects[i]["normalized_paragraphs"].append(normalized_paragraph)
 
+        break  # returns only the introduction (the first section)
+
     return sects
 
 
@@ -263,7 +265,9 @@ def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, 
 
     spacy_model = "en_core_web_sm"
 
-    nlp = spacy.load(spacy_model, disable=["tagger", "ner", "textcat"])  # disable the fancy and slow stuff
+    nlp = spacy.load(spacy_model, disable=["tagger", "ner", "textcat", "parser"])  # disable the fancy and slow stuff
+    nlp.add_pipe(nlp.create_pipe("sentencizer"))
+
     logger.info(f"Spacy model loaded: {spacy_model}")
 
     w2v_model = gensim.models.KeyedVectors.load_word2vec_format(w2v_path)
@@ -290,4 +294,6 @@ if __name__ == "__main__":
 
     wiki_pre_processed_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki.jsonl"
 
-    extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
+    extract_wiki_articles(
+        wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path
+    )

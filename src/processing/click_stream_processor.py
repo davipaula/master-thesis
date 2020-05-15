@@ -8,6 +8,8 @@ from data_structure.click_stream_dataset import ClickStreamDataset
 from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
 from torch.utils.data import TensorDataset, random_split
 
+NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
+
 SOURCE_ARTICLE_COLUMN = "source_article"
 TARGET_ARTICLE_COLUMN = "target_article"
 
@@ -22,9 +24,7 @@ class ClickStreamProcessor:
         self._click_stream_pre_processed = ClickStreamPreProcessed()
 
         _pre_processed_dataset = ClickStreamPreProcessed().dataset
-        self.dataset = self.filter_click_stream_data(
-            _pre_processed_dataset, self.get_available_titles_in_wiki_articles()
-        )
+        self.dataset = self.filter_dataset(_pre_processed_dataset, self.get_available_titles_in_wiki_articles())
 
     @staticmethod
     def get_available_titles_in_wiki_articles():
@@ -35,14 +35,32 @@ class ClickStreamProcessor:
 
         return selected_articles
 
+    def filter_dataset(self, click_stream, available_titles, threshold: int = 10000):
+        click_stream = self.filter_available_titles(click_stream, available_titles)
+        click_stream = self.filter_number_of_clicks_treshold(click_stream, threshold)
+
+        return click_stream
+
     @staticmethod
-    def filter_click_stream_data(click_stream, available_titles):
+    def filter_available_titles(click_stream, available_titles):
         filtered_dataset = click_stream[
             (click_stream[SOURCE_ARTICLE_COLUMN].isin(available_titles))
             & (click_stream[TARGET_ARTICLE_COLUMN].isin(available_titles))
         ].copy()
 
         return filtered_dataset
+
+    @staticmethod
+    def filter_number_of_clicks_treshold(click_stream, total_number_of_clicks):
+        number_of_clicks_per_source_article = click_stream.groupby(SOURCE_ARTICLE_COLUMN)[NUMBER_OF_CLICKS_COLUMN].sum()
+        articles_above_threshold = number_of_clicks_per_source_article[
+            number_of_clicks_per_source_article > total_number_of_clicks
+        ].index
+
+        return click_stream[
+            (click_stream[SOURCE_ARTICLE_COLUMN].isin(articles_above_threshold))
+            & (click_stream[NUMBER_OF_CLICKS_COLUMN] > 200)
+        ]
 
     def run(
         self,
@@ -119,7 +137,7 @@ class ClickStreamProcessor:
 
         articles_fold.to_csv(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv",
-            index=False
+            index=False,
         )
 
         print("Datasets split. Starting saving them", datetime.now())
@@ -146,7 +164,7 @@ class ClickStreamProcessor:
 
     def generate_dataset_sample(
         self,
-        sample_size=0.01,
+        sample_size=0.1,
         destination_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_random_sample.csv",
     ):
         random.seed(123)
@@ -171,7 +189,9 @@ class ClickStreamProcessor:
 
     @staticmethod
     def save_selected_articles_file(dataset):
-        selected_articles = pd.Series.append(dataset[SOURCE_ARTICLE_COLUMN], dataset[TARGET_ARTICLE_COLUMN])
+        selected_articles = pd.Series.append(
+            dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates(), dataset[TARGET_ARTICLE_COLUMN].drop_duplicates(),
+        ).reset_index(drop=True)
 
         with open(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.txt", "w"
