@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
@@ -22,7 +23,7 @@ class ResultsAnalyzer:
     def __init__(self):
         self.results = self.build_models_results()
 
-        self.top_articles = self.build_top_n_matrix_by_article()
+        self.top_articles = self.build_top_5_matrix_by_article()
 
     def build_models_results(self):
         __models = {
@@ -44,11 +45,14 @@ class ResultsAnalyzer:
         results = pd.DataFrame(columns=columns_names)
 
         for model_path in __models.values():
-            results = results.append(pd.read_csv(model_path))
+            if os.path.exists(model_path):
+                results = results.append(pd.read_csv(model_path))
 
         return results
 
-    def get_top_n_predicted_by_article_and_model(self, source_article: str, model: str, n=5):
+    def get_top_5_predicted_by_article_and_model(self, source_article: str, model: str):
+        n = 5
+
         model_results = self.results[
             (self.results["model"] == model) & (self.results["source_article"] == source_article)
         ]
@@ -56,15 +60,17 @@ class ResultsAnalyzer:
             model_results.sort_values("predicted_click_rate", ascending=False).groupby("source_article").head(n)
         )
 
-        model_results["is_in_top_10"] = False
+        model_results["is_in_top_5"] = False
         actual_top_articles = self.top_articles[self.top_articles["source_article"] == source_article][
             "target_article"
         ].unique()
-        model_results.loc[model_results["target_article"].isin(actual_top_articles), "is_in_top_10"] = True
+        model_results.loc[model_results["target_article"].isin(actual_top_articles), "is_in_top_5"] = True
 
         return model_results
 
-    def build_top_n_matrix_by_article(self, n=5):
+    def build_top_5_matrix_by_article(self):
+        n = 5
+
         actual_results = (
             self.results[self.results["model"] == "paragraph"]
             .sort_values(by=["source_article", "actual_click_rate"], ascending=[True, False])
@@ -76,6 +82,12 @@ class ResultsAnalyzer:
         actual_results["model"] = "actual click rate"
 
         return actual_results
+
+    def get_sample_source_articles(self, n=10):
+        return self.results["source_article"].sample(n=n)
+
+    def get_models(self):
+        return self.results["model"].unique()
 
     def build_validation_models_results(self):
         # For debugging purposes only
@@ -101,11 +113,11 @@ class ResultsAnalyzer:
         model_names = ["doc2vec", "wikipedia2vec", "paragraph", "word"]
 
         for model_name in model_names:
-            predicted = self.get_top_n_predicted_by_article_and_model(source_article, model_name)
+            predicted = self.get_top_5_predicted_by_article_and_model(source_article, model_name)
 
             print(predicted)
 
-        actual = self.build_top_n_matrix_by_article()
+        actual = self.build_top_5_matrix_by_article()
         print(actual)
 
 
@@ -115,5 +127,5 @@ if __name__ == "__main__":
     pd.set_option("display.width", 1000)
 
     results = ResultsAnalyzer()
-    print(results.get_top_n_predicted_by_article_and_model("Lil Wayne", "word"))
-    print(results.get_top_n_predicted_by_article_and_model("Lil Wayne", "paragraph"))
+    print(results.get_top_5_predicted_by_article_and_model("Lil Wayne", "word"))
+    print(results.get_top_5_predicted_by_article_and_model("Lil Wayne", "paragraph"))
