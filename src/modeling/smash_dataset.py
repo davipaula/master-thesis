@@ -8,6 +8,7 @@ import torch
 from ast import literal_eval
 from torch.utils.data.dataset import Dataset
 from typing import List
+import logging
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
@@ -15,14 +16,17 @@ WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
 TEXT_IDS_COLUMN = "text_ids"
 TITLE_COLUMN = "title"
 
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
 
 class SMASHDataset(Dataset):
-    def __init__(self):
+    def __init__(self, dataset_path: str):
         super(SMASHDataset, self).__init__()
 
-        dataset = pd.read_csv(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles.csv"
-        )
+        dataset = pd.read_csv(dataset_path)
         self.text_embeddings = dataset["text_ids"]
         self.articles = dataset["article"]
 
@@ -31,6 +35,19 @@ class SMASHDataset(Dataset):
         self.max_word_length = max_lengths["max_word_length"]
         self.max_sentence_length = max_lengths["max_sentence_length"]
         self.max_paragraph_length = max_lengths["max_paragraph_length"]
+
+        # batch_size = 32
+        #
+        # self.text_ids_tensor_placeholder = torch.zeros(
+        #     (batch_size, self.max_paragraph_length, self.max_sentence_length, self.max_word_length), dtype=int
+        # )
+        # self.words_per_sentence_tensor_placeholder = torch.zeros(
+        #     (batch_size, self.max_paragraph_length, self.max_sentence_length), dtype=int
+        # )
+        # self.sentences_per_paragraph_tensor_placeholder = torch.zeros(
+        #     (batch_size, self.max_paragraph_length), dtype=int
+        # )
+        # self.paragraphs_per_document_tensor_placeholder = torch.zeros(batch_size, dtype=int)
 
     def __len__(self):
         return len(self.text_embeddings)
@@ -50,7 +67,7 @@ class SMASHDataset(Dataset):
 
         paragraphs_per_document = torch.LongTensor([text_structure["paragraphs_per_document"]])
 
-        text_embeddings_padded = torch.LongTensor(self.get_padded_document(text_embedding).astype(np.int64))
+        text_embeddings_padded = self.get_padded_document(text_embedding)
 
         article = {
             "title": self.articles.iloc[index],
@@ -74,17 +91,18 @@ class SMASHDataset(Dataset):
         }
         """
 
-        batch_size = 32
-
         titles_list = []
-        text_ids_tensor = torch.LongTensor(
-            batch_size, self.max_paragraph_length, self.max_sentence_length, self.max_word_length
-        ).zero_()
-        words_per_sentence_tensor = torch.LongTensor(
-            batch_size, self.max_paragraph_length, self.max_sentence_length
-        ).zero_()
-        sentences_per_paragraph_tensor = torch.LongTensor(batch_size, self.max_paragraph_length).zero_()
-        paragraphs_per_document_tensor = torch.LongTensor(batch_size).zero_()
+
+        batch_size = len(articles)
+
+        text_ids_tensor = torch.zeros(
+            (batch_size, self.max_paragraph_length, self.max_sentence_length, self.max_word_length), dtype=int
+        )
+        words_per_sentence_tensor = torch.zeros(
+            (batch_size, self.max_paragraph_length, self.max_sentence_length), dtype=int
+        )
+        sentences_per_paragraph_tensor = torch.zeros((batch_size, self.max_paragraph_length), dtype=int)
+        paragraphs_per_document_tensor = torch.zeros(batch_size, dtype=int)
 
         for index, article in enumerate(articles):
             article_index = self.articles.index[self.articles == article][0]
@@ -130,6 +148,21 @@ class SMASHDataset(Dataset):
         return document_structure
 
     def get_padded_document(self, document):
+        document_placeholder = torch.full(
+            (self.max_paragraph_length, self.max_sentence_length, self.max_word_length), -1, dtype=torch.int64
+        )
+
+        for paragraph_index, paragraph in enumerate(document):
+            for sentence_index, sentence in enumerate(paragraph):
+                document_placeholder[paragraph_index, sentence_index, : len(sentence)] = torch.tensor(sentence)
+
+        # document = np.stack(arrays=document, axis=0)
+        document_placeholder += 1
+
+        return document_placeholder
+
+    def get_padded_document_bkp(self, document):
+        document = np.array(document)
         for paragraph in document:
             for sentences in paragraph:
                 if len(sentences) < self.max_word_length:
@@ -146,7 +179,7 @@ class SMASHDataset(Dataset):
             )
             document.extend(extended_paragraphs)
 
-        document = np.stack(arrays=document, axis=0)
+        # document = np.stack(arrays=document, axis=0)
         document += 1
 
         return document
@@ -202,7 +235,49 @@ if __name__ == "__main__":
     else:
         torch.manual_seed(123)
 
-    test = SMASHDataset()
+    test = SMASHDataset(
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
+    )
 
-    print(test.get_articles(["A", "Alan Turing", "Fruit", "Grammar"]))
+    articles_to_get = [
+        "Anarchism",
+        "Autism",
+        "A",
+        "Achilles",
+        "Abraham Lincoln",
+        "Aristotle",
+        "An American in Paris",
+        "Academy Awards",
+        "Ayn Rand",
+        "Algeria",
+        "Anthropology",
+        "Alchemy",
+        "ASCII",
+        "Apollo",
+        "Andre Agassi",
+        "Andorra",
+        "Amphibian",
+        "Alaska",
+        "Agriculture",
+        "Algae",
+        "Analysis of variance",
+        "Apollo 11",
+        "Apollo 8",
+        "Astronaut",
+        "Alphabet",
+        "Atomic number",
+        "Asia",
+        "Articles of Confederation",
+        "Atlantic Ocean",
+        "Angola",
+        "Alberta",
+        "Albert Einstein",
+    ]
+
+    logger.info("Started getting articles")
+
+    for n in range(10):
+        test.get_articles(articles_to_get)
+
+    logger.info("Finished getting articles")
     # print(test.__getitem__(1))

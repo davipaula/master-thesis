@@ -65,9 +65,6 @@ class WikiArticlesProcessor:
 
         return wiki_documents_dataset
 
-    def get_available_titles(self):
-        return self.__articles["article"].unique()
-
 
 if __name__ == "__main__":
     wiki_documents_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_base.jsonl"

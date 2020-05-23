@@ -15,15 +15,15 @@ from sklearn import metrics
 def get_evaluation(y_true, y_prob, list_metrics):
     y_pred = np.argmax(y_prob, -1)
     output = {}
-    if 'accuracy' in list_metrics:
-        output['accuracy'] = metrics.accuracy_score(y_true, y_pred)
-    if 'loss' in list_metrics:
+    if "accuracy" in list_metrics:
+        output["accuracy"] = metrics.accuracy_score(y_true, y_pred)
+    if "loss" in list_metrics:
         try:
-            output['loss'] = metrics.log_loss(y_true, y_prob)
+            output["loss"] = metrics.log_loss(y_true, y_prob)
         except ValueError:
-            output['loss'] = -1
-    if 'confusion_matrix' in list_metrics:
-        output['confusion_matrix'] = str(metrics.confusion_matrix(y_true, y_pred))
+            output["loss"] = -1
+    if "confusion_matrix" in list_metrics:
+        output["confusion_matrix"] = str(metrics.confusion_matrix(y_true, y_pred))
     return output
 
 
@@ -57,8 +57,8 @@ def get_max_lengths(data_path, limit_rows=None):
 
     dataset = pd.read_csv(data_path, nrows=limit_rows)
 
-    document_encode = dataset['current_article_text']
-    document_encode = pd.concat([document_encode, dataset['previous_article_text']])
+    document_encode = dataset["current_article_text"]
+    document_encode = pd.concat([document_encode, dataset["previous_article_text"]])
 
     for index, article in enumerate(document_encode):
         for paragraph in literal_eval(article):
@@ -80,19 +80,20 @@ def get_padded_document(document, max_length_word, max_length_sentences, max_len
                 sentences.extend(extended_words)
 
         if len(paragraph) < max_length_sentences:
-            extended_sentences = [[-1 for _ in range(max_length_word)] for _ in
-                                  range(max_length_sentences - len(paragraph))]
+            extended_sentences = [
+                [-1 for _ in range(max_length_word)] for _ in range(max_length_sentences - len(paragraph))
+            ]
             paragraph.extend(extended_sentences)
 
     if len(document) < max_length_paragraph:
-        extended_paragraphs = [[[-1 for _ in range(max_length_word)]
-                                for _ in range(max_length_sentences)]
-                               for _ in range(max_length_paragraph - len(document))]
+        extended_paragraphs = [
+            [[-1 for _ in range(max_length_word)] for _ in range(max_length_sentences)]
+            for _ in range(max_length_paragraph - len(document))
+        ]
 
         document.extend(extended_paragraphs)
 
-    document = [sentences[:max_length_word] for sentences in document][
-               :max_length_sentences]
+    document = [sentences[:max_length_word] for sentences in document][:max_length_sentences]
 
     document = np.stack(arrays=document, axis=0)
     document += 1
@@ -125,11 +126,13 @@ def add_filtered_tensors_to_original_batch(filtered_batch, original_batch):
     if len(filtered_batch.shape) > 2:
         tensor_size.append(filtered_batch.shape[2])
 
-    original_batch_reshaped = torch.zeros(tuple(tensor_size),
-                                          dtype=filtered_batch.dtype)
+    original_batch_reshaped = torch.zeros(tuple(tensor_size), dtype=filtered_batch.dtype)
 
     for i, non_zero_tensor_index in enumerate(non_zero_indices):
         original_batch_reshaped[non_zero_tensor_index] = filtered_batch[i]
+
+    if torch.cuda.is_available():
+        original_batch_reshaped = original_batch_reshaped.cuda()
 
     return original_batch_reshaped
 
@@ -172,14 +175,16 @@ def get_document_at_word_level(document_batch, words_per_sentence_at_word_level)
     sentence_length = 1
     word_length = max(words_per_sentence_at_word_level).item()
 
-    word_level_document_placeholder = torch.zeros((batch_size, paragraph_length, sentence_length, word_length),
-                                                  dtype=int)
+    word_level_document_placeholder = torch.zeros(
+        (batch_size, paragraph_length, sentence_length, word_length), dtype=int
+    )
 
     for document_index, document in enumerate(document_batch):
         non_zero_indices = document.nonzero(as_tuple=True)
 
         word_level_document_placeholder[document_index, 0, 0, : len(document[non_zero_indices])] = document[
-            non_zero_indices]
+            non_zero_indices
+        ]
 
     return word_level_document_placeholder
 
@@ -191,8 +196,8 @@ def get_document_at_sentence_level(documents_in_batch):
     word_length = documents_in_batch.shape[3]
 
     document_at_sentence_level_tensor = torch.zeros(
-        (batch_size, 1, paragraph_length * sentence_length, word_length),
-        dtype=int)
+        (batch_size, 1, paragraph_length * sentence_length, word_length), dtype=int
+    )
 
     for document_index, document_in_batch in enumerate(documents_in_batch):
         non_zero_sentences = document_in_batch[document_in_batch.sum(dim=2) > 0]
@@ -223,9 +228,9 @@ training_generator = torch.load('../data/training.pth')
 current_document = next(iter(training_generator))[0]
         """
 
-    print('starting')
+    print("starting")
     print(timeit.timeit("get_document_at_sentence_level(current_document['text'])", setup=setup, number=100))
-    print('finished')
+    print("finished")
 
 
 def measure_words_per_sentence():
@@ -241,18 +246,21 @@ training_generator = torch.load('../data/training.pth')
 current_document = next(iter(training_generator))[0]
         """
 
-    print('starting')
-    print(timeit.timeit("get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup,
-                        number=100))
-    print('finished')
+    print("starting")
+    print(
+        timeit.timeit(
+            "get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup, number=100
+        )
+    )
+    print("finished")
 
 
 def test_sentence_level():
-    training_generator = torch.load('../data/training.pth')
+    training_generator = torch.load("../data/training.pth")
 
     for current_document, previous_document, click_rate_tensor in training_generator:
-        current_document_ = get_document_at_sentence_level(current_document['text'])
-        words_per_sentence = get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])
+        current_document_ = get_document_at_sentence_level(current_document["text"])
+        words_per_sentence = get_words_per_sentence_at_sentence_level(current_document["words_per_sentence"])
 
         break
 

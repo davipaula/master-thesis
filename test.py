@@ -1,26 +1,32 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+
+import sys
 import os
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
+import logging
 import pandas as pd
 from comet_ml import Experiment
 import torch
 from torch import nn
+from tqdm import tqdm
 
-from smash_dataset import SMASHDataset
-from src.smash_rnn_model import SmashRNNModel
+from modeling.smash_dataset import SMASHDataset
+from modeling.smash_rnn_model import SmashRNNModel
 import csv
 import numpy as np
 import argparse
-from src.utils import (
-    get_max_lengths,
+from src.utils.utils import (
     get_words_per_document_at_word_level,
     get_document_at_word_level,
     get_document_at_sentence_level,
     get_words_per_sentence_at_sentence_level,
     get_sentences_per_paragraph_at_sentence_level,
 )
-from datetime import datetime
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
@@ -30,39 +36,54 @@ CLICK_RATE_COLUMN = "click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+if torch.cuda.is_available():
+    WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
+else:
+    WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
+
+
 def test(opt):
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(123)
+        device = torch.device("cuda")
+    else:
+        torch.manual_seed(123)
+        device = torch.device("cpu")
+
+    logger.info("Initializing parameters")
+
     test_generator = torch.load(opt.test_dataset_path)
 
     if torch.cuda.is_available():
         experiment = Experiment(api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ", project_name="thesis-davi", workspace="davipaula")
 
-    criterion = nn.MSELoss()
+    criterion = nn.MSELoss().to(device)
 
     model = load_model(opt.model_folder, opt.level, opt.word2vec_path)
+    model.to(device)
 
-    articles = SMASHDataset()
+    articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
 
     loss_list = []
-    columns_names = ["previous_document", "current_document", "actual_click_rate", "predicted_click_rate"]
+    columns_names = [
+        "model",
+        "source_article",
+        "target_article",
+        "actual_click_rate",
+        "predicted_click_rate",
+    ]
     predictions_list = pd.DataFrame(columns=columns_names)
 
-    print("Starting test")
+    logger.info(f"Model Smash-RNN {opt.level} level. Starting evaluation")
 
-    i = 0
-    for row in test_generator:
+    for row in tqdm(test_generator):
         source_articles = articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
         target_articles = articles.get_articles(row[TARGET_ARTICLE_COLUMN])
-
-        if torch.cuda.is_available():
-            row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].cuda()
-            source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-            source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-            source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
-            source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
-            target_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-            target_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-            target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
-            target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
 
         if opt.level == "sentence":
             source_articles = transform_to_sentence_level(source_articles)
@@ -71,6 +92,16 @@ def test(opt):
         elif opt.level == "word":
             source_articles = transform_to_word_level(source_articles)
             target_articles = transform_to_word_level(target_articles)
+
+        row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(device)
+        source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].to(device)
+        source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
+        source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
+        source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
+        target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].to(device)
+        target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
+        target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
+        target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
 
         predictions = model(
             target_articles[TEXT_IDS_COLUMN],
@@ -88,6 +119,7 @@ def test(opt):
 
         batch_results = pd.DataFrame(
             zip(
+                [opt.level] * 32,
                 row[SOURCE_ARTICLE_COLUMN],
                 row[TARGET_ARTICLE_COLUMN],
                 row[CLICK_RATE_COLUMN].tolist(),
@@ -98,20 +130,14 @@ def test(opt):
 
         predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
-        if i == 4:
-            break
+    final_loss = sum(loss_list) / len(loss_list)
 
-        i += 1
-
-    loss = sum(loss_list) / len(loss_list)
+    predictions_list.to_csv(f"./results/test/results_{opt.level}_level.csv", index=False)
 
     if torch.cuda.is_available():
-        experiment.log_metric("test_{}_level_loss".format(opt.level), loss.item())
+        experiment.log_metric("test_{}_level_loss".format(opt.level), final_loss.item())
 
-    print("Test: loss: {}\n\n".format(loss))
-    predictions_list.to_csv(
-        "./results/results_{}_level_{}.csv".format(opt.level, datetime.now()), index=False
-    )
+    logger.info(f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}")
 
 
 def load_model(model_folder, level, word2vec_path):
@@ -172,9 +198,7 @@ def transform_to_sentence_level(document):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
     document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN])
-    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
-        document[WORDS_PER_SENTENCE_COLUMN]
-    )
+    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(document[WORDS_PER_SENTENCE_COLUMN])
     document[SENTENCES_PER_PARAGRAPH_COLUMN] = get_sentences_per_paragraph_at_sentence_level(
         document[SENTENCES_PER_PARAGRAPH_COLUMN]
     )

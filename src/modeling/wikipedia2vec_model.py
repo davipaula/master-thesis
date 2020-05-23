@@ -18,9 +18,9 @@ class Wikipedia2VecModel:
 
         for article_index, article in enumerate(articles):
             try:
-                entity_vectors[article_index] = torch.from_numpy(self.model.get_entity_vector(article))
+                entity_vectors[article_index, :] = torch.from_numpy(self.model.get_entity_vector(article))
             except:
-                entity_vectors[article_index] = torch.zeros(100)
+                entity_vectors[article_index, :] = torch.zeros(100)
 
         return entity_vectors
 

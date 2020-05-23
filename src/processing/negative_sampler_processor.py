@@ -51,15 +51,10 @@ class NegativeSamplerProcessor:
     def get_click_stream_dataset_with_negative_sampling(self):
         click_stream_pre_processed_dataset = self.click_stream_pre_processed.dataset
 
-        # Removing bad data. Should be fixed in the json parser
-        wiki_dataset = self.wiki_articles_pre_processed[
-            self.wiki_articles_pre_processed["text_ids"].str.find("#Redirect") == -1
-        ].reset_index(drop=True)
-
         source_articles = (
             pd.merge(
                 click_stream_pre_processed_dataset[["source_article"]],
-                wiki_dataset[["article", "links"]],
+                self.wiki_articles_pre_processed[["article", "links"]],
                 left_on=["source_article"],
                 right_on=["article"],
             )

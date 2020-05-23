@@ -1,24 +1,38 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+
+import sys
+import os
+
+from tqdm import tqdm
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import argparse
 import csv
-import os
+import logging
 import numpy as np
 import pandas as pd
 from comet_ml import Experiment
 import torch
 import torch.nn as nn
-from src.utils import (
+from utils.utils import (
     get_document_at_sentence_level,
     get_words_per_sentence_at_sentence_level,
     get_document_at_word_level,
     get_sentences_per_paragraph_at_sentence_level,
     get_words_per_document_at_word_level,
 )
-from src.smash_rnn_model import SmashRNNModel
-from src.smash_dataset import SMASHDataset
+from modeling.smash_rnn_model import SmashRNNModel
+from modeling.smash_dataset import SMASHDataset
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
@@ -28,13 +42,20 @@ CLICK_RATE_COLUMN = "click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 
+if torch.cuda.is_available():
+    WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
+else:
+    WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
+
 
 class SmashRNN:
     def __init__(self):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
         else:
             torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
         # Basic config. Should be customizable in the future
         self.learning_rate = 10e-5
@@ -45,7 +66,7 @@ class SmashRNN:
         self.num_validations = int(self.opt.num_epoches / self.opt.validation_interval)
         # End of configs
 
-        self.articles = SMASHDataset()
+        self.articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
 
         # Load from txt file (in word2vec format)
         dict = pd.read_csv(
@@ -58,12 +79,10 @@ class SmashRNN:
 
         # Paragraph level model
         self.model = SmashRNNModel(dict, dict_len, embed_dim)
-
-        if torch.cuda.is_available():
-            self.model.cuda()
+        self.model.to(self.device)
 
         # Overall model optimization and evaluation parameters
-        self.criterion = nn.SmoothL1Loss()
+        self.criterion = nn.SmoothL1Loss().to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
         self.model.train()
@@ -82,16 +101,22 @@ class SmashRNN:
         best_weights = None
         best_epoch = 0
 
-        i = 0
-
         for epoch in range(self.opt.num_epoches):
             self.model.train()
 
             loss_list = []
 
-            for row in training_generator:
+            for row in tqdm(training_generator):
                 source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
                 target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
+
+                if level == "sentence":
+                    source_articles = self.transform_to_sentence_level(source_articles)
+                    target_articles = self.transform_to_sentence_level(target_articles)
+
+                elif level == "word":
+                    source_articles = self.transform_to_word_level(source_articles)
+                    target_articles = self.transform_to_word_level(target_articles)
 
                 if torch.cuda.is_available():
                     row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].cuda()
@@ -114,15 +139,7 @@ class SmashRNN:
 
                 self.optimizer.zero_grad()
 
-                if level == "sentence":
-                    source_articles = self.transform_to_sentence_level(source_articles)
-                    target_articles = self.transform_to_sentence_level(target_articles)
-
-                elif level == "word":
-                    source_articles = self.transform_to_word_level(source_articles)
-                    target_articles = self.transform_to_word_level(target_articles)
-
-                documents_similarity = self.model(
+                predictions = self.model(
                     target_articles[TEXT_IDS_COLUMN],
                     target_articles[WORDS_PER_SENTENCE_COLUMN],
                     target_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
@@ -133,17 +150,11 @@ class SmashRNN:
                     source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
                 )
 
-                loss = self.criterion(documents_similarity.squeeze(1), row[CLICK_RATE_COLUMN])
+                loss = self.criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
                 loss.backward()
                 self.optimizer.step()
 
                 loss_list.append(loss)
-
-                if i == 3:
-                    print(i)
-                    break
-
-                i += 1
 
             loss = self.calculate_loss(loss_list)
 
@@ -207,18 +218,24 @@ class SmashRNN:
 
         loss_list = []
         columns_names = [
-            "previous_document",
-            "current_document",
+            "source_document",
+            "target_document",
             "actual_click_rate",
             "predicted_click_rate",
         ]
         predictions_list = pd.DataFrame(columns=columns_names)
 
-        i = 0
-
         for row in validation_generator:
             source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
             target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
+
+            if level == "sentence":
+                source_articles = self.transform_to_sentence_level(source_articles)
+                target_articles = self.transform_to_sentence_level(target_articles)
+
+            elif level == "word":
+                source_articles = self.transform_to_word_level(source_articles)
+                target_articles = self.transform_to_word_level(target_articles)
 
             if torch.cuda.is_available():
                 row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].cuda()
@@ -226,20 +243,12 @@ class SmashRNN:
                 source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
                 source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
                 source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
-                target_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-                target_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-                target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
-                target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
+                target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].cuda()
+                target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
+                target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
+                target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
 
             with torch.no_grad():
-                if level == "sentence":
-                    source_articles = self.transform_to_sentence_level(source_articles)
-                    target_articles = self.transform_to_sentence_level(target_articles)
-
-                elif level == "word":
-                    source_articles = self.transform_to_word_level(source_articles)
-                    target_articles = self.transform_to_word_level(target_articles)
-
                 predictions = self.model(
                     target_articles[TEXT_IDS_COLUMN],
                     target_articles[WORDS_PER_SENTENCE_COLUMN],
@@ -267,11 +276,6 @@ class SmashRNN:
 
             predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
-            if i == 3:
-                break
-
-            i = i + 1
-
         final_loss = self.calculate_loss(loss_list)
 
         if torch.cuda.is_available():
@@ -294,7 +298,7 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = self.opt.model_folder + os.sep + self.opt.level + "_level_model.pt"
+        model_path = self.opt.model_folder + self.opt.level + "_level_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     def should_stop(self, epoch):
@@ -327,7 +331,7 @@ class SmashRNN:
             help="For development purposes. This limits the number of rows read from the dataset.",
         )
         parser.add_argument("--level", type=str, default="paragraph")
-        parser.add_argument("--batch_size", type=int, default=3)
+        parser.add_argument("--batch_size", type=int, default=32)
         parser.add_argument("--results_path", type=str, default="./")
 
         return parser.parse_args()

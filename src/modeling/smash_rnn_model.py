@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import csv
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
-from src.utils.utils import (
+from utils.utils import (
     remove_zero_tensors_from_batch,
     remove_zeros_from_words_per_sentence,
     add_filtered_tensors_to_original_batch,
@@ -20,36 +20,47 @@ class SmashRNNModel(nn.Module):
     def __init__(self, dict, dict_len, embedding_size):
         super(SmashRNNModel, self).__init__()
 
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
+        else:
+            torch.manual_seed(123)
+            self.device = torch.device("cpu")
+
         GRU_HIDDEN_SIZE = 128
         HIDDEN_LAYER_SIZE = 128
 
         # Init embedding layer
-        self.embedding = nn.Embedding(num_embeddings=dict_len, embedding_dim=embedding_size).from_pretrained(dict)
+        self.embedding = (
+            nn.Embedding(num_embeddings=dict_len, embedding_dim=embedding_size).from_pretrained(dict).to(self.device)
+        )
 
         # RNN + attention layers
         word_gru_hidden_size = GRU_HIDDEN_SIZE
         self.word_gru_out_size = word_gru_hidden_size * 2
-        self.word_gru = nn.GRU(embedding_size, word_gru_hidden_size, bidirectional=True, batch_first=True)
-        self.word_attention = nn.Linear(self.word_gru_out_size, HIDDEN_LAYER_SIZE)
-        self.word_context_vector = nn.Linear(
-            HIDDEN_LAYER_SIZE, 1, bias=False
+        self.word_gru = nn.GRU(embedding_size, word_gru_hidden_size, bidirectional=True, batch_first=True).to(
+            self.device
+        )
+        self.word_attention = nn.Linear(self.word_gru_out_size, HIDDEN_LAYER_SIZE).to(self.device)
+        self.word_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False).to(
+            self.device
         )  # Word context vector to take dot-product with
 
         sentence_gru_hidden_size = GRU_HIDDEN_SIZE
         self.sentence_gru_out_size = sentence_gru_hidden_size * 2
         self.sentence_gru = nn.GRU(
             self.word_gru_out_size, sentence_gru_hidden_size, bidirectional=True, batch_first=True
-        )
-        self.sentence_attention = nn.Linear(self.sentence_gru_out_size, HIDDEN_LAYER_SIZE)
-        self.sentence_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False)
+        ).to(self.device)
+        self.sentence_attention = nn.Linear(self.sentence_gru_out_size, HIDDEN_LAYER_SIZE).to(self.device)
+        self.sentence_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False).to(self.device)
 
         paragraph_gru_hidden_size = GRU_HIDDEN_SIZE
         self.paragraph_gru_out_size = paragraph_gru_hidden_size * 2
         self.paragraph_gru = nn.GRU(
             self.sentence_gru_out_size, paragraph_gru_hidden_size, bidirectional=True, batch_first=True
-        )
-        self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, HIDDEN_LAYER_SIZE)
-        self.paragraph_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False)
+        ).to(self.device)
+        self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, HIDDEN_LAYER_SIZE).to(self.device)
+        self.paragraph_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False).to(self.device)
 
         self.input_dim = 2 * paragraph_gru_hidden_size * 3  # 3 = number of concatenations
 
@@ -60,7 +71,7 @@ class SmashRNNModel(nn.Module):
         # These layers compute the semantic similarity between two documents
         self.classifier = nn.Sequential(
             nn.Linear(self.input_dim, self.mlp_dim), nn.ReLU(), nn.Linear(self.mlp_dim, self.out_dim), nn.Sigmoid()
-        )
+        ).to(self.device)
 
     def forward(
         self,
@@ -101,17 +112,22 @@ class SmashRNNModel(nn.Module):
 
         return articles_similarity
 
-    def get_document_representation(
-        self, article, paragraphs_per_article, sentences_per_paragraph, words_per_sentence
-    ):
+    def get_document_representation(self, article, paragraphs_per_article, sentences_per_paragraph, words_per_sentence):
 
-        batch_size = article.shape[0]
+        non_empty_articles = paragraphs_per_article.nonzero().shape[0]
+
+        if non_empty_articles < paragraphs_per_article.shape[0]:
+            article = article[:non_empty_articles]
+            paragraphs_per_article = paragraphs_per_article[:non_empty_articles]
+            sentences_per_paragraph = sentences_per_paragraph[:non_empty_articles]
+            words_per_sentence = words_per_sentence[:non_empty_articles]
+
         max_paragraphs_per_article = max(paragraphs_per_article)
         max_sentences_per_paragraph = max(sentences_per_paragraph.sum(dim=1))
 
         # zero placeholders
-        sentences = torch.zeros((batch_size, max_sentences_per_paragraph, self.word_gru_out_size))
-        paragraphs = torch.zeros((batch_size, max_paragraphs_per_article, self.sentence_gru_out_size))
+        sentences = torch.zeros((non_empty_articles, max_sentences_per_paragraph, self.word_gru_out_size))
+        paragraphs = torch.zeros((non_empty_articles, max_paragraphs_per_article, self.sentence_gru_out_size))
 
         if torch.cuda.is_available():
             sentences = sentences.cuda()

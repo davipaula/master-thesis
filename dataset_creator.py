@@ -71,11 +71,12 @@ class DatasetCreator:
 
         # TODO: fix circular dependency between click stream processor and wiki articles
         # TODO: the negative sampling method requires wiki articles data. move this step to the end
-        logger.info(f"Generating Click Stream Dataset")
-        ClickStreamProcessor().run()
+        # TODO: there's no negative sampling. I'm filtering out pairs with less than 200 clicks
+        # logger.info(f"Generating Click Stream Dataset")
+        # ClickStreamProcessor().run()
 
-        logger.info(f"Extracting Wiki Articles")
-        extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
+        # logger.info(f"Extracting Wiki Articles")
+        # extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
 
         logger.info(f"Tokenizing Wiki Articles")
         WikiArticlesProcessor(wiki_pre_processed_path).run()
