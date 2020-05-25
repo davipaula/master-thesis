@@ -30,25 +30,6 @@ class SMASHDataset(Dataset):
         self.text_embeddings = dataset["text_ids"]
         self.articles = dataset["article"]
 
-        max_lengths = self.get_max_lengths()
-
-        self.max_word_length = max_lengths["max_word_length"]
-        self.max_sentence_length = max_lengths["max_sentence_length"]
-        self.max_paragraph_length = max_lengths["max_paragraph_length"]
-
-        # batch_size = 32
-        #
-        # self.text_ids_tensor_placeholder = torch.zeros(
-        #     (batch_size, self.max_paragraph_length, self.max_sentence_length, self.max_word_length), dtype=int
-        # )
-        # self.words_per_sentence_tensor_placeholder = torch.zeros(
-        #     (batch_size, self.max_paragraph_length, self.max_sentence_length), dtype=int
-        # )
-        # self.sentences_per_paragraph_tensor_placeholder = torch.zeros(
-        #     (batch_size, self.max_paragraph_length), dtype=int
-        # )
-        # self.paragraphs_per_document_tensor_placeholder = torch.zeros(batch_size, dtype=int)
-
     def __len__(self):
         return len(self.text_embeddings)
 
@@ -59,22 +40,13 @@ class SMASHDataset(Dataset):
             text_embedding = literal_eval(self.text_embeddings.iloc[index])
 
         text_structure = self.get_document_structure(text_embedding)
-        words_per_sentence = torch.LongTensor(self.get_padded_words_per_sentence(text_structure["words_per_sentence"]))
-
-        sentences_per_paragraph = torch.LongTensor(
-            self.get_padded_sentences_per_paragraph(text_structure["sentences_per_paragraph"])
-        )
-
-        paragraphs_per_document = torch.LongTensor([text_structure["paragraphs_per_document"]])
-
-        text_embeddings_padded = self.get_padded_document(text_embedding)
 
         article = {
             "title": self.articles.iloc[index],
-            "text_ids": text_embeddings_padded,
-            "words_per_sentence": words_per_sentence,
-            "sentences_per_paragraph": sentences_per_paragraph,
-            "paragraphs_per_document": paragraphs_per_document,
+            "text_ids": text_embedding,
+            "words_per_sentence": text_structure["words_per_sentence"],
+            "sentences_per_paragraph": text_structure["sentences_per_paragraph"],
+            "paragraphs_per_document": text_structure["paragraphs_per_document"],
         }
 
         return article
@@ -90,31 +62,49 @@ class SMASHDataset(Dataset):
             "paragraphs_per_document": [paragraphs_per_document],
         }
         """
-
-        titles_list = []
-
         batch_size = len(articles)
 
-        text_ids_tensor = torch.zeros(
-            (batch_size, self.max_paragraph_length, self.max_sentence_length, self.max_word_length), dtype=int
-        )
-        words_per_sentence_tensor = torch.zeros(
-            (batch_size, self.max_paragraph_length, self.max_sentence_length), dtype=int
-        )
-        sentences_per_paragraph_tensor = torch.zeros((batch_size, self.max_paragraph_length), dtype=int)
-        paragraphs_per_document_tensor = torch.zeros(batch_size, dtype=int)
+        articles_list = []
 
         for index, article in enumerate(articles):
             article_index = self.articles.index[self.articles == article][0]
-            article = self.__getitem__(article_index)
-            titles_list.append(article[TITLE_COLUMN])
-            text_ids_tensor[index, :] = article[TEXT_IDS_COLUMN]
-            words_per_sentence_tensor[index, :] = article[WORDS_PER_SENTENCE_COLUMN]
-            sentences_per_paragraph_tensor[index, :] = article[SENTENCES_PER_PARAGRAPH_COLUMN]
-            paragraphs_per_document_tensor[index] = article[PARAGRAPHS_PER_DOCUMENT_COLUMN]
+            articles_list.append(self.__getitem__(article_index))
+
+        max_lengths = self.get_max_lengths(articles_list)
+
+        max_word_length = max_lengths["max_word_length"]
+        max_sentence_length = max_lengths["max_sentence_length"]
+        max_paragraph_length = max_lengths["max_paragraph_length"]
+
+        text_ids_tensor = np.zeros([batch_size, max_paragraph_length, max_sentence_length, max_word_length], dtype=int)
+        words_per_sentence_tensor = np.zeros([batch_size, max_paragraph_length, max_sentence_length], dtype=int)
+        sentences_per_paragraph_tensor = np.zeros([batch_size, max_paragraph_length], dtype=int)
+        paragraphs_per_document_tensor = np.zeros(batch_size, dtype=int)
+
+        for index, _ in enumerate(articles):
+            article = articles_list[index]
+            text_ids_tensor[index, :] = torch.LongTensor(
+                self.get_padded_document(
+                    article[TEXT_IDS_COLUMN], max_paragraph_length, max_sentence_length, max_word_length
+                )
+            )
+            words_per_sentence_tensor[index, :] = torch.LongTensor(
+                self.get_padded_words_per_sentence(
+                    article["words_per_sentence"], max_paragraph_length, max_sentence_length
+                )
+            )
+            sentences_per_paragraph_tensor[index, :] = torch.LongTensor(
+                self.get_padded_sentences_per_paragraph(article["sentences_per_paragraph"], max_paragraph_length)
+            )
+            paragraphs_per_document_tensor[index] = torch.LongTensor([article["paragraphs_per_document"]])
+
+        text_ids_tensor = torch.from_numpy(text_ids_tensor)
+        words_per_sentence_tensor = torch.from_numpy(words_per_sentence_tensor)
+        sentences_per_paragraph_tensor = torch.from_numpy(sentences_per_paragraph_tensor)
+        paragraphs_per_document_tensor = torch.from_numpy(paragraphs_per_document_tensor)
 
         articles_list = {
-            TITLE_COLUMN: titles_list,
+            TITLE_COLUMN: articles,
             TEXT_IDS_COLUMN: text_ids_tensor,
             WORDS_PER_SENTENCE_COLUMN: words_per_sentence_tensor,
             SENTENCES_PER_PARAGRAPH_COLUMN: sentences_per_paragraph_tensor,
@@ -147,53 +137,29 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    def get_padded_document(self, document):
+    @staticmethod
+    def get_padded_document(document, max_paragraph_length: int, max_sentence_length: int, max_word_length: int):
         document_placeholder = torch.full(
-            (self.max_paragraph_length, self.max_sentence_length, self.max_word_length), -1, dtype=torch.int64
+            (max_paragraph_length, max_sentence_length, max_word_length), -1, dtype=torch.int64
         )
 
         for paragraph_index, paragraph in enumerate(document):
             for sentence_index, sentence in enumerate(paragraph):
                 document_placeholder[paragraph_index, sentence_index, : len(sentence)] = torch.tensor(sentence)
 
-        # document = np.stack(arrays=document, axis=0)
         document_placeholder += 1
 
         return document_placeholder
 
-    def get_padded_document_bkp(self, document):
-        document = np.array(document)
-        for paragraph in document:
-            for sentences in paragraph:
-                if len(sentences) < self.max_word_length:
-                    extended_words = list([-1] * (self.max_word_length - len(sentences)))
-                    sentences.extend(extended_words)
-
-            if len(paragraph) < self.max_sentence_length:
-                extended_sentences = list([[-1] * self.max_word_length] * (self.max_sentence_length - len(paragraph)))
-                paragraph.extend(extended_sentences)
-
-        if len(document) < self.max_paragraph_length:
-            extended_paragraphs = list(
-                [[[-1] * self.max_word_length] * self.max_sentence_length] * (self.max_paragraph_length - len(document))
-            )
-            document.extend(extended_paragraphs)
-
-        # document = np.stack(arrays=document, axis=0)
-        document += 1
-
-        return document
-
-    def get_padded_words_per_sentence(self, document_structure):
+    @staticmethod
+    def get_padded_words_per_sentence(document_structure, max_paragraph_length: int, max_sentence_length: int):
         for paragraph in document_structure:
-            if len(paragraph) < self.max_sentence_length:
-                extended_sentences = [0 for _ in range(self.max_sentence_length - len(paragraph))]
+            if len(paragraph) < max_sentence_length:
+                extended_sentences = [0 for _ in range(max_sentence_length - len(paragraph))]
                 paragraph.extend(extended_sentences)
 
-        if len(document_structure) < self.max_paragraph_length:
-            extended_paragraphs = [list([0] * self.max_sentence_length)] * (
-                self.max_paragraph_length - len(document_structure)
-            )
+        if len(document_structure) < max_paragraph_length:
+            extended_paragraphs = [list([0] * max_sentence_length)] * (max_paragraph_length - len(document_structure))
 
             document_structure.extend(extended_paragraphs)
 
@@ -201,26 +167,26 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    def get_padded_sentences_per_paragraph(self, document_structure):
-        if len(document_structure) < self.max_paragraph_length:
-            extended_paragraphs = [0 for _ in range(self.max_paragraph_length - len(document_structure))]
+    def get_padded_sentences_per_paragraph(self, document_structure, max_paragraph_length: int):
+        if len(document_structure) < max_paragraph_length:
+            extended_paragraphs = [0 for _ in range(max_paragraph_length - len(document_structure))]
             document_structure.extend(extended_paragraphs)
 
         return document_structure
 
-    def get_max_lengths(self):
+    def get_max_lengths(self, articles):
         word_length_list = []
         sent_length_list = []
         paragraph_length_list = []
 
-        for index, embedding in enumerate(self.text_embeddings):
-            for paragraph in literal_eval(embedding):
+        for index, article in enumerate(articles):
+            for paragraph in article["text_ids"]:
                 for sentences in paragraph:
                     word_length_list.append(len(sentences))
 
                 sent_length_list.append(len(paragraph))
 
-            paragraph_length_list.append(len(literal_eval(embedding)))
+            paragraph_length_list.append(len(article["text_ids"]))
 
         return {
             "max_word_length": max(word_length_list),
@@ -277,7 +243,7 @@ if __name__ == "__main__":
     logger.info("Started getting articles")
 
     for n in range(10):
-        test.get_articles(articles_to_get)
+        (test.get_articles(articles_to_get))
 
     logger.info("Finished getting articles")
     # print(test.__getitem__(1))

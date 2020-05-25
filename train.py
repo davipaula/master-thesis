@@ -182,7 +182,7 @@ class SmashRNN:
                 break
 
         self.save_model()
-        print("Training finished {}. Best epoch {}".format(datetime.now(), best_epoch))
+        print(f"Training finished {datetime.now()}. Best epoch {best_epoch + 1}")
 
     @staticmethod
     def transform_to_word_level(document):
@@ -225,7 +225,7 @@ class SmashRNN:
         ]
         predictions_list = pd.DataFrame(columns=columns_names)
 
-        for row in validation_generator:
+        for row in tqdm(validation_generator):
             source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
             target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
 
