@@ -11,11 +11,8 @@ from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
 from typing import List
 
 ARTICLE_COLUMN = "article"
-
 RAW_TEXT_COLUMN = "raw_text"
-
 TRAIN_FOLD = "train"
-
 FOLD_COLUMN = "fold"
 
 
