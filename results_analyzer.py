@@ -1,5 +1,12 @@
+import logging
+import math
+
+import numpy as np
 import pandas as pd
 import os
+
+from tqdm import tqdm
+from typing import List
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
@@ -18,10 +25,16 @@ SMASH_RNN_PARAGRAPH_LEVEL_VALIDATION_RESULTS_PATH = (
     BASE_VALIDATION_RESULTS_PATH + "results_paragraph_level_validation.csv"
 )
 
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
 
 class ResultsAnalyzer:
     def __init__(self):
         self.results = self.build_models_results()
+        self.source_articles = self.results["source_article"].unique().tolist()
 
         self.top_articles = self.build_top_5_matrix_by_article()
 
@@ -108,17 +121,108 @@ class ResultsAnalyzer:
 
         return results_validation
 
-    def run(self):
-        source_article = "Kirsten Dunst"
-        model_names = ["doc2vec", "wikipedia2vec", "paragraph", "word"]
+    @staticmethod
+    def calculate_precision(predictions: List[bool]):
+        running_sum = []
+        correct_predictions = 0
 
-        for model_name in model_names:
-            predicted = self.get_top_5_predicted_by_article_and_model(source_article, model_name)
+        for prediction_index, prediction in enumerate(predictions):
+            correct_predictions += 1 if prediction is True else 0
+            running_sum.append(correct_predictions / float(prediction_index + 1))
 
-            print(predicted)
+        return running_sum
 
-        actual = self.build_top_5_matrix_by_article()
-        print(actual)
+    def precision_at_k(self, predictions: List[bool], k=5):
+        return self.calculate_precision(predictions)[k - 1]
+
+    def average_precision_at_k(self, predictions, k=5):
+        precisions = self.calculate_precision(predictions)[: k - 1]
+        average_precisions = []
+
+        for precision_index, precision in enumerate(precisions, 1):
+            if predictions[precision_index - 1] is True:
+                average_precisions.append(precision)
+
+        if average_precisions:
+            result = round(sum(average_precisions) / len(average_precisions), 4)
+        else:
+            result = 0
+
+        return result
+
+    def calculate_mean_average_precision_at_k(self, predictions_by_article, k=5):
+        average_precisions = []
+
+        for predictions in predictions_by_article:
+            average_precisions.append(self.average_precision_at_k(predictions, k))
+
+        model_map = sum(average_precisions) / len(average_precisions)
+
+        return model_map
+
+    def get_map_for_all_models(self, k=5):
+        models = self.get_models()
+
+        predictions_by_model = {model: [] for model in models}
+
+        logger.info("Calculating MAP for each model")
+        for model in tqdm(models):
+            predictions = []
+
+            for source_article in self.source_articles:
+                predictions.append(
+                    self.get_top_5_predicted_by_article_and_model(source_article, model)["is_in_top_5"].tolist()
+                )
+
+            predictions_by_model[model] = round(self.calculate_mean_average_precision_at_k(predictions, k), 4)
+
+        return predictions_by_model
+
+    def get_ndcg_for_all_models(self, k=5):
+        models = self.get_models()
+
+        ndcg_by_model = {model: [] for model in models}
+
+        logger.info("Calculating NDCG for each model")
+        for model in tqdm(models):
+            model_predictions = []
+
+            for source_article in self.source_articles:
+                model_predictions.append(
+                    self.get_top_5_predicted_by_article_and_model(source_article, model)["is_in_top_5"].tolist()
+                )
+
+            ndcg_by_model[model] = self.calculate_ndcg(model_predictions, k)
+
+        return ndcg_by_model
+
+    def calculate_idcg(self, predictions):
+        sorted_predictions = [sorted(article_predictions, reverse=True) for article_predictions in predictions]
+
+        return self.calculate_dcg(sorted_predictions)
+
+    @staticmethod
+    def calculate_dcg(predictions: List[List[bool]]):
+        cumulative_gain_list = []
+
+        for article_predictions in predictions:
+            article_cumulative_gain = []
+            for i, article_prediction in enumerate(article_predictions, 1):
+                article_cumulative_gain.append((2 ** article_prediction - 1) / (math.log2(i + 1)))
+
+            cumulative_gain_list.append(sum(article_cumulative_gain))
+
+        return cumulative_gain_list
+
+    def calculate_ndcg(self, predictions, k=5):
+        np.seterr(divide="ignore", invalid="ignore")
+        dcg = np.array(self.calculate_dcg(predictions))
+        idcg = np.array(self.calculate_idcg(predictions))
+        ndcg = np.nan_to_num(dcg / idcg)
+
+        ndcg = np.mean(ndcg)
+
+        return ndcg
 
 
 if __name__ == "__main__":
@@ -127,5 +231,4 @@ if __name__ == "__main__":
     pd.set_option("display.width", 1000)
 
     results = ResultsAnalyzer()
-    print(results.get_top_5_predicted_by_article_and_model("Lil Wayne", "word"))
-    print(results.get_top_5_predicted_by_article_and_model("Lil Wayne", "paragraph"))
+    print(results.get_ndcg_for_all_models())
