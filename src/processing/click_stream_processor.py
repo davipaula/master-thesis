@@ -69,7 +69,7 @@ class ClickStreamProcessor:
 
     def run(
         self,
-        train_split=0.8,
+        train_split=0.7,
         batch_size=32,
         save_folder="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/",
     ):
@@ -158,33 +158,32 @@ class ClickStreamProcessor:
         ]
         test_source_articles = source_articles[-test_dataset_size:]
 
-        validation_and_test_source_articles = set(validation_source_articles + test_source_articles)
-
-        train_dataset = click_stream_data[
-            click_stream_data[SOURCE_ARTICLE_COLUMN].isin(train_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(validation_and_test_source_articles)
-        ]
-
-        train_all_articles = list(
-            set(train_dataset[SOURCE_ARTICLE_COLUMN].tolist() + train_dataset[TARGET_ARTICLE_COLUMN].tolist())
-        )
-
-        train_all_articles_and_validation_source_articles = set(train_all_articles + validation_source_articles)
-
+        train_and_validation_source_articles = set(train_source_articles + validation_source_articles)
         test_dataset = click_stream_data[
             click_stream_data[SOURCE_ARTICLE_COLUMN].isin(test_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(train_all_articles_and_validation_source_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(train_and_validation_source_articles)
         ]
 
         test_all_articles = list(
             set(test_dataset[SOURCE_ARTICLE_COLUMN].tolist() + test_dataset[TARGET_ARTICLE_COLUMN].tolist())
         )
 
-        train_and_test_all_articles = set(train_all_articles + test_all_articles)
+        test_all_articles_and_train_source_articles = set(test_all_articles + train_source_articles)
 
         validation_dataset = click_stream_data[
             click_stream_data[SOURCE_ARTICLE_COLUMN].isin(validation_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(train_and_test_all_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(test_all_articles_and_train_source_articles)
+        ]
+
+        validation_all_articles = list(
+            set(validation_dataset[SOURCE_ARTICLE_COLUMN].tolist() + validation_dataset[TARGET_ARTICLE_COLUMN].tolist())
+        )
+
+        validation_and_test_all_articles = set(validation_all_articles + test_all_articles)
+
+        train_dataset = click_stream_data[
+            click_stream_data[SOURCE_ARTICLE_COLUMN].isin(train_source_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(validation_and_test_all_articles)
         ]
 
         train_articles_dict = [

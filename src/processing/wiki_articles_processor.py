@@ -1,6 +1,8 @@
 import itertools
 import json
 import pandas as pd
+from tqdm import tqdm
+
 from src.utils.utils import clean_title
 from ast import literal_eval
 
@@ -9,9 +11,7 @@ class WikiArticlesProcessor:
     def __init__(self, wiki_articles_path):
         self.__wiki_articles_path = wiki_articles_path
 
-        self.__save_path = (
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles_english.csv"
-        )
+        self.__save_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles_english_complete.csv"
         self.__articles = self.extract_wiki_articles()
 
     def run(self):
@@ -39,25 +39,21 @@ class WikiArticlesProcessor:
 
         with open(self.__wiki_articles_path, "r") as json_file:
             json_list = list(json_file)
-        for json_str in json_list:
+
+        for json_str in tqdm(json_list):
             result = json.loads(json_str)
-            introduction_ids = result["sections"][0]["paragraphs"]
-            # Cleaning empty paragraphs and sentences
-            sentences_to_append = [
-                filtered_sentence
-                for filtered_sentence in [
-                    [sentence for sentence in paragraph if sentence] for paragraph in introduction_ids if paragraph
-                ]
-                if filtered_sentence
-            ]
+            sections = result["sections"]
+            article_text_ids = [section["paragraphs"] for section in sections if section["paragraphs"]]
+            article_raw_text = [section["normalized_paragraphs"] for section in sections if section["paragraphs"]]
 
-            introduction_string = result["sections"][0]["normalized_paragraphs"]
+            # This removes one dimension of the list, keeping the same shape of the paragraphs
+            article_text_ids = list(itertools.chain.from_iterable(article_text_ids))
+            article_raw_text = list(itertools.chain.from_iterable(article_raw_text))
 
-            if sentences_to_append:
-                text_ids.append(sentences_to_append)
-                text_string.append(introduction_string)
-                articles.append(clean_title(result["title"]))
-                links.append(result["links"])
+            text_ids.append(article_text_ids)
+            text_string.append(article_raw_text)
+            articles.append(clean_title(result["title"]))
+            links.append(result["links"])
 
         wiki_documents_dataset = pd.DataFrame(
             list(zip(articles, text_ids, text_string, links)), columns=["article", "text_ids", "raw_text", "links"]
@@ -67,5 +63,8 @@ class WikiArticlesProcessor:
 
 
 if __name__ == "__main__":
-    wiki_documents_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_base.jsonl"
+    wiki_documents_path = (
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article.jsonl"
+    )
     wiki = WikiArticlesProcessor(wiki_documents_path)
+    wiki.run()

@@ -13,8 +13,8 @@ RAW_TEXT_COLUMN = "raw_text"
 
 class WikiArticlesDataset:
     def __init__(self):
-        __selected_articles_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv"
-        __wiki_articles_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
+        __selected_articles_path = "./data/processed/selected_articles.csv"
+        __wiki_articles_path = "./data/dataset/wiki_articles_english.csv"
 
         __selected_articles = pd.read_csv(__selected_articles_path)
         __wiki_articles = pd.read_csv(__wiki_articles_path)
@@ -30,9 +30,7 @@ class WikiArticlesDataset:
         train_articles = self.dataset.copy()
 
         if level == "word":
-            train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(
-                self.extract_articles_at_word_level
-            )
+            train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(self.extract_articles_at_word_level)
         elif level == "sentence":
             train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(
                 self.extract_articles_at_sentence_level

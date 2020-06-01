@@ -5,11 +5,10 @@
 import sys
 import os
 
-from tqdm import tqdm
-
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
+from tqdm import tqdm
 import argparse
 import csv
 import logging

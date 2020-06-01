@@ -19,11 +19,18 @@ JSON-line file (one valid JSON per line)
 {"title": "Contact network", "sections": [{"title": "Introduction", "text": "'''Contact network''' may mean:\n*Creative network\n*Social network\n*Power network", "paragraphs": [[[1871, 849, 107, 1702, 4069, 849, 659, 849, 268, 849]]]}]}
 
 """
+import sys
+import os
 
+from tqdm import tqdm
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
+import bz2
 import re
 import json
-import os
-import fire
+import torch
 import logging
 import gensim
 import spacy
@@ -34,7 +41,7 @@ from gensim.scripts.segment_wiki import extract_page_xmls
 from utils.extractor_utils import dropNested, replaceInternalLinks, replaceExternalLinks
 from xml.etree import cElementTree
 from gensim.scripts.segment_wiki import segment
-
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +127,19 @@ def process_text(nlp, w2v_model, text):
     :param text: Wikitext
     :return: Sections dict(title, text, paragraphs[])
     """
+    appendices_and_footers_sections = [
+        "See also",
+        "References",
+        "Sources",
+        "Further reading",
+        "External links",
+        "Notes",
+        "Works",
+        "Publications",
+        "Discography",
+        "Bibliography",
+        "Filmography",
+    ]
     headline_matches = list(re.finditer(r"^([=]{2,5})([^=]+?)([=]{2,5})", text, re.MULTILINE))
     sects = []
 
@@ -134,7 +154,14 @@ def process_text(nlp, w2v_model, text):
                 sects.append({"title": "Introduction", "text": plain_sect_text})
 
         title = match.group(2).strip()
-        level = len(match.group(1).strip()) - 1  # ignore subsection hierarchy for now
+
+        # If text hits any of the appendices and footers sections, we should stop collecting data for the article
+        # See:https://en.wikipedia.org/wiki/Wikipedia:Manual_of_Style/Layout#Standard_appendices_and_footers
+        if title in appendices_and_footers_sections:
+            break
+
+        # ignore subsection hierarchy for now
+        # level = len(match.group(1).strip()) - 1
 
         if i < len(headline_matches) - 1:
             next_match = headline_matches[i + 1]
@@ -145,17 +172,15 @@ def process_text(nlp, w2v_model, text):
 
         plain_sect_text = convert_to_plain_text(sect_text)
 
-        if not plain_sect_text:
-            break
-
-        sects.append(
-            {"title": title, "text": plain_sect_text,}
-        )
+        if plain_sect_text:
+            sects.append(
+                {"title": title, "text": plain_sect_text,}
+            )
 
     # no sections found -> article consists of only a single section
     plain_text = convert_to_plain_text(text)
     if not plain_text:
-        pass
+        return
 
     if len(sects) == 0:
         sects.append(
@@ -176,14 +201,23 @@ def process_text(nlp, w2v_model, text):
                 sects[i]["paragraphs"].append(paragraph_tokens)
                 sects[i]["normalized_paragraphs"].append(normalized_paragraph)
 
-        break  # returns only the introduction (the first section)
+        # break  # returns only the introduction (the first section)
 
     return sects
 
 
-def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, filter_selected_articles=True, log_every=100):
+def process_dump(
+    wiki_dump_path: str,
+    nlp,
+    w2v_model,
+    existing_articles: List[str],
+    max_doc_count=0,
+    filter_selected_articles=True,
+    log_every=100,
+):
     """
 
+    :param existing_articles: List with already existing articles
     :param filter_selected_articles: Flag to filter only selected articles. If false all articles in dump file will be processed (not recommended)
     :param log_every: Print process every X docs
     :param wiki_dump_path: Path to Wikipedia XML dump
@@ -197,14 +231,12 @@ def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, filter_se
     logger.info(f"Processing dump from: {wiki_dump_path}")
 
     if filter_selected_articles:
-        selected_articles = pd.read_csv(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv"
-        )
+        selected_articles = pd.read_csv(SELECTED_ARTICLES_PATH)
 
-    with open(wiki_dump_path, "rb") as xml_fileobj:
+    with bz2.open(wiki_dump_path, "rb") as xml_fileobj:
         page_xmls = extract_page_xmls(xml_fileobj)
 
-        for i, page_xml in enumerate(page_xmls):
+        for i, page_xml in enumerate(tqdm(page_xmls)):
             # Parse XML element
             elem = cElementTree.fromstring(page_xml)
             filter_namespaces = ("0",)
@@ -219,6 +251,9 @@ def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, filter_se
             if filter_selected_articles:
                 if title not in selected_articles["article"].to_list():
                     continue
+
+            if title in existing_articles:
+                continue
 
             text = elem.find(text_path).text
             ns = elem.find(ns_path).text
@@ -242,22 +277,33 @@ def process_dump(wiki_dump_path: str, nlp, w2v_model, max_doc_count=0, filter_se
 
             doc_counter += 1
 
-            if (doc_counter % log_every) == 0:
-                logger.info(f"Documents completed: {doc_counter}")
-
             if 0 < max_doc_count < doc_counter:
                 break
 
     logger.info(f"Finished processing dump from: {wiki_dump_path}")
 
 
-def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, limit=0, override=True):
-    if os.path.exists(output_path):
-        if override:
-            logger.info(f"Override existing output: {output_path}")
-        else:
-            logger.error(f"Output file exist already: {output_path}")
-            exit(1)
+def load_existing_articles(output_path: str):
+    with open(output_path, "r") as f:
+        json_list = list(f)
+
+    article_titles = []
+
+    for json_str in tqdm(json_list):
+        result = json.loads(json_str)
+        article_titles.append(result["title"])
+
+    return article_titles
+
+
+def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, limit=0, append=True):
+
+    if append:
+        logger.info(f"Appending to output: {output_path}")
+        open_mode = "a"
+    else:
+        logger.info(f"Creating new output file: {output_path}")
+        open_mode = "w"
 
     if not os.path.exists(wiki_dump_path):
         logger.error(f"Wiki dump does not exist at: {wiki_dump_path}")
@@ -272,28 +318,32 @@ def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, 
 
     w2v_model = gensim.models.KeyedVectors.load_word2vec_format(w2v_path)
 
-    with open(output_path, "w") as f:
-        for doc in process_dump(wiki_dump_path, nlp, w2v_model, limit):
+    existing_articles = load_existing_articles(output_path)
+
+    with open(output_path, open_mode) as f:
+        for doc in process_dump(wiki_dump_path, nlp, w2v_model, existing_articles, limit):
             f.write(json.dumps(doc) + "\n")
 
 
 if __name__ == "__main__":
-    w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
-    click_stream_dump_path = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/clickstream-enwiki-2020-03.tsv"
-    )
-    wiki_titles_path = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-all-titles-in-ns0.gz"
-    )
-    wiki_dump_path = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml"
-    )
-    available_titles_save_path = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/available_titles.txt"
-    )
+    if torch.cuda.is_available():
+        _w2v_path = "/home/dnascimento/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
+        _wiki_dump_path = "/home/dnascimento/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
+        _wiki_pre_processed_path = "/home/dnascimento/thesis-davi/data/processed/enwiki_entire_article.jsonl"
+        SELECTED_ARTICLES_PATH = "/home/dnascimento/thesis-davi/data/processed/selected_articles.csv"
 
-    wiki_pre_processed_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki.jsonl"
+    else:
+        _w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
+        _wiki_dump_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
+        _wiki_pre_processed_path = (
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article_2.jsonl"
+        )
+        SELECTED_ARTICLES_PATH = (
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv"
+        )
+
+    limit = 30
 
     extract_wiki_articles(
-        wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path
+        wiki_dump_path=_wiki_dump_path, w2v_path=_w2v_path, output_path=_wiki_pre_processed_path, limit=limit
     )

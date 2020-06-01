@@ -4,6 +4,7 @@ from datetime import datetime
 import pandas as pd
 import torch
 from torch import nn
+from tqdm import tqdm
 
 from modeling.doc2vec_model import Doc2VecModel
 from modeling.wikipedia2vec_model import Wikipedia2VecModel
@@ -28,7 +29,6 @@ class TrainDoc2Vec:
         else:
             torch.manual_seed(123)
 
-        logger.info("Initializing parameters")
         self.click_stream_train = torch.load(
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_train.pth"
         )
@@ -43,8 +43,8 @@ class TrainDoc2Vec:
         self.models = {"doc2vec": self.doc2vec}
         # self.models = {"doc2vec": self.doc2vec, "wikipedia2vec": self.wikipedia2vec}
 
-        self.num_epochs = 20
-        self.patience = 5
+        self.num_epochs = 30
+        self.patience = 10
 
         self.criterion = nn.SmoothL1Loss()
 
@@ -83,7 +83,7 @@ class TrainDoc2Vec:
                 regression_model.train()
                 logger.info(f"Model {model_name}. Starting epoch {epoch + 1} / {self.num_epochs}")
 
-                for row in self.click_stream_train:
+                for row in tqdm(self.click_stream_train):
                     source_article_vector = model.get_entity_vector(row[SOURCE_ARTICLE_COLUMN])
                     target_article_vector = model.get_entity_vector(row[TARGET_ARTICLE_COLUMN])
 
@@ -126,7 +126,7 @@ class TrainDoc2Vec:
         loss_list = []
         predictions_list = pd.DataFrame(columns=self.column_names)
 
-        for row in self.click_stream_validation:
+        for row in tqdm(self.click_stream_validation):
             source_article_vector = model.get_inferred_vector(row[SOURCE_ARTICLE_COLUMN])
             target_article_vector = model.get_inferred_vector(row[TARGET_ARTICLE_COLUMN])
 

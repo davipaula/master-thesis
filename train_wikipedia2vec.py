@@ -1,5 +1,13 @@
+import sys
+import os
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
+
 import logging
 from datetime import datetime
+from tqdm import tqdm
 
 import pandas as pd
 import torch
@@ -29,14 +37,9 @@ class TrainWikipedia2Vec:
             torch.manual_seed(123)
 
         logger.info("Initializing parameters")
-        self.click_stream_train = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_train.pth"
-        )
-        self.click_stream_validation = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_validation.pth"
-        )
+        self.click_stream_train = torch.load("./data/dataset/click_stream_train.pth")
+        self.click_stream_validation = torch.load("./data/dataset/click_stream_validation.pth")
 
-        self.doc2vec = Doc2VecModel()
         self.wikipedia2vec = Wikipedia2VecModel()
         logger.info("Loaded models")
 
@@ -82,7 +85,7 @@ class TrainWikipedia2Vec:
                 regression_model.train()
                 logger.info(f"Model {model_name}. Starting epoch {epoch + 1} / {self.num_epochs}")
 
-                for row in self.click_stream_train:
+                for row in tqdm(self.click_stream_train):
                     source_article_vector = model.get_entity_vector(row[SOURCE_ARTICLE_COLUMN])
                     target_article_vector = model.get_entity_vector(row[TARGET_ARTICLE_COLUMN])
 
@@ -125,7 +128,7 @@ class TrainWikipedia2Vec:
         loss_list = []
         predictions_list = pd.DataFrame(columns=self.column_names)
 
-        for row in self.click_stream_validation:
+        for row in tqdm(self.click_stream_validation):
             source_article_vector = model.get_entity_vector(row[SOURCE_ARTICLE_COLUMN])
             target_article_vector = model.get_entity_vector(row[TARGET_ARTICLE_COLUMN])
 

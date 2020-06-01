@@ -2,6 +2,7 @@ import logging
 
 import torch
 from torch import nn
+from tqdm import tqdm
 
 import pandas as pd
 
@@ -51,7 +52,7 @@ class TestDoc2Vec:
 
         logger.info(f"Model {model_name}. Starting evaluation")
 
-        for row in self.click_stream_validation:
+        for row in tqdm(self.click_stream_validation):
             source_article_vector = model.get_inferred_vector(row["source_article"])
             target_article_vector = model.get_inferred_vector(row["target_article"])
 

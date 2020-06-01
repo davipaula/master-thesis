@@ -1,3 +1,4 @@
+fastapi
 appdirs==1.4.3
 appnope==0.1.0
 attrs==19.3.0
