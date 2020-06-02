@@ -1,5 +1,6 @@
 # Import required libraries
 import itertools
+import logging
 import multiprocessing
 import os
 import torch
@@ -9,6 +10,12 @@ from gensim.models import Doc2Vec
 from gensim.models.doc2vec import TaggedDocument
 from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
 from typing import List
+
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
 
 ARTICLE_COLUMN = "article"
 RAW_TEXT_COLUMN = "raw_text"
@@ -40,7 +47,10 @@ class Doc2VecModel:
 
         labeled_questions = self.generate_tagged_documents()
 
+        logger.info("Building vocab DBOW")
         dbow_model.build_vocab(labeled_questions)
+
+        logger.info("Building vocab DM")
         dm_model.build_vocab(labeled_questions)
 
         dbow_model.save(self.dbow_path)

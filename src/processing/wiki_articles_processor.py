@@ -1,17 +1,35 @@
+import sys
+import os
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import itertools
 import json
 import pandas as pd
+import torch
 from tqdm import tqdm
 
-from src.utils.utils import clean_title
+from utils.utils import clean_title
 from ast import literal_eval
+
+if torch.cuda.is_available():
+    SAVE_PATH = "/home/dnascimento/thesis-davi/data/processed/wiki_articles_english_complete.csv"
+    WIKI_DOCUMENTS_PATH = "/home/dnascimento/thesis-davi/data/processed/enwiki_entire_article.jsonl"
+else:
+    SAVE_PATH = (
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles_english_complete.csv"
+    )
+    WIKI_DOCUMENTS_PATH = (
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article.jsonl"
+    )
 
 
 class WikiArticlesProcessor:
     def __init__(self, wiki_articles_path):
         self.__wiki_articles_path = wiki_articles_path
 
-        self.__save_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles_english_complete.csv"
+        self.__save_path = SAVE_PATH
         self.__articles = self.extract_wiki_articles()
 
     def run(self):
@@ -43,6 +61,10 @@ class WikiArticlesProcessor:
         for json_str in tqdm(json_list):
             result = json.loads(json_str)
             sections = result["sections"]
+
+            if sections is None:
+                continue
+
             article_text_ids = [section["paragraphs"] for section in sections if section["paragraphs"]]
             article_raw_text = [section["normalized_paragraphs"] for section in sections if section["paragraphs"]]
 
@@ -63,8 +85,5 @@ class WikiArticlesProcessor:
 
 
 if __name__ == "__main__":
-    wiki_documents_path = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article.jsonl"
-    )
-    wiki = WikiArticlesProcessor(wiki_documents_path)
+    wiki = WikiArticlesProcessor(WIKI_DOCUMENTS_PATH)
     wiki.run()

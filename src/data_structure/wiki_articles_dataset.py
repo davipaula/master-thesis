@@ -5,9 +5,7 @@ import pandas as pd
 from torch.utils.data.dataset import Dataset
 
 FOLD_COLUMN = "fold"
-
 ARTICLE_COLUMN = "article"
-
 RAW_TEXT_COLUMN = "raw_text"
 
 
