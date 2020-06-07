@@ -1,9 +1,10 @@
+import argparse
 import sys
 import os
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
-
 
 import logging
 from datetime import datetime
@@ -13,7 +14,6 @@ import pandas as pd
 import torch
 from torch import nn
 
-from modeling.doc2vec_model import Doc2VecModel
 from modeling.wikipedia2vec_model import Wikipedia2VecModel
 
 PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
@@ -45,8 +45,10 @@ class TrainWikipedia2Vec:
 
         self.models = {"wikipedia2vec": self.wikipedia2vec}
 
-        self.num_epochs = 20
-        self.patience = 5
+        options = self.get_args()
+
+        self.num_epochs = options.num_epochs
+        self.patience = options.patience
 
         self.criterion = nn.SmoothL1Loss()
 
@@ -64,7 +66,7 @@ class TrainWikipedia2Vec:
         return torch.optim.Adam(regression_model.parameters(), lr=learning_rate)
 
     def get_regression_model(self, hidden_size):
-        input_dim = hidden_size * 3  # 3 = number of concatenations
+        input_dim = hidden_size * 4  # 3 = number of concatenations
         # Not mentioned in the paper.
         mlp_dim = int(input_dim / 2)
         output_dim = 1
@@ -163,8 +165,26 @@ class TrainWikipedia2Vec:
         return final_loss
 
     @staticmethod
-    def get_siamese_representation(source_document, target_document):
-        return torch.cat((source_document, target_document, torch.abs(source_document - target_document),), 1,)
+    def get_siamese_representation(source_article, target_article):
+        return torch.cat(
+            (
+                source_article,
+                target_article,
+                torch.abs(source_article - target_article),
+                source_article * target_article,
+            ),
+            1,
+        )
+
+    @staticmethod
+    def get_args():
+        parser = argparse.ArgumentParser(
+            """Implementation of doc2vec to predict the number of clicks for Wikipedia articles"""
+        )
+        parser.add_argument("--num_epochs", type=int, default=20)
+        parser.add_argument("--patience", type=int, default=5)
+
+        return parser.parse_args()
 
 
 if __name__ == "__main__":

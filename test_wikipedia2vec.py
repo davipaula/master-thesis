@@ -1,11 +1,16 @@
+import sys
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import logging
 
+import pandas as pd
 import torch
 from torch import nn
 
-import pandas as pd
-
-from modeling.doc2vec_model import Doc2VecModel
 from modeling.wikipedia2vec_model import Wikipedia2VecModel
 
 logger = logging.getLogger(__name__)
@@ -22,9 +27,7 @@ class TestWikipedia2Vec:
             torch.manual_seed(123)
 
         logger.info("Initializing parameters")
-        self.click_stream_validation = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_test.pth"
-        )
+        self.click_stream_validation = torch.load("./data/dataset/click_stream_test.pth")
 
         self.wikipedia2vec = Wikipedia2VecModel()
 
@@ -53,7 +56,6 @@ class TestWikipedia2Vec:
 
         logger.info(f"Model {model_name}. Starting evaluation")
 
-        i = 0
         for row in self.click_stream_validation:
             source_article_vector = model.get_entity_vector(row["source_article"])
             target_article_vector = model.get_entity_vector(row["target_article"])
@@ -84,17 +86,16 @@ class TestWikipedia2Vec:
         predictions_list.to_csv(f"./results/test/results_{model_name}_level_test.csv", index=False)
 
     @staticmethod
-    def get_siamese_representation(source_document, target_document):
-        return torch.cat((source_document, target_document, torch.abs(source_document - target_document),), 1,)
-
-    @staticmethod
-    def get_regression_model(hidden_size):
-        input_dim = hidden_size * 3  # 3 = number of concatenations
-        # Not mentioned in the paper.
-        mlp_dim = int(input_dim / 2)
-        output_dim = 1
-
-        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),)
+    def get_siamese_representation(source_article, target_article):
+        return torch.cat(
+            (
+                source_article,
+                target_article,
+                torch.abs(source_article - target_article),
+                source_article * target_article,
+            ),
+            1,
+        )
 
 
 if __name__ == "__main__":

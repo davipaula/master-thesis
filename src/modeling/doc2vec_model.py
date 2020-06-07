@@ -1,11 +1,10 @@
-# Import required libraries
 import itertools
 import logging
 import multiprocessing
 import os
 import torch
 from ast import literal_eval
-from data_structure.wiki_articles_dataset import WikiArticlesDataset
+from src.data_structure.wiki_articles_dataset import WikiArticlesDataset
 from gensim.models import Doc2Vec
 from gensim.models.doc2vec import TaggedDocument
 from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
@@ -25,9 +24,7 @@ FOLD_COLUMN = "fold"
 
 class Doc2VecModel:
     def __init__(
-        self,
-        dbow_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/trained_models/doc2vec_dbow_model",
-        dm_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/trained_models/doc2vec_dm_model",
+        self, dbow_path="./trained_models/doc2vec_dbow_model", dm_path="./trained_models/doc2vec_dm_model",
     ):
 
         self.__articles = WikiArticlesDataset().get_articles(level="word")

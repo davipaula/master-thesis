@@ -5,12 +5,12 @@
 import sys
 import os
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
 import logging
 import pandas as pd
-from comet_ml import Experiment
 import torch
 from torch import nn
 from tqdm import tqdm
@@ -46,6 +46,12 @@ if torch.cuda.is_available():
 else:
     WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
 
+MODEL_FOLDER = "./trained_models/"
+FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+WORD2VEC_PATH = "./data/glove.6B.50d.txt"
+TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
+RESULTS_PATH = "./results/"
+
 
 def test(opt):
     if torch.cuda.is_available():
@@ -57,14 +63,11 @@ def test(opt):
 
     logger.info("Initializing parameters")
 
-    test_generator = torch.load(opt.test_dataset_path)
-
-    if torch.cuda.is_available():
-        experiment = Experiment(api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ", project_name="thesis-davi", workspace="davipaula")
+    test_generator = torch.load(TEST_DATASET_PATH)
 
     criterion = nn.MSELoss().to(device)
 
-    model = load_model(opt.model_folder, opt.level, opt.word2vec_path)
+    model = load_model(MODEL_FOLDER, opt.level, WORD2VEC_PATH)
     model.to(device)
 
     articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
@@ -134,9 +137,6 @@ def test(opt):
 
     predictions_list.to_csv(f"./results/test/results_{opt.level}_level.csv", index=False)
 
-    if torch.cuda.is_available():
-        experiment.log_metric("test_{}_level_loss".format(opt.level), final_loss.item())
-
     logger.info(f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}")
 
 
@@ -173,10 +173,7 @@ def get_args():
     parser = argparse.ArgumentParser(
         """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
     )
-    parser.add_argument("--model_folder", type=str, default="./trained_models/")
     parser.add_argument("--level", type=str, default="paragraph")
-    parser.add_argument("--test_dataset_path", type=str, default="./data/dataset/click_stream_test.pth")
-    parser.add_argument("--word2vec_path", type=str, default="./data/glove.6B.50d.txt")
 
     return parser.parse_args()
 

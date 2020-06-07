@@ -22,8 +22,6 @@ JSON-line file (one valid JSON per line)
 import sys
 import os
 
-from tqdm import tqdm
-
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
@@ -32,16 +30,13 @@ import re
 import json
 import torch
 import logging
-import gensim
-import spacy
-import pandas as pd
-from itertools import compress
 from gensim.corpora.wikicorpus import get_namespace
 from gensim.scripts.segment_wiki import extract_page_xmls
 from utils.extractor_utils import dropNested, replaceInternalLinks, replaceExternalLinks
 from xml.etree import cElementTree
 from gensim.scripts.segment_wiki import segment
 from typing import List
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -68,62 +63,8 @@ def convert_to_plain_text(text):
     return text.strip()
 
 
-def remove_special_characters(text):
-    text = re.sub(r"[^A-Za-z0-9(),!.?\'`]", " ", text)
-    text = re.sub(r"\'s", " 's ", text)
-    text = re.sub(r"\'ve", " 've ", text)
-    text = re.sub(r"n\'t", " 't ", text)
-    text = re.sub(r"\'re", " 're ", text)
-    text = re.sub(r"\'d", " 'd ", text)
-    text = re.sub(r"\'ll", " 'll ", text)
-    text = re.sub(r",", " ", text)
-    text = re.sub(r"\.", " ", text)
-    text = re.sub(r"!", " ", text)
-    text = re.sub(r"\(", " ( ", text)
-    text = re.sub(r"\)", " ) ", text)
-    text = re.sub(r"\?", " ", text)
-    text = re.sub(r"\s{2,}", " ", text)
-
-    return text
-
-
-def process_paragraph(text, w2v_model):
+def process_text(text):
     """
-    Split plain paragraph text into sentences and tokens, and find their word vectors (with Gensim)
-    :param nlp:
-    :param w2v_model:
-    :param text:
-    :return: sentences -> word indexes
-    """
-
-    tokenized_sentences = []
-    normalized_sentences = []
-
-    for sentence in text.sents:
-        valid_tokens = [is_valid_token(token, w2v_model) for token in sentence]
-
-        valid_words = list(compress(sentence, valid_tokens))
-        if valid_words:
-            sentence_embedding_ids = [w2v_model.vocab[word.lemma_.lower()].index for word in valid_words]
-            valid_words = [word.lemma_.lower() for word in valid_words]
-
-            tokenized_sentences.append(sentence_embedding_ids)
-            normalized_sentences.append(valid_words)
-
-    return tokenized_sentences, normalized_sentences
-
-
-def is_valid_token(token, w2v_model):
-    normalized_word = token.lemma_.lower()
-
-    return token.is_alpha and not token.is_stop and normalized_word in w2v_model.vocab
-
-
-def process_text(nlp, w2v_model, text):
-    """
-
-    :param nlp: Spacy model
-    :param w2v_model: Gensim word2vec
     :param text: Wikitext
     :return: Sections dict(title, text, paragraphs[])
     """
@@ -183,55 +124,21 @@ def process_text(nlp, w2v_model, text):
         return
 
     if len(sects) == 0:
-        sects.append(
-            {"title": "Introduction", "text": plain_text,}
-        )
-
-    # Tokenize + find word indexes for tokens
-    for i, sect in enumerate(sects):
-        sects[i]["paragraphs"] = []
-        sects[i]["normalized_paragraphs"] = []
-
-        tokenized_paragraphs = list(nlp.pipe(sect["text"].split("\n\n")))
-
-        for paragraph in tokenized_paragraphs:
-            paragraph_tokens, normalized_paragraph = process_paragraph(paragraph, w2v_model)
-
-            if paragraph_tokens:
-                sects[i]["paragraphs"].append(paragraph_tokens)
-                sects[i]["normalized_paragraphs"].append(normalized_paragraph)
-
-        # break  # returns only the introduction (the first section)
+        sects.append({"title": "Introduction", "text": plain_text})
 
     return sects
 
 
-def process_dump(
-    wiki_dump_path: str,
-    nlp,
-    w2v_model,
-    existing_articles: List[str],
-    max_doc_count=0,
-    filter_selected_articles=True,
-    log_every=100,
-):
+def process_dump(wiki_dump_path: str, max_doc_count=0, log_every=100):
     """
-
-    :param existing_articles: List with already existing articles
-    :param filter_selected_articles: Flag to filter only selected articles. If false all articles in dump file will be processed (not recommended)
     :param log_every: Print process every X docs
     :param wiki_dump_path: Path to Wikipedia XML dump
-    :param nlp: Spacy NLP model
-    :param w2v_model: Gensim Word2Vec model
     :param max_doc_count: limit the number of articles to be returned (0 = no limit)
     :return: Generator for processed docs (Wikipedia articles)
     """
     doc_counter = 0
 
     logger.info(f"Processing dump from: {wiki_dump_path}")
-
-    if filter_selected_articles:
-        selected_articles = pd.read_csv(SELECTED_ARTICLES_PATH)
 
     with bz2.open(wiki_dump_path, "rb") as xml_fileobj:
         page_xmls = extract_page_xmls(xml_fileobj)
@@ -247,13 +154,6 @@ def process_dump(
             ns_path = "./{%(ns)s}ns" % ns_mapping
 
             title = elem.find(title_path).text
-
-            if filter_selected_articles:
-                if title not in selected_articles["article"].to_list():
-                    continue
-
-            if title in existing_articles:
-                continue
 
             text = elem.find(text_path).text
             ns = elem.find(ns_path).text
@@ -271,7 +171,7 @@ def process_dump(
 
             yield {
                 "title": title,
-                "sections": process_text(nlp, w2v_model, text),
+                "sections": process_text(text),
                 "links": links_in_document,
             }
 
@@ -283,21 +183,7 @@ def process_dump(
     logger.info(f"Finished processing dump from: {wiki_dump_path}")
 
 
-def load_existing_articles(output_path: str):
-    with open(output_path, "r") as f:
-        json_list = list(f)
-
-    article_titles = []
-
-    for json_str in tqdm(json_list):
-        result = json.loads(json_str)
-        article_titles.append(result["title"])
-
-    return article_titles
-
-
-def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, limit=0, append=True):
-
+def extract_wiki_articles(wiki_dump_path: str, output_path: str, limit=0, append=True):
     if append:
         logger.info(f"Appending to output: {output_path}")
         open_mode = "a"
@@ -309,19 +195,8 @@ def extract_wiki_articles(wiki_dump_path: str, w2v_path: str, output_path: str, 
         logger.error(f"Wiki dump does not exist at: {wiki_dump_path}")
         exit(1)
 
-    spacy_model = "en_core_web_sm"
-
-    nlp = spacy.load(spacy_model, disable=["tagger", "ner", "textcat", "parser"])  # disable the fancy and slow stuff
-    nlp.add_pipe(nlp.create_pipe("sentencizer"))
-
-    logger.info(f"Spacy model loaded: {spacy_model}")
-
-    w2v_model = gensim.models.KeyedVectors.load_word2vec_format(w2v_path)
-
-    existing_articles = load_existing_articles(output_path)
-
     with open(output_path, open_mode) as f:
-        for doc in process_dump(wiki_dump_path, nlp, w2v_model, existing_articles, limit):
+        for doc in process_dump(wiki_dump_path, limit):
             f.write(json.dumps(doc) + "\n")
 
 
@@ -329,21 +204,17 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         _w2v_path = "/home/dnascimento/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
         _wiki_dump_path = "/home/dnascimento/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
-        _wiki_pre_processed_path = "/home/dnascimento/thesis-davi/data/processed/enwiki_entire_article.jsonl"
+        _wiki_pre_processed_path = "/home/dnascimento/thesis-davi/data/processed/enwiki_raw_text.jsonl"
         SELECTED_ARTICLES_PATH = "/home/dnascimento/thesis-davi/data/processed/selected_articles.csv"
 
     else:
         _w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
         _wiki_dump_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
         _wiki_pre_processed_path = (
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article_2.jsonl"
+            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_raw_text.jsonl"
         )
         SELECTED_ARTICLES_PATH = (
             "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv"
         )
 
-    limit = 30
-
-    extract_wiki_articles(
-        wiki_dump_path=_wiki_dump_path, w2v_path=_w2v_path, output_path=_wiki_pre_processed_path, limit=limit
-    )
+    extract_wiki_articles(wiki_dump_path=_wiki_dump_path, output_path=_wiki_pre_processed_path)

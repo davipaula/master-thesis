@@ -62,7 +62,7 @@ class SmashRNNModel(nn.Module):
         self.paragraph_attention = nn.Linear(self.paragraph_gru_out_size, HIDDEN_LAYER_SIZE).to(self.device)
         self.paragraph_context_vector = nn.Linear(HIDDEN_LAYER_SIZE, 1, bias=False).to(self.device)
 
-        self.input_dim = 2 * paragraph_gru_hidden_size * 3  # 3 = number of concatenations
+        self.input_dim = 2 * paragraph_gru_hidden_size * 4  # 4 = number of concatenations
 
         # Not mentioned in the paper.
         self.mlp_dim = int(self.input_dim / 2)
@@ -101,9 +101,10 @@ class SmashRNNModel(nn.Module):
         # Concatenates document representations. This is the siamese part of the model
         concatenated_articles_representation = torch.cat(
             (
-                target_article_representation,
                 source_article_representation,
-                torch.abs(target_article_representation - source_article_representation),
+                target_article_representation,
+                torch.abs(source_article_representation - target_article_representation),
+                source_article_representation * target_article_representation,
             ),
             1,
         )

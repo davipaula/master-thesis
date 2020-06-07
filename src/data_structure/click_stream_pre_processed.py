@@ -6,7 +6,7 @@ class ClickStreamPreProcessed(Dataset):
     def __init__(self):
         super(ClickStreamPreProcessed, self).__init__()
 
-        dataset_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/click_stream.csv"
+        dataset_path = "./data/processed/click_stream.csv"
         self.dataset = pd.read_csv(dataset_path)
 
     def __len__(self):

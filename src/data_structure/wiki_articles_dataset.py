@@ -2,7 +2,6 @@ import itertools
 from ast import literal_eval
 
 import pandas as pd
-from torch.utils.data.dataset import Dataset
 
 FOLD_COLUMN = "fold"
 ARTICLE_COLUMN = "article"

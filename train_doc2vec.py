@@ -1,3 +1,11 @@
+import argparse
+import sys
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import logging
 from datetime import datetime
 
@@ -6,8 +14,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 
-from modeling.doc2vec_model import Doc2VecModel
-from modeling.wikipedia2vec_model import Wikipedia2VecModel
+from src.modeling.doc2vec_model import Doc2VecModel
 
 PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
 ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
@@ -29,22 +36,18 @@ class TrainDoc2Vec:
         else:
             torch.manual_seed(123)
 
-        self.click_stream_train = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_train.pth"
-        )
-        self.click_stream_validation = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_validation.pth"
-        )
+        self.click_stream_train = torch.load("./data/dataset/click_stream_train.pth")
+        self.click_stream_validation = torch.load("./data/dataset/click_stream_validation.pth")
 
         self.doc2vec = Doc2VecModel()
-        self.wikipedia2vec = Wikipedia2VecModel()
         logger.info("Loaded models")
 
         self.models = {"doc2vec": self.doc2vec}
-        # self.models = {"doc2vec": self.doc2vec, "wikipedia2vec": self.wikipedia2vec}
 
-        self.num_epochs = 30
-        self.patience = 10
+        options = self.get_args()
+
+        self.num_epochs = options.num_epochs
+        self.patience = options.patience
 
         self.criterion = nn.SmoothL1Loss()
 
@@ -62,7 +65,7 @@ class TrainDoc2Vec:
         return torch.optim.Adam(regression_model.parameters(), lr=learning_rate)
 
     def get_regression_model(self, hidden_size):
-        input_dim = hidden_size * 3  # 3 = number of concatenations
+        input_dim = hidden_size * 4  # 3 = number of concatenations
         # Not mentioned in the paper.
         mlp_dim = int(input_dim / 2)
         output_dim = 1
@@ -161,8 +164,26 @@ class TrainDoc2Vec:
         return final_loss
 
     @staticmethod
-    def get_siamese_representation(source_document, target_document):
-        return torch.cat((source_document, target_document, torch.abs(source_document - target_document),), 1,)
+    def get_siamese_representation(source_article, target_article):
+        return torch.cat(
+            (
+                source_article,
+                target_article,
+                torch.abs(source_article - target_article),
+                source_article * target_article,
+            ),
+            1,
+        )
+
+    @staticmethod
+    def get_args():
+        parser = argparse.ArgumentParser(
+            """Implementation of doc2vec to predict the number of clicks for Wikipedia articles"""
+        )
+        parser.add_argument("--num_epochs", type=int, default=30)
+        parser.add_argument("--patience", type=int, default=10)
+
+        return parser.parse_args()
 
 
 if __name__ == "__main__":

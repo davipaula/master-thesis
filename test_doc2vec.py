@@ -1,3 +1,10 @@
+import sys
+import os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import logging
 
 import torch
@@ -6,7 +13,7 @@ from tqdm import tqdm
 
 import pandas as pd
 
-from modeling.doc2vec_model import Doc2VecModel
+from src.modeling.doc2vec_model import Doc2VecModel
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +29,8 @@ class TestDoc2Vec:
             torch.manual_seed(123)
 
         logger.info("Initializing parameters")
-        self.click_stream_validation = torch.load(
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/click_stream_test.pth"
-        )
+        click_stream_path = "./data/dataset/click_stream_test.pth"
+        self.click_stream_validation = torch.load(click_stream_path)
         self.doc2vec = Doc2VecModel()
 
         self.models = {"doc2vec": self.doc2vec}
@@ -81,8 +87,16 @@ class TestDoc2Vec:
         logger.info(f"Model {model_name}. Evaluation finished. Final loss: {final_loss}")
 
     @staticmethod
-    def get_siamese_representation(source_document, target_document):
-        return torch.cat((source_document, target_document, torch.abs(source_document - target_document),), 1,)
+    def get_siamese_representation(source_article, target_article):
+        return torch.cat(
+            (
+                source_article,
+                target_article,
+                torch.abs(source_article - target_article),
+                source_article * target_article,
+            ),
+            1,
+        )
 
     @staticmethod
     def get_regression_model(hidden_size):

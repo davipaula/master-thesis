@@ -5,6 +5,7 @@
 import sys
 import os
 
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
@@ -14,7 +15,6 @@ import csv
 import logging
 import numpy as np
 import pandas as pd
-from comet_ml import Experiment
 import torch
 import torch.nn as nn
 from utils.utils import (
@@ -41,6 +41,13 @@ CLICK_RATE_COLUMN = "click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 
+VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+MODEL_FOLDER = "./trained_models/"
+FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+WORD2VEC_PATH = "./data/glove.6B.50d.txt"
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+RESULTS_PATH = "./results/"
+
 if torch.cuda.is_available():
     WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
 else:
@@ -61,16 +68,16 @@ class SmashRNN:
         self.patience = 3
 
         self.opt = self.get_args()
-        self.batch_size = self.opt.batch_size
-        self.num_validations = int(self.opt.num_epoches / self.opt.validation_interval)
+        self.batch_size = 32
+        self.num_validations = int(self.opt.num_epochs / self.opt.validation_interval)
         # End of configs
 
         self.articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
 
         # Load from txt file (in word2vec format)
-        dict = pd.read_csv(
-            filepath_or_buffer=self.opt.word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE,
-        ).values[:, 1:]
+        dict = pd.read_csv(filepath_or_buffer=WORD2VEC_PATH, header=None, sep=" ", quoting=csv.QUOTE_NONE,).values[
+            :, 1:
+        ]
         dict_len, embed_dim = dict.shape
         dict_len += 1
         unknown_word = np.zeros((1, embed_dim))
@@ -86,13 +93,8 @@ class SmashRNN:
 
         self.model.train()
 
-        if torch.cuda.is_available():
-            self.experiment = Experiment(
-                api_key="NPD7aHoJxhZgG0MNWBkFb3hzZ", project_name="thesis-davi", workspace="davipaula",
-            )
-
     def train(self, level="paragraph"):
-        training_generator = torch.load(self.opt.train_dataset_path)
+        training_generator = torch.load(TRAIN_DATASET_PATH)
         print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
@@ -100,7 +102,7 @@ class SmashRNN:
         best_weights = None
         best_epoch = 0
 
-        for epoch in range(self.opt.num_epoches):
+        for epoch in range(self.opt.num_epochs):
             self.model.train()
 
             loss_list = []
@@ -149,7 +151,7 @@ class SmashRNN:
                     source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
                 )
 
-                loss = self.criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
+                loss = self.criterion(predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float())
                 loss.backward()
                 self.optimizer.step()
 
@@ -157,12 +159,9 @@ class SmashRNN:
 
             loss = self.calculate_loss(loss_list)
 
-            if torch.cuda.is_available():
-                self.experiment.log_metric("train_loss", loss.item(), epoch=epoch + 1)
-
             print(
                 "Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}".format(
-                    epoch + 1, self.opt.num_epoches, self.optimizer.param_groups[0]["lr"], loss, datetime.now(),
+                    epoch + 1, self.opt.num_epochs, self.optimizer.param_groups[0]["lr"], loss, datetime.now(),
                 )
             )
 
@@ -212,7 +211,7 @@ class SmashRNN:
         return document
 
     def validate(self, validation_step, level):
-        validation_generator = torch.load(self.opt.validation_dataset_path)
+        validation_generator = torch.load(VALIDATION_DATASET_PATH)
         validation_step = int(validation_step) + 1
 
         loss_list = []
@@ -277,11 +276,8 @@ class SmashRNN:
 
         final_loss = self.calculate_loss(loss_list)
 
-        if torch.cuda.is_available():
-            self.experiment.log_metric("validation_loss", final_loss.item(), epoch=validation_step)
-
         predictions_list.to_csv(
-            "{}results_{}_level_validation_{}.csv".format(self.opt.results_path, level, datetime.now()), index=False,
+            "{}results_{}_level_validation_{}.csv".format(RESULTS_PATH, level, datetime.now()), index=False,
         )
 
         print(
@@ -297,7 +293,7 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = self.opt.model_folder + self.opt.level + "_level_model.pt"
+        model_path = MODEL_FOLDER + self.opt.level + "_level_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     def should_stop(self, epoch):
@@ -315,23 +311,10 @@ class SmashRNN:
         parser = argparse.ArgumentParser(
             """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
         )
-        parser.add_argument("--model_folder", type=str, default="./trained_models/")
-        parser.add_argument("--full_dataset_path", type=str, default="./data/dataset/click_stream_train.pth")
-        parser.add_argument("--word2vec_path", type=str, default="./data/glove.6B.50d.txt")
-        parser.add_argument("--train_dataset_path", type=str, default="./data/dataset/click_stream_train.pth")
-        parser.add_argument("--validation_dataset_path", type=str, default="./data/dataset/click_stream_validation.pth")
-        parser.add_argument("--test_dataset_path", type=str, default="./data/dataset/click_stream_test.pth")
-        parser.add_argument("--num_epoches", type=int, default=1)
+
+        parser.add_argument("--num_epochs", type=int, default=1)
         parser.add_argument("--validation_interval", type=int, default=1)
-        parser.add_argument(
-            "--limit_rows_dataset",
-            type=int,
-            default=9999999,
-            help="For development purposes. This limits the number of rows read from the dataset.",
-        )
         parser.add_argument("--level", type=str, default="paragraph")
-        parser.add_argument("--batch_size", type=int, default=32)
-        parser.add_argument("--results_path", type=str, default="./")
 
         return parser.parse_args()
 
