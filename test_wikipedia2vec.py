@@ -1,6 +1,8 @@
 import sys
 import os
 
+from tqdm import tqdm
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -56,7 +58,7 @@ class TestWikipedia2Vec:
 
         logger.info(f"Model {model_name}. Starting evaluation")
 
-        for row in self.click_stream_validation:
+        for row in tqdm(self.click_stream_validation):
             source_article_vector = model.get_entity_vector(row["source_article"])
             target_article_vector = model.get_entity_vector(row["target_article"])
 

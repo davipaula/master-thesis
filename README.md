@@ -6,7 +6,7 @@ A PyTorch implementation of the paper [Semantic Text Match for Long-Form Docuemn
 
 ```
 # Setup virtual Python 3.6 environment (with conda)
-conda create -n smash-rnn python=3.6
+conda create -n smash-rnn python=3.7
 conda activate smash-rnn
 
 # Dependencies
@@ -18,27 +18,41 @@ pip install -r requirements.txt
 ![Model architecure)](smash-rnn_architecture.png)
 
 ### Datasets
-This project uses a combination of Simple English Wikipedia articles - to get the documents content - and Wikipedia English clickstream data. You can find a reduced version of this dataset [here](https://drive.google.com/open?id=1Ie_oa6FVW9o2hXjTmsm-x-I2DjHgtHwx).
+This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip them in the project root folder.
 
 ### Training
+The model supports three levels:
+- word
+- sentence
+- paragraph (default level)
+
 If you want to train a model with default parameters, you could run:
 
-- **python train.py**
+- **python train_smash_rnn.py --level=word**
 
 If you want to train a model with your preference parameters, like optimizer and learning rate, you could run:
 
-- **python train.py --num_epoches num_epoches --validation_interval validation_interval**: For example, python train.py --num_epoches 6 --validation_interval 2
-
-If you want to train a model with your preference word2vec model, you could run:
-
-- **python train.py --word2vec_path path/to/your/word2vec**
+- **python train_smash_rnn.py --num_epoches num_epoches --validation_interval validation_interval**: For example, python train_smash_rnn.py --num_epoches 6 --validation_interval 2
 
 ### Test
-For testing a trained model with your test file, please run the following command:
+To test a trained model with your test file, please run the following command:
 
-- **python test.py --word2vec_path path/to/your/word2vec**, with the word2vec file is the same as the one you use in training phase.
+- **python test_smash_rnn.py --level=word**.
 
-You can find a trained model in this [link](https://drive.google.com/open?id=1W62KwmYUSUbRTfeyym6M22IonKRB-i27)
+You can find trained models in this [link](https://drive.google.com/open?id=1W62KwmYUSUbRTfeyym6M22IonKRB-i27)
+
+#### Additional models
+Additional models were developed to compare the results with Smash-RNN:
+- Wikipedia2Vec:
+    - Train: **python train_wikipedia2vec.py**
+    - Test: **python test_wikipedia2vec.py**
+    
+- Doc2Vec:
+    - Train: **python train_doc2vec.py**
+    - Test: **python test_doc2vec.py**
+    
+#### Results comparison
+To compare the results of the models in the evaluation step, please take a look see the Jupyter Notebook **Results analyzer.ipynb** 
 
 ### Concepts
 

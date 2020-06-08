@@ -59,15 +59,15 @@ class DatasetCreator:
         pass
 
     def run(self):
-        logger.info(f"Process started:")
-        logger.info(f"Converting Glove file to Word2Vec format")
-        convert_to_word2vec.convert()
-
-        logger.info(f"Extracting Click Stream data")
-        ClickStreamExtractor(click_stream_dump_path).run()
-
-        logger.info(f"Generating Available Titles")
-        AvailableTitlesExtractor(wiki_titles_path).run(available_titles_save_path)
+        # logger.info(f"Process started:")
+        # logger.info(f"Converting Glove file to Word2Vec format")
+        # convert_to_word2vec.convert()
+        #
+        # logger.info(f"Extracting Click Stream data")
+        # ClickStreamExtractor(click_stream_dump_path).run()
+        #
+        # logger.info(f"Generating Available Titles")
+        # AvailableTitlesExtractor(wiki_titles_path).run(available_titles_save_path)
 
         # TODO: fix circular dependency between click stream processor and wiki articles
         # TODO: the negative sampling method requires wiki articles data. move this step to the end
@@ -75,11 +75,11 @@ class DatasetCreator:
         logger.info(f"Generating Click Stream Dataset")
         ClickStreamProcessor().run()
 
-        logger.info(f"Tokenizing Wiki Articles")
-        extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
-
-        logger.info(f"Creating dataset with Wiki Articles")
-        WikiArticlesProcessor(wiki_pre_processed_path).run()
+        # logger.info(f"Tokenizing Wiki Articles")
+        # extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
+        #
+        # logger.info(f"Creating dataset with Wiki Articles")
+        # WikiArticlesProcessor(wiki_pre_processed_path).run()
 
 
 if __name__ == "__main__":
