@@ -35,7 +35,7 @@ If you want to train a model with default parameters, you could run:
 
 If you want to train a model with your preference parameters, like optimizer and learning rate, you could run:
 
-- **python train_smash_rnn.py --num_epoches num_epoches --validation_interval validation_interval**: For example, python train_smash_rnn.py --num_epoches 6 --validation_interval 2
+- **python train_smash_rnn.py --num_epochs=num_epochs --level=level**: For example, python train_smash_rnn.py --num_epochs=6
 
 ### Test
 To test a trained model with your test file, please run the following command:
