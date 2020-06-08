@@ -18,7 +18,10 @@ pip install -r requirements.txt
 ![Model architecure)](smash-rnn_architecture.png)
 
 ### Datasets
-This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip them in the project root folder.
+This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip this file in the project root folder.
+To download using wget, you can run:
+
+    wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj" -O data.zip && rm -rf /tmp/cookies.txt
 
 ### Training
 The model supports three levels:
@@ -39,7 +42,9 @@ To test a trained model with your test file, please run the following command:
 
 - **python test_smash_rnn.py --level=word**.
 
-You can find trained models in this [link](https://drive.google.com/open?id=1W62KwmYUSUbRTfeyym6M22IonKRB-i27)
+You can find trained models in this [link](https://drive.google.com/file/d/1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex/view?usp=sharing). You need to unzip this file in the project root folder.
+
+    wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex" -O trained_models.zip && rm -rf /tmp/cookies.txt
 
 #### Additional models
 Additional models were developed to compare the results with Smash-RNN:
