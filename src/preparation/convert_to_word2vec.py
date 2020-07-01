@@ -1,10 +1,12 @@
 from gensim.test.utils import datapath, get_tmpfile
 from gensim.scripts.glove2word2vec import glove2word2vec
 
+import os
+
 
 def convert(
-    glove_file_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.txt",
-    output_file_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt",
+    glove_file_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.200d.txt",
+    output_file_path="/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.200d.w2vformat.txt",
 ):
     _glove_file = datapath(glove_file_path)
     _output_file = get_tmpfile(output_file_path)

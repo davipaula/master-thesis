@@ -23,8 +23,8 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
 class WikiArticlesTokenizer:
-    def __init__(self, wiki_dump_path: str, output_path: str, w2v_path: str):
-        self.__wiki_dump_path = wiki_dump_path
+    def __init__(self, wiki_pre_processed_path: str, output_path: str, w2v_path: str):
+        self.__wiki_pre_processed = wiki_pre_processed_path
         self.__output_path = output_path
 
         __spacy_model = "en_core_web_sm"
@@ -37,12 +37,11 @@ class WikiArticlesTokenizer:
 
         self.__w2v_model = gensim.models.KeyedVectors.load_word2vec_format(w2v_path)
 
-        # self.__existing_articles = self.load_existing_articles(self.__output_path)
-
         self.docs = {}
 
-    def tokenize(self, title, article_text):
+    def tokenize(self, title, article):
         # Tokenize + find word indexes for tokens
+        article_text = article["text"]
         tokenized_article = {"paragraphs": [], "normalized_paragraphs": []}
 
         for section in article_text:
@@ -61,7 +60,11 @@ class WikiArticlesTokenizer:
             tokenized_article["paragraphs"].append(tokenized_paragraphs)
             tokenized_article["normalized_paragraphs"].append(normalized_paragraphs)
 
-        return {"title": title, "sections": tokenized_article}
+        return {
+            "title": title,
+            "sections": tokenized_article,
+            "links": article["links"],
+        }
 
     def process_paragraph(self, text):
         """
@@ -123,92 +126,58 @@ class WikiArticlesTokenizer:
             logger.info(f"Creating new output file: {self.__output_path}")
             open_mode = "w"
 
-        if not os.path.exists(self.__wiki_dump_path):
-            logger.error(f"Wiki dump does not exist at: {self.__wiki_dump_path}")
+        if not os.path.exists(self.__wiki_pre_processed):
+            logger.error(f"Wiki dump does not exist at: {self.__wiki_pre_processed}")
             exit(1)
 
-        """
-            - Load all documents
-                - Ok
-            - Load only text. Generate: - ok
-                {
-                "title": abc,
-                "text": [[[Sentence 1 2 3], [Sentence 1, 2, 3]]]
-                }
-            - Tokenize
-        """
-
-        n = 0
-        with open(self.__wiki_dump_path, "r") as wiki_dump:
+        logger.info("Loading articles")
+        with open(self.__wiki_pre_processed, "r") as wiki_dump:
             for line in tqdm(wiki_dump):
                 article = json.loads(line)
 
                 article_text = []
+
+                if not article["sections"]:
+                    continue
+
                 for section in article["sections"]:
                     article_text.append(section["text"].split("\n\n"))
 
-                self.docs[article["title"]] = article_text
-
-                n += 1
-
-                if n == 5000:
-                    break
+                self.docs[article["title"]] = {"text": article_text, "links": article["links"]}
 
         logger.info("Articles loaded. Starting tokenization")
 
         start = datetime.now()
 
-        # for title, article in self.docs.items():
-        #     self.tokenize(title, article)
+        workers = max(1, multiprocessing.cpu_count() - 1)
 
-        processes = []
-        for title, article in self.docs.items():
-            p = multiprocessing.Process(target=self.tokenize, args=(title, article))
-            processes.append(p)
-            p.start()
+        pool = multiprocessing.Pool(workers)
 
-        for process in processes:
-            process.join()
+        pool_out = pool.map(self.tokenize_pool, self.docs.items())
 
-        # workers = max(1, multiprocessing.cpu_count() - 1)
-        #
-        # pool = multiprocessing.Pool(workers)
-        #
-        # pool_out = pool.map(self.tokenize_pool, self.docs.items())
-        #
-        # # stop threads when done
-        # pool.close()
-        # pool.join()
+        pool.close()
+        pool.join()
 
         time_elapsed = datetime.now() - start
         print(f"Finished. Time elapsed {time_elapsed}")
 
-        # with open(self.__output_path, open_mode) as f:
-        #     for doc in process_dump(wiki_dump_path, nlp, w2v_model, existing_articles, limit):
-        #         f.write(json.dumps(doc) + "\n")
+        with open(self.__output_path, "w+") as f:
+            for doc in pool_out:
+                f.write(json.dumps(doc) + "\n")
+
+        logger.info("Tokens saved")
 
     def tokenize_pool(self, args):
         return self.tokenize(*args)
 
 
 if __name__ == "__main__":
-    if torch.cuda.is_available():
-        _w2v_path = "/home/dnascimento/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
-        _wiki_dump_path = "/home/dnascimento/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
-        _wiki_pre_processed_path = "/home/dnascimento/thesis-davi/data/processed/enwiki_raw_text.jsonl"
-        SELECTED_ARTICLES_PATH = "/home/dnascimento/thesis-davi/data/processed/selected_articles.csv"
+    # os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
 
-    else:
-        _w2v_path = (
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.200d.w2vformat.1k.txt"
-        )
-        _wiki_dump_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
-        _wiki_pre_processed_path = (
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_raw_text.jsonl"
-        )
-        SELECTED_ARTICLES_PATH = (
-            "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/selected_articles.csv"
-        )
+    _w2v_path = "./data/source/glove.6B.200d.w2vformat.txt"
+    _wiki_dump_path = "./data/source/enwiki-20200401-pages-articles.xml.bz2"
+    _wiki_pre_processed_path = "./data/processed/enwiki_raw_text.jsonl"
+    SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.csv"
 
     tokenizer = WikiArticlesTokenizer(_wiki_pre_processed_path, _wiki_pre_processed_path, _w2v_path)
     tokenizer.process()

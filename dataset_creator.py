@@ -1,9 +1,16 @@
+import sys
+import os
+
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import logging
 
 from preparation import convert_to_word2vec
 from preparation.click_stream_extractor import ClickStreamExtractor
 from preparation.available_titles_extractor import AvailableTitlesExtractor
 from preparation.wiki_articles_extractor import extract_wiki_articles
+from preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
 from processing.click_stream_processor import ClickStreamProcessor
 from processing.wiki_articles_processor import WikiArticlesProcessor
 
@@ -14,13 +21,17 @@ wiki_titles_path = (
     "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-all-titles-in-ns0.gz"
 )
 wiki_dump_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml"
+    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
 )
 available_titles_save_path = (
     "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/available_titles.txt"
 )
 
-wiki_pre_processed_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki.jsonl"
+wiki_pre_processed_path = (
+    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_articles.jsonl"
+)
+
+wiki_articles_tokenized_path = "./data/processed/enwiki_tokens.jsonl"
 
 # Problem. This doesn't exist before running convert_to_word2vec
 w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
@@ -59,28 +70,30 @@ class DatasetCreator:
         pass
 
     def run(self):
-        # logger.info(f"Process started:")
-        # logger.info(f"Converting Glove file to Word2Vec format")
-        # convert_to_word2vec.convert()
+        logger.info(f"Process started:")
+        logger.info(f"Converting Glove file to Word2Vec format")
+        convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
         #
         # logger.info(f"Extracting Click Stream data")
         # ClickStreamExtractor(click_stream_dump_path).run()
         #
         # logger.info(f"Generating Available Titles")
         # AvailableTitlesExtractor(wiki_titles_path).run(available_titles_save_path)
-
-        # TODO: fix circular dependency between click stream processor and wiki articles
-        # TODO: the negative sampling method requires wiki articles data. move this step to the end
-        # TODO: there's no negative sampling. I'm filtering out pairs with less than 200 clicks
-        logger.info(f"Generating Click Stream Dataset")
-        ClickStreamProcessor().run()
-
-        # logger.info(f"Tokenizing Wiki Articles")
-        # extract_wiki_articles(wiki_dump_path=wiki_dump_path, w2v_path=w2v_path, output_path=wiki_pre_processed_path)
         #
-        # logger.info(f"Creating dataset with Wiki Articles")
-        # WikiArticlesProcessor(wiki_pre_processed_path).run()
+        # logger.info("Extractiing Wiki articles")
+        # extract_wiki_articles(wiki_dump_path=wiki_dump_path, output_path=wiki_pre_processed_path, limit=100)
+
+        # logger.info(f"Generating Click Stream Dataset")
+        # ClickStreamProcessor().run()
+
+        # logger.info("Tokenizing articles")
+        # WikiArticlesTokenizer(wiki_pre_processed_path, wiki_articles_tokenized_path, w2v_path).process()
+        #
+        # logger.info("Creating dataset with Wiki Articles")
+        # WikiArticlesProcessor(wiki_articles_tokenized_path).run()
 
 
 if __name__ == "__main__":
+    os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
+
     DatasetCreator().run()

@@ -130,6 +130,11 @@ class SmashRNNModel(nn.Module):
         sentences = torch.zeros((non_empty_articles, max_sentences_per_paragraph, self.word_gru_out_size))
         paragraphs = torch.zeros((non_empty_articles, max_paragraphs_per_article, self.sentence_gru_out_size))
 
+        words_attention = torch.zeros(
+            (non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph, words_per_sentence.max())
+        )
+        sentences_attention = torch.zeros((non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph))
+
         if torch.cuda.is_available():
             sentences = sentences.cuda()
             paragraphs = paragraphs.cuda()
@@ -178,6 +183,7 @@ class SmashRNNModel(nn.Module):
                 word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
 
                 sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
+                words_attention[:, paragraph_idx, sentence_idx, : word_level_attention.shape[1]] = word_level_attention
 
             # pack padded sequence of sentences
             packed_sentences = pack_padded_sequence(
@@ -199,8 +205,9 @@ class SmashRNNModel(nn.Module):
             sentence_level_gru, _ = pad_packed_sequence(sentence_level_gru, batch_first=True)
 
             paragraphs[:, paragraph_idx] = self.get_representation(sentence_alphas, sentence_level_gru)
+            sentences_attention[:, paragraph_idx] = sentence_level_attention
 
-        # attention over paragraphs
+            # attention over paragraphs
         # paragraphs
         # pack padded sequence of sentences
         packed_paragraphs = pack_padded_sequence(
@@ -237,6 +244,35 @@ class SmashRNNModel(nn.Module):
         )  # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
         # Find document embeddings
         doc = (doc.float() * paragraph_alphas.unsqueeze(2)).sum(dim=1)  # (batch_size, self.paragraph_gru_out_size)
+
+        # Gets the paragraph with max attention per document in batch
+        maximum_paragraph_indices = [
+            (document == document.max()).nonzero().squeeze(1).item() for document in paragraph_att_out
+        ]
+
+        # Gets the sentence with max attention per sentence in the max paragraph in document in batch
+        maximum_sentence = []
+        for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
+            maximum_sentence.append(sentences_attention[document_index][document_max_paragraph])
+
+        maximum_sentence_indices = [
+            (document == document.max()).nonzero().squeeze(1).item() for document in maximum_sentence
+        ]
+
+        # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
+        # per document in batch
+        maximum_words_softmax = []
+        for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
+            document_max_paragraph = maximum_paragraph_indices[document_index]
+            maximum_words_softmax.append(
+                torch.nn.functional.softmax(
+                    words_attention[document_index, document_max_paragraph, document_max_sentence]
+                )
+            )
+        maximum_word_indices = [
+            (document == document.max()).nonzero().squeeze(1).item() for document in maximum_words_softmax
+        ]
+
         return doc
 
     def get_sentence_level_attention(self, sentence_level_gru):

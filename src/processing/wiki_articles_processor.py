@@ -30,11 +30,10 @@ class WikiArticlesProcessor:
         self.__wiki_articles_path = wiki_articles_path
 
         self.__save_path = SAVE_PATH
-        self.__articles = self.extract_wiki_articles()
+        self.__articles = self.load_wiki_articles()
 
     def run(self):
         self.__articles.to_csv(self.__save_path, index=False)
-        pass
 
     def get_wiki_articles_data(self):
         return self.__articles
@@ -49,7 +48,7 @@ class WikiArticlesProcessor:
 
         return " ".join(word_level)
 
-    def extract_wiki_articles(self):
+    def load_wiki_articles(self):
         text_ids = []
         text_string = []
         links = []
@@ -65,8 +64,8 @@ class WikiArticlesProcessor:
             if sections is None:
                 continue
 
-            article_text_ids = [section["paragraphs"] for section in sections if section["paragraphs"]]
-            article_raw_text = [section["normalized_paragraphs"] for section in sections if section["paragraphs"]]
+            article_text_ids = [section for section in sections["paragraphs"] if sections["paragraphs"]]
+            article_raw_text = [section for section in sections["normalized_paragraphs"] if sections["paragraphs"]]
 
             # This removes one dimension of the list, keeping the same shape of the paragraphs
             article_text_ids = list(itertools.chain.from_iterable(article_text_ids))
@@ -77,11 +76,9 @@ class WikiArticlesProcessor:
             articles.append(clean_title(result["title"]))
             links.append(result["links"])
 
-        wiki_documents_dataset = pd.DataFrame(
-            list(zip(articles, text_ids, text_string, links)), columns=["article", "text_ids", "raw_text", "links"]
+        return pd.DataFrame(
+            list(zip(articles, text_ids, text_string, links)), columns=["article", "text_ids", "raw_text", "links"],
         )
-
-        return wiki_documents_dataset
 
 
 if __name__ == "__main__":

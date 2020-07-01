@@ -41,11 +41,11 @@ CLICK_RATE_COLUMN = "click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 
-VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth 2"
 MODEL_FOLDER = "./trained_models/"
-FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth 2"
 WORD2VEC_PATH = "./data/glove.6B.50d.txt"
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth 2"
 RESULTS_PATH = "./results/"
 
 if torch.cuda.is_available():

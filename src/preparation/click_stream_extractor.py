@@ -15,7 +15,7 @@ class ClickStreamExtractor:
 
         # working_directory = os.getcwd()
         # save_path = os.path.join(working_directory, 'data', 'processed', 'click_stream.csv')
-        self.__save_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/click_stream.csv"
+        self.__save_path = "./data/processed/click_stream.csv"
 
     def run(self):
         click_stream = self.__extract_click_stream_data()
