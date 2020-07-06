@@ -143,7 +143,7 @@ class TrainDoc2Vec:
 
             batch_results = pd.DataFrame(
                 zip(
-                    [model_name] * 32,
+                    [model_name] * 16,
                     row[SOURCE_ARTICLE_COLUMN],
                     row[TARGET_ARTICLE_COLUMN],
                     row[CLICK_RATE_COLUMN].tolist(),

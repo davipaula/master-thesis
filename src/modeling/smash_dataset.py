@@ -9,6 +9,7 @@ from ast import literal_eval
 from torch.utils.data.dataset import Dataset
 from typing import List
 import logging
+import json
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
@@ -26,8 +27,10 @@ class SMASHDataset(Dataset):
     def __init__(self, dataset_path: str):
         super(SMASHDataset, self).__init__()
 
-        dataset = pd.read_csv(dataset_path)
-        self.text_embeddings = dataset["text_ids"]
+        dataset = pd.read_csv(
+            dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"}
+        )
+        self.text_embeddings = dataset["text_ids"].map(json.loads)
         self.articles = dataset["article"]
 
     def __len__(self):
@@ -35,9 +38,6 @@ class SMASHDataset(Dataset):
 
     def __getitem__(self, index):
         text_embedding = self.text_embeddings.iloc[index]
-
-        if isinstance(text_embedding, str):
-            text_embedding = literal_eval(self.text_embeddings.iloc[index])
 
         text_structure = self.get_document_structure(text_embedding)
 
@@ -148,6 +148,15 @@ class SMASHDataset(Dataset):
                 document_placeholder[paragraph_index, sentence_index, : len(sentence)] = torch.tensor(sentence)
 
         document_placeholder += 1
+
+        # padded_sentences = np.array(
+        #     [
+        #         [[row + [-1] * (max_word_length - len(row)) for row in sentence] for sentence in paragraph]
+        #         for paragraph in document
+        #     ]
+        # )
+        #
+        # padded_document = F.pad(torch.tensor(padded_sentences), (0, 0, 0, 1, 0, 1), "constant", -1)
 
         return document_placeholder
 

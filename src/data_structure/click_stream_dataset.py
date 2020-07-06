@@ -8,10 +8,6 @@ class ClickStreamDataset(Dataset):
 
         self.dataset = dataset
 
-        self.source_article = dataset["source_article"]
-        self.target_article = dataset["target_article"]
-        self.click_rate = dataset["click_rate"]
-
     def __len__(self):
         return len(self.dataset)
 

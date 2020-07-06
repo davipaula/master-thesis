@@ -2,6 +2,7 @@ import gzip
 from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
 from utils.utils import clean_title
 
+
 class AvailableTitlesExtractor:
     def __init__(
         self,

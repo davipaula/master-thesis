@@ -6,6 +6,7 @@ import jsonlines
 import json
 
 from tqdm import tqdm
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
@@ -14,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 class ArticlesDatabase:
     def __init__(self):
-        self.conn = sqlite3.connect("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/wikipedia_dump.db")
+        self.conn = sqlite3.connect("./wikipedia_dump.db")
         self.cursor = self.conn.cursor()
         self.cursor.arraysize = 10
 
@@ -28,11 +29,7 @@ class ArticlesDatabase:
         self.cursor.execute(query, (title, json.dumps(sections), json.dumps(links)))
 
     def import_articles(self):
-        print("Running")
-        # create_table()
         json_path = "./data/processed/enwiki_raw_text.jsonl"
-
-        logger.info("Started")
 
         with jsonlines.open(json_path) as json_file:
             for article in tqdm(json_file):
@@ -50,12 +47,37 @@ class ArticlesDatabase:
         query = f"SELECT TITLE, LINKS FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
         return self.cursor.execute(query, articles).fetchall()
 
+    def get_valid_articles(self, articles):
+        self.cursor.row_factory = lambda cursor, row: row[0]
+        query = f"SELECT TITLE FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
+        results = self.cursor.execute(query, articles).fetchall()
+        self.cursor.row_factory = None
+
+        return results
+
     def create_index(self):
         query = "CREATE INDEX idx_article_title ON articles (title)"
         self.cursor.execute(query)
         self.conn.commit()
 
         print("Finished creating index")
+
+    def get_text_from_article(self, article):
+        query = "SELECT TITLE, SECTIONS FROM ARTICLES WHERE TITLE = ?"
+        return self.cursor.execute(query, (article,)).fetchone()
+
+    def get_text_from_articles(self, articles):
+        query = f"SELECT TITLE, SECTIONS FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
+        result = self.cursor.execute(query, articles).fetchall()
+
+        return result
+
+    def generate_available_articles(self):
+        self.cursor.row_factory = lambda cursor, row: row[0]
+        query = "SELECT DISTINCT TITLE FROM ARTICLES"
+        available_articles = self.cursor.execute(query).fetchall()
+        pd.Series(available_articles).to_csv("./data/processed/available_titles.txt", header=False, index=False)
+        self.cursor.row_factory = None
 
 
 if __name__ == "__main__":
@@ -163,4 +185,12 @@ if __name__ == "__main__":
     ]
 
     articles_database = ArticlesDatabase()
-    print(articles_database.get_links_from_articles(source_articles))
+    value = articles_database.get_text_from_article("Lage Raho Munna Bhai")
+    print(value)
+    # logger.info("Creating table")
+    # articles_database.create_table()
+    # logger.info("Creating index")
+    # articles_database.create_index()
+    # logger.info("Importing articles")
+
+    # articles_database.import_articles()

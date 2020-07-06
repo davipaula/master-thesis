@@ -41,17 +41,13 @@ CLICK_RATE_COLUMN = "click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 
-VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth 2"
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 MODEL_FOLDER = "./trained_models/"
-FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth 2"
-WORD2VEC_PATH = "./data/glove.6B.50d.txt"
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth 2"
+WORD2VEC_PATH = "./data/source/glove.6B.200d.txt"
 RESULTS_PATH = "./results/"
 
-if torch.cuda.is_available():
-    WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
-else:
-    WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
+WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 
 class SmashRNN:
@@ -68,7 +64,6 @@ class SmashRNN:
         self.patience = 3
 
         self.opt = self.get_args()
-        self.batch_size = 32
         self.num_validations = int(self.opt.num_epochs / self.opt.validation_interval)
         # End of configs
 
@@ -107,6 +102,7 @@ class SmashRNN:
 
             loss_list = []
 
+            i = 0
             for row in tqdm(training_generator):
                 source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
                 target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
@@ -295,12 +291,6 @@ class SmashRNN:
     def save_model(self):
         model_path = MODEL_FOLDER + self.opt.level + "_level_model.pt"
         torch.save(self.model.state_dict(), model_path)
-
-    def should_stop(self, epoch):
-        return epoch - self.best_epoch > self.es_patience > 0
-
-    def should_run_validation(self, epoch):
-        return ((epoch + 1) % self.opt.validation_interval) == 0
 
     @staticmethod
     def calculate_loss(loss_list):

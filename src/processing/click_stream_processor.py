@@ -25,7 +25,7 @@ TARGET_CLICKS_THRESHOLD = 200
 
 TRAIN_DATASET_SPLIT = 0.7
 
-DATASET_SAMPLE_PERCENT = 0.05
+DATASET_SAMPLE_PERCENT = 0.1
 
 logger = logging.getLogger(__name__)
 
@@ -78,39 +78,39 @@ class ClickStreamProcessor:
             & (click_stream[NUMBER_OF_CLICKS_COLUMN] > TARGET_CLICKS_THRESHOLD)
         ]
 
-    def run(self, batch_size=32, save_folder="./data/dataset"):
+    def run(self, batch_size=2, save_folder="./data/dataset"):
         logger.info("Beginning of dataset split")
 
-        train_dataset, validation_dataset, test_dataset = self.split_datasets()
+        self.split_datasets()
 
-        click_stream_train = ClickStreamDataset(train_dataset)
-        click_stream_validation = ClickStreamDataset(validation_dataset)
-        click_stream_test = ClickStreamDataset(test_dataset)
-
-        logger.info("Datasets split. Starting saving them")
-
-        training_params = {"batch_size": batch_size, "shuffle": True, "drop_last": True}
-        train_loader = torch.utils.data.DataLoader(click_stream_train, **training_params)
-
-        validation_and_test_params = {
-            "batch_size": batch_size,
-            "shuffle": True,
-            "drop_last": False,
-        }
-        validation_loader = torch.utils.data.DataLoader(click_stream_validation, **validation_and_test_params)
-
-        test_loader = torch.utils.data.DataLoader(click_stream_test, **validation_and_test_params)
-
-        torch.save(train_loader, os.path.join(save_folder, "click_stream_train.pth"))
-        torch.save(validation_loader, os.path.join(save_folder, "click_stream_validation.pth"))
-        torch.save(test_loader, os.path.join(save_folder, "click_stream_test.pth"))
-
-        logger.info(
-            f"Datasets saved successfully. \n"
-            f"Train size: {len(train_loader.dataset)} \n"
-            f"Validation size: {len(validation_loader.dataset)} \n"
-            f"Test size: {len(test_loader.dataset)} \n"
-        )
+        # click_stream_train = ClickStreamDataset(train_dataset)
+        # click_stream_validation = ClickStreamDataset(validation_dataset)
+        # click_stream_test = ClickStreamDataset(test_dataset)
+        #
+        # logger.info("Datasets split. Starting saving them")
+        #
+        # training_params = {"batch_size": batch_size, "shuffle": True, "drop_last": True}
+        # train_loader = torch.utils.data.DataLoader(click_stream_train, **training_params)
+        #
+        # validation_and_test_params = {
+        #     "batch_size": batch_size,
+        #     "shuffle": True,
+        #     "drop_last": False,
+        # }
+        # validation_loader = torch.utils.data.DataLoader(click_stream_validation, **validation_and_test_params)
+        #
+        # test_loader = torch.utils.data.DataLoader(click_stream_test, **validation_and_test_params)
+        #
+        # torch.save(train_loader, os.path.join(save_folder, "click_stream_train.pth"))
+        # torch.save(validation_loader, os.path.join(save_folder, "click_stream_validation.pth"))
+        # torch.save(test_loader, os.path.join(save_folder, "click_stream_test.pth"))
+        #
+        # logger.info(
+        #     f"Datasets saved successfully. \n"
+        #     f"Train size: {len(train_loader.dataset)} \n"
+        #     f"Validation size: {len(validation_loader.dataset)} \n"
+        #     f"Test size: {len(test_loader.dataset)} \n"
+        # )
 
     def generate_dataset_sample(self, destination_path="./data/dataset/click_stream_random_sample.csv"):
         _pre_processed_dataset = ClickStreamPreProcessed().dataset
@@ -144,8 +144,7 @@ class ClickStreamProcessor:
             dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates(), dataset[TARGET_ARTICLE_COLUMN].drop_duplicates(),
         ).reset_index(drop=True)
 
-        with open("./data/processed/selected_articles.txt", "w") as output:
-            output.write("\n".join(selected_articles))
+        selected_articles.to_csv("./data/processed/selected_articles.txt", header=False, index=False)
 
     def split_datasets(self):
         random.seed(123)
@@ -220,8 +219,9 @@ class ClickStreamProcessor:
         )
 
         articles_fold.to_csv("./data/processed/selected_articles.csv", index=False)
-
-        return train_dataset, validation_dataset, test_dataset
+        train_dataset.to_csv("./data/processed/train.csv", index=False)
+        validation_dataset.to_csv("./data/processed/validation.csv", index=False)
+        test_dataset.to_csv("./data/processed/test.csv", index=False)
 
     def add_negative_sampling(self, click_stream_dataset):
         unique_source_articles_titles = click_stream_dataset["source_article"].unique()
@@ -255,6 +255,10 @@ class ClickStreamProcessor:
             how="left",
         )
         non_visited_articles = non_visited_articles[non_visited_articles["target_article"].isna()]
+        non_visited_articles = non_visited_articles.drop(["target_article"], axis=1)
+        non_visited_articles.columns = ["source_article", "target_article"]
+
+        non_visited_articles = self.filter_available_titles(non_visited_articles)
 
         # Gets only up to 20 negative sampling articles to reduce set size and speed up tokenization
         size = 20  # sample size
@@ -262,11 +266,9 @@ class ClickStreamProcessor:
         non_visited_articles = non_visited_articles.groupby("source_article", as_index=False).apply(random_function)
 
         # Adds the non visited links data
-        logger.info("Adding non visited links data")
-        negative_sampling = non_visited_articles.drop(["target_article"], axis=1)
-        negative_sampling.columns = ["source_article", "target_article"]
-
         logger.info("Adding columns")
+        # Remove this
+        negative_sampling = non_visited_articles
         negative_sampling.insert(len(negative_sampling.columns), "number_of_clicks", 0)
         negative_sampling.insert(len(negative_sampling.columns), "click_rate", 0)
 
@@ -274,6 +276,9 @@ class ClickStreamProcessor:
 
     def get_wiki_articles_links(self, source_articles):
         return self.articles_database.get_links_from_articles(source_articles)
+
+    def get_valid_articles(self, target_articles):
+        return self.articles_database.get_valid_articles(target_articles)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,8 @@ from datetime import datetime
 import torch
 from tqdm import tqdm
 
+import pandas as pd
+
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
@@ -15,6 +17,8 @@ from itertools import compress
 
 import gensim
 import spacy
+
+from database import ArticlesDatabase
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +43,11 @@ class WikiArticlesTokenizer:
 
         self.docs = {}
 
-    def tokenize(self, title, article):
+        self.db = ArticlesDatabase()
+
+    def tokenize(self, title, text):
         # Tokenize + find word indexes for tokens
-        article_text = article["text"]
+        article_text = text["text"]
         tokenized_article = {"paragraphs": [], "normalized_paragraphs": []}
 
         for section in article_text:
@@ -60,11 +66,7 @@ class WikiArticlesTokenizer:
             tokenized_article["paragraphs"].append(tokenized_paragraphs)
             tokenized_article["normalized_paragraphs"].append(normalized_paragraphs)
 
-        return {
-            "title": title,
-            "sections": tokenized_article,
-            "links": article["links"],
-        }
+        return {"title": title, "sections": tokenized_article}
 
     def process_paragraph(self, text):
         """
@@ -109,6 +111,48 @@ class WikiArticlesTokenizer:
 
         return article_titles
 
+    def process_article(self, article_title):
+        articles_text = self.db.get_text_from_article(article_title)
+        # print(f"Selected articles: {len(selected_articles)}")
+        # print(f"Loaded articles: {len(articles_text)}")
+
+        article = json.loads(articles_text[1])
+
+        article_text = [section["text"].split("\n\n") for section in article]
+
+        doc = {articles_text[0]: {"text": article_text}}
+
+        for title, text in tqdm(doc.items()):
+            result = self.tokenize(title, text)
+
+        print(result)
+
+    def process_from_db(self):
+        logger.info("Loading selected articles")
+        with open(SELECTED_ARTICLES_PATH, "r") as selected_articles_file:
+            selected_articles = [article_title.rstrip("\n") for article_title in selected_articles_file]
+
+        logger.info("Loaded selected articles")
+        start = datetime.now()
+        articles_text = self.db.get_text_from_articles(selected_articles)
+        logger.info(f"Loaded articles from DB. Time elapsed {datetime.now() - start}")
+        # print(f"Selected articles: {len(selected_articles)}")
+        # print(f"Loaded articles: {len(articles_text)}")
+
+        for result in tqdm(articles_text):
+            article = json.loads(result[1])
+
+            if not article:
+                continue
+
+            article_text = [section["text"].split("\n\n") for section in article]
+
+            self.docs[result[0]] = {"text": article_text}
+
+        with open(self.__output_path, "w+") as f:
+            for title, text in tqdm(self.docs.items()):
+                f.write(json.dumps(self.tokenize(title, text)) + "\n")
+
     def process(self, append: bool = True) -> None:
         """
 
@@ -130,40 +174,53 @@ class WikiArticlesTokenizer:
             logger.error(f"Wiki dump does not exist at: {self.__wiki_pre_processed}")
             exit(1)
 
+        logger.info("Loading selected articles")
+        with open(SELECTED_ARTICLES_PATH, "r") as selected_articles_file:
+            selected_articles = [article_title.rstrip("\n") for article_title in selected_articles_file]
+
         logger.info("Loading articles")
         with open(self.__wiki_pre_processed, "r") as wiki_dump:
             for line in tqdm(wiki_dump):
                 article = json.loads(line)
 
-                article_text = []
-
                 if not article["sections"]:
                     continue
 
-                for section in article["sections"]:
-                    article_text.append(section["text"].split("\n\n"))
+                article_text = [section["text"].split("\n\n") for section in article["sections"]]
 
-                self.docs[article["title"]] = {"text": article_text, "links": article["links"]}
+                self.docs[article["title"]] = {"text": article_text}
+
+        logger.info("Filtering articles")
+        selected_docs = {title: text for (title, text) in self.docs.items() if title in selected_articles}
+
+        print(f"Selected articles: {len(selected_articles)}")
+        print(f"Loaded articles: {len(selected_docs)}")
 
         logger.info("Articles loaded. Starting tokenization")
 
         start = datetime.now()
 
-        workers = max(1, multiprocessing.cpu_count() - 1)
-
-        pool = multiprocessing.Pool(workers)
-
-        pool_out = pool.map(self.tokenize_pool, self.docs.items())
-
-        pool.close()
-        pool.join()
+        with open(self.__output_path, "w+") as f:
+            for title, text in tqdm(selected_docs.items()):
+                f.write(json.dumps(self.tokenize(title, text)) + "\n")
 
         time_elapsed = datetime.now() - start
         print(f"Finished. Time elapsed {time_elapsed}")
 
-        with open(self.__output_path, "w+") as f:
-            for doc in pool_out:
-                f.write(json.dumps(doc) + "\n")
+        # # Removed multiprocessing because this is slowing down the process. Keeping the code here for future improvement
+        # workers = max(1, multiprocessing.cpu_count() - 1)
+        # # workers = 1
+        #
+        # pool = multiprocessing.Pool(workers)
+        #
+        # pool_out = pool.map(self.tokenize_pool, self.docs.items())
+        #
+        # pool.close()
+        # pool.join()
+
+        # with open(self.__output_path, "w+") as f:
+        #     for doc in pool_out:
+        #         f.write(json.dumps(doc) + "\n")
 
         logger.info("Tokens saved")
 
@@ -172,12 +229,18 @@ class WikiArticlesTokenizer:
 
 
 if __name__ == "__main__":
-    # os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
+    is_development = True
 
     _w2v_path = "./data/source/glove.6B.200d.w2vformat.txt"
     _wiki_dump_path = "./data/source/enwiki-20200401-pages-articles.xml.bz2"
     _wiki_pre_processed_path = "./data/processed/enwiki_raw_text.jsonl"
-    SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.csv"
+    _output_path = "./data/processed/enwiki_tokenized_selected_articles.jsonl"
+    SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.txt"
 
-    tokenizer = WikiArticlesTokenizer(_wiki_pre_processed_path, _wiki_pre_processed_path, _w2v_path)
-    tokenizer.process()
+    if is_development:
+        os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
+        _w2v_path = "./data/source/glove.6B.200d.w2vformat.1k.txt"
+
+    tokenizer = WikiArticlesTokenizer(_wiki_pre_processed_path, _output_path, _w2v_path)
+    # tokenizer.process()
+    tokenizer.process_article("Extinction")

@@ -31,7 +31,7 @@ wiki_pre_processed_path = (
     "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_articles.jsonl"
 )
 
-wiki_articles_tokenized_path = "./data/processed/enwiki_tokens.jsonl"
+wiki_articles_tokenized_path = "./data/processed/enwiki_tokenized_selected_articles.jsonl"
 
 # Problem. This doesn't exist before running convert_to_word2vec
 w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
@@ -71,8 +71,8 @@ class DatasetCreator:
 
     def run(self):
         logger.info(f"Process started:")
-        logger.info(f"Converting Glove file to Word2Vec format")
-        convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
+        # logger.info(f"Converting Glove file to Word2Vec format")
+        # convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
         #
         # logger.info(f"Extracting Click Stream data")
         # ClickStreamExtractor(click_stream_dump_path).run()
@@ -89,8 +89,8 @@ class DatasetCreator:
         # logger.info("Tokenizing articles")
         # WikiArticlesTokenizer(wiki_pre_processed_path, wiki_articles_tokenized_path, w2v_path).process()
         #
-        # logger.info("Creating dataset with Wiki Articles")
-        # WikiArticlesProcessor(wiki_articles_tokenized_path).run()
+        logger.info("Creating dataset with Wiki Articles")
+        WikiArticlesProcessor(wiki_articles_tokenized_path).run()
 
 
 if __name__ == "__main__":

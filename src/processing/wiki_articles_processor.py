@@ -13,16 +13,8 @@ from tqdm import tqdm
 from utils.utils import clean_title
 from ast import literal_eval
 
-if torch.cuda.is_available():
-    SAVE_PATH = "/home/dnascimento/thesis-davi/data/processed/wiki_articles_english_complete.csv"
-    WIKI_DOCUMENTS_PATH = "/home/dnascimento/thesis-davi/data/processed/enwiki_entire_article.jsonl"
-else:
-    SAVE_PATH = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/wiki_articles_english_complete.csv"
-    )
-    WIKI_DOCUMENTS_PATH = (
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_entire_article.jsonl"
-    )
+SAVE_PATH = "./data/processed/wiki_articles_english_complete.csv"
+WIKI_DOCUMENTS_PATH = "./data/processed/enwiki_tokenized_selected_articles.jsonl"
 
 
 class WikiArticlesProcessor:
@@ -51,8 +43,8 @@ class WikiArticlesProcessor:
     def load_wiki_articles(self):
         text_ids = []
         text_string = []
-        links = []
         articles = []
+        articles_to_remove = []
 
         with open(self.__wiki_articles_path, "r") as json_file:
             json_list = list(json_file)
@@ -61,7 +53,12 @@ class WikiArticlesProcessor:
             result = json.loads(json_str)
             sections = result["sections"]
 
-            if sections is None:
+            if result["title"] == "Lage Raho Munna Bhai":
+                print("Check here")
+
+            if not sections["paragraphs"]:
+                articles_to_remove.append(result["title"])
+
                 continue
 
             article_text_ids = [section for section in sections["paragraphs"] if sections["paragraphs"]]
@@ -74,11 +71,10 @@ class WikiArticlesProcessor:
             text_ids.append(article_text_ids)
             text_string.append(article_raw_text)
             articles.append(clean_title(result["title"]))
-            links.append(result["links"])
 
-        return pd.DataFrame(
-            list(zip(articles, text_ids, text_string, links)), columns=["article", "text_ids", "raw_text", "links"],
-        )
+            pd.Series(articles_to_remove).to_csv("./data/processed/articles_to_remove.txt", header=False, index=False)
+
+        return pd.DataFrame(list(zip(articles, text_ids, text_string)), columns=["article", "text_ids", "raw_text"],)
 
 
 if __name__ == "__main__":
