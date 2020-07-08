@@ -53,12 +53,7 @@ class WikiArticlesProcessor:
             result = json.loads(json_str)
             sections = result["sections"]
 
-            if result["title"] == "Lage Raho Munna Bhai":
-                print("Check here")
-
             if not sections["paragraphs"]:
-                articles_to_remove.append(result["title"])
-
                 continue
 
             article_text_ids = [section for section in sections["paragraphs"] if sections["paragraphs"]]
@@ -68,15 +63,17 @@ class WikiArticlesProcessor:
             article_text_ids = list(itertools.chain.from_iterable(article_text_ids))
             article_raw_text = list(itertools.chain.from_iterable(article_raw_text))
 
+            if not article_text_ids:
+                continue
+
             text_ids.append(article_text_ids)
             text_string.append(article_raw_text)
             articles.append(clean_title(result["title"]))
-
-            pd.Series(articles_to_remove).to_csv("./data/processed/articles_to_remove.txt", header=False, index=False)
 
         return pd.DataFrame(list(zip(articles, text_ids, text_string)), columns=["article", "text_ids", "raw_text"],)
 
 
 if __name__ == "__main__":
+    os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/")
     wiki = WikiArticlesProcessor(WIKI_DOCUMENTS_PATH)
     wiki.run()

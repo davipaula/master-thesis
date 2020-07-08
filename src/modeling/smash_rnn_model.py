@@ -10,7 +10,10 @@ from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_
 from utils.utils import (
     remove_zero_tensors_from_batch,
     remove_zeros_from_words_per_sentence,
+    remove_zeros_from_sentences_per_paragraph,
     add_filtered_tensors_to_original_batch,
+    add_filtered_tensors_to_original_sentences_batch,
+    remove_batches_with_no_sentences,
 )
 
 HIDDEN_LAYER_SIZE = 200
@@ -130,10 +133,10 @@ class SmashRNNModel(nn.Module):
         sentences = torch.zeros((non_empty_articles, max_sentences_per_paragraph, self.word_gru_out_size))
         paragraphs = torch.zeros((non_empty_articles, max_paragraphs_per_article, self.sentence_gru_out_size))
 
-        words_attention = torch.zeros(
-            (non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph, words_per_sentence.max())
-        )
-        sentences_attention = torch.zeros((non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph))
+        # words_attention = torch.zeros(
+        #     (non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph, words_per_sentence.max())
+        # )
+        # sentences_attention = torch.zeros((non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph))
 
         if torch.cuda.is_available():
             sentences = sentences.cuda()
@@ -185,18 +188,24 @@ class SmashRNNModel(nn.Module):
                 sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
                 # words_attention[:, paragraph_idx, sentence_idx, : word_level_attention.shape[1]] = word_level_attention
 
+            # removes empty sentences
+            non_empty_sentences = remove_batches_with_no_sentences(sentences)
+            non_empty_sentences_per_paragraph = remove_zeros_from_sentences_per_paragraph(
+                sentences_per_paragraph[:, paragraph_idx]
+            )
+
             # pack padded sequence of sentences
             packed_sentences = pack_padded_sequence(
-                sentences,
-                # TODO refactor this monstruosity
-                lengths=sentences_per_paragraph.sum(dim=1).tolist(),
-                batch_first=True,
-                enforce_sorted=False,
+                non_empty_sentences, lengths=non_empty_sentences_per_paragraph, batch_first=True, enforce_sorted=False,
             )
 
             sentence_level_gru, _ = self.sentence_gru(packed_sentences)
 
             sentence_level_attention = self.get_sentence_level_attention(sentence_level_gru)
+
+            sentence_level_attention = add_filtered_tensors_to_original_sentences_batch(
+                sentence_level_attention, sentences
+            )
 
             # Calculate softmax values as now words are arranged in their respective sentences
             sentence_alphas = self.get_alphas(sentence_level_attention)
@@ -204,7 +213,10 @@ class SmashRNNModel(nn.Module):
             # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
             sentence_level_gru, _ = pad_packed_sequence(sentence_level_gru, batch_first=True)
 
-            paragraphs[:, paragraph_idx] = self.get_representation(sentence_alphas, sentence_level_gru)
+            try:
+                paragraphs[:, paragraph_idx] = self.get_representation(sentence_alphas, sentence_level_gru)
+            except:
+                print("error")
             # sentences_attention[:, paragraph_idx] = sentence_level_attention
 
             # attention over paragraphs

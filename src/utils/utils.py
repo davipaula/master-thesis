@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+from orderedset import OrderedSet
+
 
 def get_padded_document(document, max_length_word, max_length_sentences, max_length_paragraph):
     for paragraph in document:
@@ -38,14 +40,29 @@ def get_padded_document(document, max_length_word, max_length_sentences, max_len
     return document
 
 
-def remove_zero_tensors_from_batch(sentences_in_batch):
-    non_zero_indices = torch.nonzero(sentences_in_batch, as_tuple=True)[0].unique().tolist()
+def remove_zero_tensors_from_batch(tensors_in_batch):
+    non_zero_indices = torch.nonzero(tensors_in_batch, as_tuple=True)[0].unique().tolist()
 
-    max_sentence_length = sentences_in_batch.shape[1]
-    non_zero_tensor = torch.zeros((len(non_zero_indices), max_sentence_length), dtype=sentences_in_batch.dtype)
+    # If there are no empty tensors, there's no need to perform calculations and should return filtered_batch
+    if len(non_zero_indices) == tensors_in_batch.shape[0]:
+        return tensors_in_batch
 
-    for i, non_zero_index in enumerate(non_zero_indices):
-        non_zero_tensor[i] = sentences_in_batch[non_zero_index]
+    non_zero_tensor = torch.stack([tensors_in_batch[non_zero_index] for non_zero_index in non_zero_indices])
+
+    if torch.cuda.is_available():
+        non_zero_tensor = non_zero_tensor.cuda()
+
+    return non_zero_tensor
+
+
+def remove_batches_with_no_sentences(tensors_in_batch):
+    non_zero_indices = torch.nonzero(tensors_in_batch, as_tuple=True)[0].unique().tolist()
+
+    # If there are no empty tensors, there's no need to perform calculations and should return filtered_batch
+    if len(non_zero_indices) == tensors_in_batch.shape[0]:
+        return tensors_in_batch
+
+    non_zero_tensor = torch.stack([tensors_in_batch[non_zero_index] for non_zero_index in non_zero_indices])
 
     if torch.cuda.is_available():
         non_zero_tensor = non_zero_tensor.cuda()
@@ -54,7 +71,11 @@ def remove_zero_tensors_from_batch(sentences_in_batch):
 
 
 def add_filtered_tensors_to_original_batch(filtered_batch, original_batch):
-    non_zero_indices = torch.nonzero(original_batch, as_tuple=True)[0].unique().tolist()
+    non_zero_indices = set(torch.nonzero(original_batch, as_tuple=True)[0].tolist())
+
+    # If there are no empty tensors, there's no need to perform calculations and should return filtered_batch
+    if len(original_batch.shape) == 2 and len(non_zero_indices) == original_batch.shape[0]:
+        return filtered_batch
 
     batch_size = original_batch.shape[0]
     sequence_length = filtered_batch.shape[1]
@@ -66,7 +87,37 @@ def add_filtered_tensors_to_original_batch(filtered_batch, original_batch):
     original_batch_reshaped = torch.zeros(tuple(tensor_size), dtype=filtered_batch.dtype)
 
     for i, non_zero_tensor_index in enumerate(non_zero_indices):
-        original_batch_reshaped[non_zero_tensor_index] = filtered_batch[i]
+        try:
+            original_batch_reshaped[non_zero_tensor_index] = filtered_batch[i]
+        except:
+            print("Check")
+
+    if torch.cuda.is_available():
+        original_batch_reshaped = original_batch_reshaped.cuda()
+
+    return original_batch_reshaped
+
+
+def add_filtered_tensors_to_original_sentences_batch(filtered_batch, original_batch):
+    non_zero_indices = set(torch.nonzero(original_batch, as_tuple=True)[0].tolist())
+
+    batch_size = original_batch.shape[0]
+    sequence_length = filtered_batch.shape[1]
+    tensor_size = [batch_size, sequence_length]
+
+    if len(filtered_batch.shape) > 2:
+        tensor_size.append(filtered_batch.shape[2])
+
+    original_batch_reshaped = torch.zeros(tuple(tensor_size), dtype=filtered_batch.dtype)
+
+    for i, non_zero_index in enumerate(non_zero_indices):
+        try:
+            original_batch_reshaped[non_zero_index] = filtered_batch[i]
+        except:
+            # This function is not wrong.
+            # For some reason, the `filtered_batch` contains non empty tensors in the middle of the tensor
+            # Need to check how this data is being generated
+            print("Check")
 
     if torch.cuda.is_available():
         original_batch_reshaped = original_batch_reshaped.cuda()
@@ -78,6 +129,10 @@ def remove_zeros_from_words_per_sentence(words_per_sentence):
     non_zero_indices = words_per_sentence.nonzero().squeeze(1)
 
     return words_per_sentence[non_zero_indices].tolist()
+
+
+def remove_zeros_from_sentences_per_paragraph(sentences_per_paragraph):
+    return [sentence for sentence in sentences_per_paragraph.tolist() if sentence > 0]
 
 
 def get_words_per_document_at_word_level(words_per_sentence):

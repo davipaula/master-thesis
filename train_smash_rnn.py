@@ -44,7 +44,7 @@ SOURCE_ARTICLE_COLUMN = "source_article"
 TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 MODEL_FOLDER = "./trained_models/"
-WORD2VEC_PATH = "./data/source/glove.6B.200d.txt"
+WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
 RESULTS_PATH = "./results/"
 
 WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
@@ -152,6 +152,10 @@ class SmashRNN:
                 self.optimizer.step()
 
                 loss_list.append(loss)
+
+                i += 1
+                if i == 40:
+                    exit(0)
 
             loss = self.calculate_loss(loss_list)
 
