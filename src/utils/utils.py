@@ -8,8 +8,6 @@ import numpy as np
 import pandas as pd
 import torch
 
-from orderedset import OrderedSet
-
 
 def get_padded_document(document, max_length_word, max_length_sentences, max_length_paragraph):
     for paragraph in document:
@@ -126,13 +124,11 @@ def add_filtered_tensors_to_original_sentences_batch(filtered_batch, original_ba
 
 
 def remove_zeros_from_words_per_sentence(words_per_sentence):
-    non_zero_indices = words_per_sentence.nonzero().squeeze(1)
-
-    return words_per_sentence[non_zero_indices].tolist()
+    return [words if words else 1 for words in words_per_sentence.tolist()]
 
 
 def remove_zeros_from_sentences_per_paragraph(sentences_per_paragraph):
-    return [sentence for sentence in sentences_per_paragraph.tolist() if sentence > 0]
+    return [sentences if sentences else 1 for sentences in sentences_per_paragraph.tolist()]
 
 
 def get_words_per_document_at_word_level(words_per_sentence):

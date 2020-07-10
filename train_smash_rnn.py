@@ -153,10 +153,6 @@ class SmashRNN:
 
                 loss_list.append(loss)
 
-                i += 1
-                if i == 40:
-                    exit(0)
-
             loss = self.calculate_loss(loss_list)
 
             print(
