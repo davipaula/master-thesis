@@ -86,10 +86,15 @@ class SmashRNN:
         self.criterion = nn.SmoothL1Loss().to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
+        self.batch_size = self.opt.batch_size
+
         self.model.train()
 
     def train(self, level="paragraph"):
-        training_generator = torch.load(TRAIN_DATASET_PATH)
+        click_stream_train = torch.load(TRAIN_DATASET_PATH)
+        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
+        training_generator = torch.utils.data.DataLoader(click_stream_train, **training_params)
+
         print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
@@ -207,7 +212,14 @@ class SmashRNN:
         return document
 
     def validate(self, validation_step, level):
-        validation_generator = torch.load(VALIDATION_DATASET_PATH)
+        click_stream_validation = torch.load(VALIDATION_DATASET_PATH)
+
+        validation_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        validation_generator = torch.utils.data.DataLoader(click_stream_validation, **validation_params)
         validation_step = int(validation_step) + 1
 
         loss_list = []
@@ -304,6 +316,7 @@ class SmashRNN:
 
         parser.add_argument("--num_epochs", type=int, default=1)
         parser.add_argument("--validation_interval", type=int, default=1)
+        parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
 
         return parser.parse_args()

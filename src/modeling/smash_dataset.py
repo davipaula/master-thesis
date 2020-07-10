@@ -5,7 +5,6 @@
 import pandas as pd
 import numpy as np
 import torch
-from ast import literal_eval
 from torch.utils.data.dataset import Dataset
 from typing import List
 import logging

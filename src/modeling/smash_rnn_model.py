@@ -147,10 +147,8 @@ class SmashRNNModel(nn.Module):
             for sentence_idx in range(max(sentences_per_paragraph[:, paragraph_idx])):
                 sentences_in_batch = article[:, paragraph_idx, sentence_idx, :]
 
-                word_ids_in_sentences = sentences_in_batch
-
                 # get word embeddings from ids
-                word_embeddings = self.embedding(word_ids_in_sentences)
+                word_embeddings = self.embedding(sentences_in_batch)
 
                 # This transforms every sentence with length == 0 into a sentence with length == 1
                 # This allows performing calculations with packing the sentences

@@ -41,14 +41,11 @@ logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-if torch.cuda.is_available():
-    WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
-else:
-    WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
+WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 MODEL_FOLDER = "./trained_models/"
 FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-WORD2VEC_PATH = "./data/glove.6B.50d.txt"
+WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 RESULTS_PATH = "./results/"
 
@@ -63,7 +60,15 @@ def test(opt):
 
     logger.info("Initializing parameters")
 
-    test_generator = torch.load(TEST_DATASET_PATH)
+    click_stream_test = torch.load(TEST_DATASET_PATH)
+
+    batch_size = 6
+    test_params = {
+        "batch_size": batch_size,
+        "shuffle": True,
+        "drop_last": False,
+    }
+    test_generator = torch.utils.data.DataLoader(click_stream_test, **test_params)
 
     criterion = nn.MSELoss().to(device)
 
