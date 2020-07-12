@@ -118,103 +118,89 @@ class SmashRNNModel(nn.Module):
 
     def get_document_representation(self, article, paragraphs_per_article, sentences_per_paragraph, words_per_sentence):
 
-        non_empty_articles = paragraphs_per_article.nonzero().shape[0]
+        batch_size = article.shape[0]
+        max_paragraphs_per_article = article.shape[1]
+        max_sentences_per_paragraph = article.shape[2]
+        max_words_per_sentence = article.shape[3]
 
-        if non_empty_articles < paragraphs_per_article.shape[0]:
-            article = article[:non_empty_articles]
-            paragraphs_per_article = paragraphs_per_article[:non_empty_articles]
-            sentences_per_paragraph = sentences_per_paragraph[:non_empty_articles]
-            words_per_sentence = words_per_sentence[:non_empty_articles]
+        flatten_size = batch_size * max_paragraphs_per_article * max_sentences_per_paragraph
+        flatten_word_ids = article.reshape((flatten_size, max_words_per_sentence))
 
-        max_paragraphs_per_article = max(paragraphs_per_article)
-        max_sentences_per_paragraph = max(sentences_per_paragraph.sum(dim=1))
+        word_embeddings = self.embedding(flatten_word_ids)
 
-        # zero placeholders
-        sentences = torch.zeros((non_empty_articles, max_sentences_per_paragraph, self.word_gru_out_size))
-        paragraphs = torch.zeros((non_empty_articles, max_paragraphs_per_article, self.sentence_gru_out_size))
+        flatten_words_per_sentence = words_per_sentence.reshape(flatten_size)
 
-        # words_attention = torch.zeros(
-        #     (non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph, words_per_sentence.max())
-        # )
-        # sentences_attention = torch.zeros((non_empty_articles, max_paragraphs_per_article, max_sentences_per_paragraph))
+        # This transforms every sentence with length == 0 into a sentence with length == 1
+        # This allows performing calculations with packing the sentences
+        flatten_words_per_sentence = remove_zeros_from_words_per_sentence(flatten_words_per_sentence)
 
-        if torch.cuda.is_available():
-            sentences = sentences.cuda()
-            paragraphs = paragraphs.cuda()
+        packed_word_embeddings = pack_padded_sequence(
+            word_embeddings, lengths=flatten_words_per_sentence, batch_first=True, enforce_sorted=False
+        ).float()
 
-        # iterate over each hierarchy level
-        for paragraph_idx in range(max_paragraphs_per_article):
-            for sentence_idx in range(max(sentences_per_paragraph[:, paragraph_idx])):
-                sentences_in_batch = article[:, paragraph_idx, sentence_idx, :]
+        word_level_gru, _ = self.word_gru(packed_word_embeddings)
 
-                # get word embeddings from ids
-                word_embeddings = self.embedding(sentences_in_batch)
+        word_level_attention = self.get_word_attention(word_level_gru)
 
-                # This transforms every sentence with length == 0 into a sentence with length == 1
-                # This allows performing calculations with packing the sentences
-                words_per_sentence_in_paragraph = remove_zeros_from_words_per_sentence(
-                    words_per_sentence[:, paragraph_idx, sentence_idx]
-                )
+        # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
+        # (n_sentences, max(words_per_sentence))
+        word_level_attention, _ = pad_packed_sequence(
+            PackedSequence(
+                data=word_level_attention,
+                batch_sizes=word_level_gru.batch_sizes,
+                sorted_indices=word_level_gru.sorted_indices,
+                unsorted_indices=word_level_gru.unsorted_indices,
+            ),
+            batch_first=True,
+        )
 
-                packed_word_embeddings = pack_padded_sequence(
-                    word_embeddings, lengths=words_per_sentence_in_paragraph, batch_first=True, enforce_sorted=False
-                ).float()
+        word_level_alphas = self.get_alphas(word_level_attention)
 
-                word_level_gru, _ = self.word_gru(packed_word_embeddings)
+        # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
+        word_level_gru, _ = pad_packed_sequence(word_level_gru, batch_first=True)
 
-                word_level_attention = self.get_word_attention(word_level_gru)
+        word_level_representation = self.get_representation(word_level_alphas, word_level_gru)
 
-                # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
-                # (n_sentences, max(words_per_sentence))
-                word_level_attention, _ = pad_packed_sequence(
-                    PackedSequence(
-                        data=word_level_attention,
-                        batch_sizes=word_level_gru.batch_sizes,
-                        sorted_indices=word_level_gru.sorted_indices,
-                        unsorted_indices=word_level_gru.unsorted_indices,
-                    ),
-                    batch_first=True,
-                )
+        word_level_representation = word_level_representation.reshape(
+            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, word_level_gru.shape[-1])
+        )
 
-                word_level_alphas = self.get_alphas(word_level_attention)
+        flatten_sentences_shape = (
+            batch_size * max_paragraphs_per_article,
+            max_sentences_per_paragraph,
+            word_level_gru.shape[-1],
+        )
+        flatten_sentences = word_level_representation.reshape(flatten_sentences_shape)
 
-                # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-                word_level_gru, _ = pad_packed_sequence(word_level_gru, batch_first=True)
+        # removes empty sentences
+        sentences_per_paragraph = sentences_per_paragraph.reshape(batch_size * max_paragraphs_per_article)
+        non_empty_sentences_per_paragraph = remove_zeros_from_sentences_per_paragraph(sentences_per_paragraph)
 
-                word_level_gru = add_filtered_tensors_to_original_batch(word_level_gru, sentences_in_batch)
+        # pack padded sequence of sentences
+        packed_sentences = pack_padded_sequence(
+            flatten_sentences, lengths=non_empty_sentences_per_paragraph, batch_first=True, enforce_sorted=False,
+        )
 
-                sentences[:, sentence_idx] = self.get_representation(word_level_alphas, word_level_gru)
-                # words_attention[:, paragraph_idx, sentence_idx, : word_level_attention.shape[1]] = word_level_attention
+        sentence_level_gru, _ = self.sentence_gru(packed_sentences)
 
-            # removes empty sentences
-            non_empty_sentences_per_paragraph = remove_zeros_from_sentences_per_paragraph(
-                sentences_per_paragraph[:, paragraph_idx]
-            )
+        sentence_level_attention = self.get_sentence_level_attention(sentence_level_gru)
 
-            # pack padded sequence of sentences
-            packed_sentences = pack_padded_sequence(
-                sentences, lengths=non_empty_sentences_per_paragraph, batch_first=True, enforce_sorted=False,
-            )
+        # Calculate softmax values as now words are arranged in their respective sentences
+        sentence_alphas = self.get_alphas(sentence_level_attention)
 
-            sentence_level_gru, _ = self.sentence_gru(packed_sentences)
+        # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
+        sentence_level_gru, _ = pad_packed_sequence(sentence_level_gru, batch_first=True)
 
-            sentence_level_attention = self.get_sentence_level_attention(sentence_level_gru)
+        sentence_level_representation = self.get_representation(sentence_alphas, sentence_level_gru)
+        sentence_level_representation = sentence_level_representation.reshape(
+            (batch_size, max_paragraphs_per_article, sentence_level_gru.shape[-1])
+        )
 
-            # Calculate softmax values as now words are arranged in their respective sentences
-            sentence_alphas = self.get_alphas(sentence_level_attention)
-
-            # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
-            sentence_level_gru, _ = pad_packed_sequence(sentence_level_gru, batch_first=True)
-
-            paragraphs[:, paragraph_idx] = self.get_representation(sentence_alphas, sentence_level_gru)
-
-            # sentences_attention[:, paragraph_idx] = sentence_level_attention
-
-            # attention over paragraphs
+        # attention over paragraphs
         # paragraphs
         # pack padded sequence of sentences
         packed_paragraphs = pack_padded_sequence(
-            paragraphs, lengths=paragraphs_per_article, batch_first=True, enforce_sorted=False
+            sentence_level_representation, lengths=paragraphs_per_article, batch_first=True, enforce_sorted=False
         )
 
         paragraph_gru_out, _ = self.paragraph_gru(packed_paragraphs)
