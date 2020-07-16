@@ -179,6 +179,7 @@ def get_args():
         """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
     )
     parser.add_argument("--level", type=str, default="paragraph")
+    parser.add_argument("--batch_size", type=int, default=2)
 
     return parser.parse_args()
 

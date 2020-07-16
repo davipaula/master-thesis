@@ -39,7 +39,7 @@ def remove_empty_articles(tokenized_articles, dataset):
     ]
 
 
-def run(batch_size=6):
+def run():
     tokenized_articles = pd.read_csv("./data/processed/wiki_articles_english_complete.csv")
 
     train_dataset = pd.read_csv(TRAIN_DATASET_PATH)

@@ -210,47 +210,47 @@ if __name__ == "__main__":
         torch.manual_seed(123)
 
     test = SMASHDataset(
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english_complete.csv"
     )
 
     articles_to_get = [
-        "Anarchism",
-        "Autism",
-        "A",
-        "Achilles",
-        "Abraham Lincoln",
-        "Aristotle",
-        "An American in Paris",
-        "Academy Awards",
-        "Ayn Rand",
-        "Algeria",
-        "Anthropology",
-        "Alchemy",
-        "ASCII",
-        "Apollo",
-        "Andre Agassi",
-        "Andorra",
-        "Amphibian",
-        "Alaska",
-        "Agriculture",
-        "Algae",
-        "Analysis of variance",
-        "Apollo 11",
-        "Apollo 8",
-        "Astronaut",
-        "Alphabet",
-        "Atomic number",
-        "Asia",
-        "Articles of Confederation",
-        "Atlantic Ocean",
-        "Angola",
-        "Alberta",
-        "Albert Einstein",
+        "Curtis Axel",
+        "To Write Love on Her Arms (film)",
+        "Joseph Smith",
+        "Darren Moore",
+        "Non-cellular life",
+        "Dir En Grey",
+        "My Neighbor Totoro",
+        "Imaginary Heroes",
+        "Video game bot",
+        "Curt Menefee",
+        "Dr. Mario 64",
+        "Ghost Rider (2007 film)",
+        "Cinema of the United Kingdom",
+        "Satoru Iwata",
+        "Honor (The Walking Dead)",
+        "Tamara Rojo",
+        "Demian Maia",
+        "Child of the Sun",
+        "Swedish Mauser",
+        "San Fernando Valley",
+        "Paul Nicholls (horse racing)",
+        "Adzuki bean",
+        "Big Brother (British series 8)",
+        "Dan Byrd",
+        "Curious George 2: Follow That Monkey!",
+        "Mil Mi-26",
+        "Hand of Death (1976 film)",
+        "Camelot (film)",
+        "Pyarey Afzal",
+        "Lothaire Bluteau",
+        "Deism",
+        "Douglas Costa",
     ]
 
     logger.info("Started getting articles")
 
-    for n in range(10):
+    for n in range(50):
         (test.get_articles(articles_to_get))
 
     logger.info("Finished getting articles")

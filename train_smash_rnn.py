@@ -95,12 +95,14 @@ class SmashRNN:
         training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
         training_generator = torch.utils.data.DataLoader(click_stream_train, **training_params)
 
-        print("Starting training {}".format(datetime.now()))
+        # print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
         best_loss = 1
         best_weights = None
         best_epoch = 0
+
+        print(range(self.opt.num_epochs))
 
         for epoch in range(self.opt.num_epochs):
             self.model.train()
@@ -157,11 +159,6 @@ class SmashRNN:
                 self.optimizer.step()
 
                 loss_list.append(loss)
-
-                i += 1
-
-                if i == 10:
-                    exit(0)
 
             loss = self.calculate_loss(loss_list)
 

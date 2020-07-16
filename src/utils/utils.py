@@ -109,13 +109,7 @@ def add_filtered_tensors_to_original_sentences_batch(filtered_batch, original_ba
     original_batch_reshaped = torch.zeros(tuple(tensor_size), dtype=filtered_batch.dtype)
 
     for i, non_zero_index in enumerate(non_zero_indices):
-        try:
-            original_batch_reshaped[non_zero_index] = filtered_batch[i]
-        except:
-            # This function is not wrong.
-            # For some reason, the `filtered_batch` contains non empty tensors in the middle of the tensor
-            # Need to check how this data is being generated
-            print("Check")
+        original_batch_reshaped[non_zero_index] = filtered_batch[i]
 
     if torch.cuda.is_available():
         original_batch_reshaped = original_batch_reshaped.cuda()
@@ -123,12 +117,8 @@ def add_filtered_tensors_to_original_sentences_batch(filtered_batch, original_ba
     return original_batch_reshaped
 
 
-def remove_zeros_from_words_per_sentence(words_per_sentence):
-    return [words if words else 1 for words in words_per_sentence.tolist()]
-
-
-def remove_zeros_from_sentences_per_paragraph(sentences_per_paragraph):
-    return [sentences if sentences else 1 for sentences in sentences_per_paragraph.tolist()]
+def remove_zeros(elements_in_sequence):
+    return [element if element else 1 for element in elements_in_sequence.tolist()]
 
 
 def get_words_per_document_at_word_level(words_per_sentence):
