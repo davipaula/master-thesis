@@ -27,7 +27,7 @@ class SMASHDataset(Dataset):
         super(SMASHDataset, self).__init__()
 
         dataset = pd.read_csv(
-            dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"}
+            dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"},
         )
         self.text_embeddings = dataset["text_ids"].map(json.loads)
         self.articles = dataset["article"]
@@ -202,6 +202,12 @@ class SMASHDataset(Dataset):
             "max_paragraph_length": max(paragraph_length_list),
         }
 
+    def get_n_percentile_paragraph_length(self, n=90):
+        articles_text = self.text_embeddings
+        paragraphs_size = [len(article_text) for article_text in articles_text]
+
+        return int(np.percentile(paragraphs_size, n))
+
 
 if __name__ == "__main__":
     if torch.cuda.is_available():
@@ -212,6 +218,8 @@ if __name__ == "__main__":
     test = SMASHDataset(
         "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english_complete.csv"
     )
+
+    test.get_sizes()
 
     articles_to_get = [
         "Curtis Axel",
@@ -248,10 +256,10 @@ if __name__ == "__main__":
         "Douglas Costa",
     ]
 
-    logger.info("Started getting articles")
+    # logger.info("Started getting articles")
 
-    for n in range(50):
-        (test.get_articles(articles_to_get))
+    # for n in range(50):
+    #     (test.get_articles(articles_to_get))
 
-    logger.info("Finished getting articles")
+    # logger.info("Finished getting articles")
     # print(test.__getitem__(1))

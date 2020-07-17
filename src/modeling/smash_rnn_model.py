@@ -1,6 +1,8 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import logging
+
 import torch
 import torch.nn as nn
 import numpy as np
@@ -9,7 +11,13 @@ import csv
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
 from utils.utils import remove_zeros
 
-HIDDEN_LAYER_SIZE = 200
+logger = logging.getLogger(__name__)
+
+LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+GRU_HIDDEN_SIZE = 128
+HIDDEN_LAYER_SIZE = 128
 
 
 class SmashRNNModel(nn.Module):
@@ -22,9 +30,6 @@ class SmashRNNModel(nn.Module):
         else:
             torch.manual_seed(123)
             self.device = torch.device("cpu")
-
-        GRU_HIDDEN_SIZE = 128
-        HIDDEN_LAYER_SIZE = 128
 
         self.dict = dict
 
@@ -81,6 +86,7 @@ class SmashRNNModel(nn.Module):
         words_per_sentence_source_article,
         sentences_per_paragraph_source_article,
         paragraphs_per_article_source_article,
+        paragraphs_limit=None,
     ):
 
         target_article_representation = self.get_document_representation(
@@ -88,12 +94,14 @@ class SmashRNNModel(nn.Module):
             paragraphs_per_article_target_article,
             sentences_per_paragraph_target_article,
             words_per_sentence_target_article,
+            paragraphs_limit,
         )
         source_article_representation = self.get_document_representation(
             source_article,
             paragraphs_per_article_source_article,
             sentences_per_paragraph_source_article,
             words_per_sentence_source_article,
+            paragraphs_limit,
         )
 
         # Concatenates document representations. This is the siamese part of the model
@@ -112,12 +120,11 @@ class SmashRNNModel(nn.Module):
         return articles_similarity
 
     def get_document_representation(
-        self, articles_batch, paragraphs_per_article, sentences_per_paragraph, words_per_sentence
+        self, articles_batch, paragraphs_per_article, sentences_per_paragraph, words_per_sentence, paragraphs_limit=None
     ):
 
-        paragraphs_limit = 5
-
-        if articles_batch.shape[1] > paragraphs_limit:
+        # TODO this should be in the dataset class
+        if paragraphs_limit and articles_batch.shape[1] > paragraphs_limit:
             paragraphs_per_article = paragraphs_per_article.clamp(1, paragraphs_limit)
             sentences_per_paragraph = sentences_per_paragraph[:, :paragraphs_limit]
             max_sentences_per_paragraph = sentences_per_paragraph.max()
@@ -137,11 +144,12 @@ class SmashRNNModel(nn.Module):
 
         flatten_words_per_sentence = words_per_sentence.reshape(flatten_size)
 
-        # deleting tensors for development purpose
+        # deleting tensors to release memory
         del articles_batch
         del words_per_sentence
 
-        word_level_gru, word_level_importance, word_level_representation = self.get_word_level_representation(
+        # attention over words
+        word_level_importance, word_level_representation = self.get_word_level_representation(
             batch_size,
             flatten_word_ids,
             flatten_words_per_sentence,
@@ -150,31 +158,20 @@ class SmashRNNModel(nn.Module):
             max_words_per_sentence,
         )
 
-        word_level_representation = word_level_representation.reshape(
-            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, word_level_gru.shape[-1])
-        )
-
         flatten_sentences_shape = (
             batch_size * max_paragraphs_per_article,
             max_sentences_per_paragraph,
-            word_level_gru.shape[-1],
+            word_level_representation.shape[-1],
         )
         flatten_sentences = word_level_representation.reshape(flatten_sentences_shape)
 
-        (
-            sentence_level_gru,
-            sentence_level_importance,
-            sentence_level_representation,
-        ) = self.get_sentence_level_representation(
+        # attention over sentences
+        sentence_level_importance, sentence_level_representation = self.get_sentence_level_representation(
             batch_size,
             flatten_sentences,
             max_paragraphs_per_article,
             max_sentences_per_paragraph,
             sentences_per_paragraph,
-        )
-
-        sentence_level_representation = sentence_level_representation.reshape(
-            (batch_size, max_paragraphs_per_article, sentence_level_gru.shape[-1])
         )
 
         # attention over paragraphs
@@ -183,33 +180,33 @@ class SmashRNNModel(nn.Module):
         )
         # (batch_size, self.paragraph_gru_out_size)
 
-        # Calculating most important words
-        # Gets the paragraph with max attention per document in batch
-        maximum_paragraph_indices = [
-            (document == document.max()).nonzero().squeeze(1).item() for document in paragraph_alphas
-        ]
-
-        # Gets the sentence with max attention per sentence in the max paragraph in document in batch
-        maximum_sentence = []
-        for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
-            maximum_sentence.append(sentence_level_importance[document_index][document_max_paragraph])
-
-        maximum_sentence_indices = [
-            (document == document.max()).nonzero().squeeze(1).item() for document in maximum_sentence
-        ]
+        # # Calculating most important words
+        # # Gets the paragraph with max attention per document in batch
+        # maximum_paragraph_indices = [
+        #     (document == document.max()).nonzero().squeeze(1).item() for document in paragraph_alphas
+        # ]
         #
-        # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
-        # per document in batch
-        maximum_words_indices = []
-        for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
-            document_max_paragraph = maximum_paragraph_indices[document_index]
-            maximum_words_indices.append(
-                word_level_importance[document_index, document_max_paragraph, document_max_sentence]
-            )
-
-        maximum_word_indices = [
-            (document == document.max()).nonzero().squeeze(1).item() for document in maximum_words_indices
-        ]
+        # # Gets the sentence with max attention per sentence in the max paragraph in document in batch
+        # maximum_sentence = []
+        # for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
+        #     maximum_sentence.append(sentence_level_importance[document_index][document_max_paragraph])
+        #
+        # maximum_sentence_indices = [
+        #     (document == document.max()).nonzero().squeeze(1).item() for document in maximum_sentence
+        # ]
+        # #
+        # # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
+        # # per document in batch
+        # maximum_words_indices = []
+        # for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
+        #     document_max_paragraph = maximum_paragraph_indices[document_index]
+        #     maximum_words_indices.append(
+        #         word_level_importance[document_index, document_max_paragraph, document_max_sentence]
+        #     )
+        #
+        # maximum_word_indices = [
+        #     (document == document.max()).nonzero().squeeze(1).item() for document in maximum_words_indices
+        # ]
 
         return document_representation
 
@@ -250,13 +247,13 @@ class SmashRNNModel(nn.Module):
     ):
         sentences_per_paragraph = sentences_per_paragraph.reshape(batch_size * max_paragraphs_per_article)
         non_empty_sentences_per_paragraph = remove_zeros(sentences_per_paragraph)
-        # pack padded sequence of sentences
+
         packed_sentences = pack_padded_sequence(
             flatten_sentences, lengths=non_empty_sentences_per_paragraph, batch_first=True, enforce_sorted=False,
         )
+
         sentence_level_gru, _ = self.sentence_gru(packed_sentences)
         sentence_level_attention = self.get_sentence_level_attention(sentence_level_gru)
-        # Calculate softmax values as now words are arranged in their respective sentences
         sentence_alphas = self.get_alphas(sentence_level_attention)
 
         sentence_level_importance = sentence_alphas.reshape(
@@ -265,8 +262,11 @@ class SmashRNNModel(nn.Module):
 
         # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
         sentence_level_gru, _ = pad_packed_sequence(sentence_level_gru, batch_first=True)
-        sentence_level_representation = self.get_representation(sentence_alphas, sentence_level_gru)
-        return sentence_level_gru, sentence_level_importance, sentence_level_representation
+        sentence_level_representation = self.get_representation(sentence_alphas, sentence_level_gru).reshape(
+            (batch_size, max_paragraphs_per_article, sentence_level_gru.shape[-1])
+        )
+
+        return sentence_level_importance, sentence_level_representation
 
     def get_word_level_representation(
         self,
@@ -279,9 +279,11 @@ class SmashRNNModel(nn.Module):
     ):
         word_embeddings = self.embedding(flatten_word_ids)
         flatten_words_per_sentence = remove_zeros(flatten_words_per_sentence)
+
         packed_word_embeddings = pack_padded_sequence(
             word_embeddings, lengths=flatten_words_per_sentence, batch_first=True, enforce_sorted=False
         ).float()
+
         word_level_gru, _ = self.word_gru(packed_word_embeddings)
         word_level_attention = self.get_word_attention(word_level_gru)
 
@@ -294,6 +296,7 @@ class SmashRNNModel(nn.Module):
             ),
             batch_first=True,
         )
+
         word_level_alphas = self.get_alphas(word_level_attention)
         word_level_importance = word_level_alphas.reshape(
             (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence)
@@ -305,10 +308,10 @@ class SmashRNNModel(nn.Module):
         del word_embeddings
         del word_level_attention
 
-        # re-padding with 0s
+        # To track when memory limit is reached
         try:
             word_level_gru, _ = pad_packed_sequence(word_level_gru, batch_first=True)
-        except:
+        except Exception as error:
             print(
                 f"Batch size: {batch_size} \n"
                 f"Paragraphs per article: {max_paragraphs_per_article} \n"
@@ -316,11 +319,17 @@ class SmashRNNModel(nn.Module):
                 f"Words per sentence: {max_words_per_sentence} "
             )
 
+            logger.exception(error)
+
             exit(1)
 
         word_level_representation = self.get_representation(word_level_alphas, word_level_gru)
 
-        return word_level_gru, word_level_importance, word_level_representation
+        word_level_representation = word_level_representation.reshape(
+            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, word_level_gru.shape[-1])
+        )
+
+        return word_level_importance, word_level_representation
 
     def get_sentence_level_attention(self, sentence_level_gru):
         sentence_level_attention = torch.tanh(self.sentence_attention(sentence_level_gru.data))

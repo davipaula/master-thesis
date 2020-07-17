@@ -62,7 +62,7 @@ def test(opt):
 
     click_stream_test = torch.load(TEST_DATASET_PATH)
 
-    batch_size = 6
+    batch_size = opt.batch_size
     test_params = {
         "batch_size": batch_size,
         "shuffle": True,
@@ -76,6 +76,10 @@ def test(opt):
     model.to(device)
 
     articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
+
+    paragraphs_limit = (
+        opt.paragraphs_limit if opt.paragraphs_limit is not None else articles.get_n_percentile_paragraph_length()
+    )
 
     loss_list = []
     columns_names = [
@@ -120,6 +124,7 @@ def test(opt):
             source_articles[WORDS_PER_SENTENCE_COLUMN],
             source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
             source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
+            paragraphs_limit,
         )
 
         loss = criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
@@ -180,6 +185,7 @@ def get_args():
     )
     parser.add_argument("--level", type=str, default="paragraph")
     parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--paragraphs_limit", type=int, default=None)
 
     return parser.parse_args()
 

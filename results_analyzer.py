@@ -51,6 +51,7 @@ class ResultsAnalyzer:
 
         __models = {
             "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
+            "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
         }
 
         columns_names = [

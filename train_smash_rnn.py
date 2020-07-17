@@ -95,6 +95,12 @@ class SmashRNN:
         training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
         training_generator = torch.utils.data.DataLoader(click_stream_train, **training_params)
 
+        paragraphs_limit = (
+            self.opt.paragraphs_limit
+            if self.opt.paragraphs_limit is not None
+            else self.articles.get_n_percentile_paragraph_length()
+        )
+
         # print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
@@ -152,6 +158,7 @@ class SmashRNN:
                     source_articles[WORDS_PER_SENTENCE_COLUMN],
                     source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
                     source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
+                    paragraphs_limit,
                 )
 
                 loss = self.criterion(predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float())
@@ -320,6 +327,7 @@ class SmashRNN:
         parser.add_argument("--validation_interval", type=int, default=1)
         parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
+        parser.add_argument("--paragraphs_limit", type=int, default=None)
 
         return parser.parse_args()
 
