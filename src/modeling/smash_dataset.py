@@ -5,7 +5,6 @@
 import pandas as pd
 import numpy as np
 import torch
-from ast import literal_eval
 from torch.utils.data.dataset import Dataset
 from typing import List
 import logging
@@ -28,7 +27,7 @@ class SMASHDataset(Dataset):
         super(SMASHDataset, self).__init__()
 
         dataset = pd.read_csv(
-            dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"}
+            dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"},
         )
         self.text_embeddings = dataset["text_ids"].map(json.loads)
         self.articles = dataset["article"]
@@ -203,6 +202,12 @@ class SMASHDataset(Dataset):
             "max_paragraph_length": max(paragraph_length_list),
         }
 
+    def get_n_percentile_paragraph_length(self, n=90):
+        articles_text = self.text_embeddings
+        paragraphs_size = [len(article_text) for article_text in articles_text]
+
+        return int(np.percentile(paragraphs_size, n))
+
 
 if __name__ == "__main__":
     if torch.cuda.is_available():
@@ -211,48 +216,50 @@ if __name__ == "__main__":
         torch.manual_seed(123)
 
     test = SMASHDataset(
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english_complete.csv"
     )
 
+    test.get_sizes()
+
     articles_to_get = [
-        "Anarchism",
-        "Autism",
-        "A",
-        "Achilles",
-        "Abraham Lincoln",
-        "Aristotle",
-        "An American in Paris",
-        "Academy Awards",
-        "Ayn Rand",
-        "Algeria",
-        "Anthropology",
-        "Alchemy",
-        "ASCII",
-        "Apollo",
-        "Andre Agassi",
-        "Andorra",
-        "Amphibian",
-        "Alaska",
-        "Agriculture",
-        "Algae",
-        "Analysis of variance",
-        "Apollo 11",
-        "Apollo 8",
-        "Astronaut",
-        "Alphabet",
-        "Atomic number",
-        "Asia",
-        "Articles of Confederation",
-        "Atlantic Ocean",
-        "Angola",
-        "Alberta",
-        "Albert Einstein",
+        "Curtis Axel",
+        "To Write Love on Her Arms (film)",
+        "Joseph Smith",
+        "Darren Moore",
+        "Non-cellular life",
+        "Dir En Grey",
+        "My Neighbor Totoro",
+        "Imaginary Heroes",
+        "Video game bot",
+        "Curt Menefee",
+        "Dr. Mario 64",
+        "Ghost Rider (2007 film)",
+        "Cinema of the United Kingdom",
+        "Satoru Iwata",
+        "Honor (The Walking Dead)",
+        "Tamara Rojo",
+        "Demian Maia",
+        "Child of the Sun",
+        "Swedish Mauser",
+        "San Fernando Valley",
+        "Paul Nicholls (horse racing)",
+        "Adzuki bean",
+        "Big Brother (British series 8)",
+        "Dan Byrd",
+        "Curious George 2: Follow That Monkey!",
+        "Mil Mi-26",
+        "Hand of Death (1976 film)",
+        "Camelot (film)",
+        "Pyarey Afzal",
+        "Lothaire Bluteau",
+        "Deism",
+        "Douglas Costa",
     ]
 
-    logger.info("Started getting articles")
+    # logger.info("Started getting articles")
 
-    for n in range(10):
-        (test.get_articles(articles_to_get))
+    # for n in range(50):
+    #     (test.get_articles(articles_to_get))
 
-    logger.info("Finished getting articles")
+    # logger.info("Finished getting articles")
     # print(test.__getitem__(1))

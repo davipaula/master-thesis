@@ -39,7 +39,7 @@ def remove_empty_articles(tokenized_articles, dataset):
     ]
 
 
-def run(batch_size=6):
+def run():
     tokenized_articles = pd.read_csv("./data/processed/wiki_articles_english_complete.csv")
 
     train_dataset = pd.read_csv(TRAIN_DATASET_PATH)
@@ -57,27 +57,15 @@ def run(batch_size=6):
 
     logger.info("Datasets split. Starting saving them")
 
-    training_params = {"batch_size": batch_size, "shuffle": True, "drop_last": True}
-    train_loader = torch.utils.data.DataLoader(click_stream_train, **training_params)
-
-    validation_and_test_params = {
-        "batch_size": batch_size,
-        "shuffle": True,
-        "drop_last": False,
-    }
-    validation_loader = torch.utils.data.DataLoader(click_stream_validation, **validation_and_test_params)
-
-    test_loader = torch.utils.data.DataLoader(click_stream_test, **validation_and_test_params)
-
-    torch.save(train_loader, TRAIN_FINAL_DATASET_PATH)
-    torch.save(validation_loader, VALIDATION_FINAL_DATASET_PATH)
-    torch.save(test_loader, TEST_FINAL_DATASET_PATH)
+    torch.save(click_stream_train, TRAIN_FINAL_DATASET_PATH)
+    torch.save(click_stream_validation, VALIDATION_FINAL_DATASET_PATH)
+    torch.save(click_stream_test, TEST_FINAL_DATASET_PATH)
 
     logger.info(
-        f"Datasets saved successfully. \n"
-        f"Train size: {len(train_loader.dataset)} \n"
-        f"Validation size: {len(validation_loader.dataset)} \n"
-        f"Test size: {len(test_loader.dataset)} \n"
+        f"Datasets successfully saved. \n"
+        f"Train size: {len(train_dataset)} \n"
+        f"Validation size: {len(validation_dataset)} \n"
+        f"Test size: {len(test_dataset)} \n"
     )
 
 

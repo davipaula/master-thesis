@@ -41,14 +41,11 @@ logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-if torch.cuda.is_available():
-    WIKI_ARTICLES_DATASET_PATH = "~/thesis-davi/data/dataset/wiki_articles_english.csv"
-else:
-    WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
+WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 MODEL_FOLDER = "./trained_models/"
 FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-WORD2VEC_PATH = "./data/glove.6B.50d.txt"
+WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 RESULTS_PATH = "./results/"
 
@@ -63,7 +60,15 @@ def test(opt):
 
     logger.info("Initializing parameters")
 
-    test_generator = torch.load(TEST_DATASET_PATH)
+    click_stream_test = torch.load(TEST_DATASET_PATH)
+
+    batch_size = opt.batch_size
+    test_params = {
+        "batch_size": batch_size,
+        "shuffle": True,
+        "drop_last": False,
+    }
+    test_generator = torch.utils.data.DataLoader(click_stream_test, **test_params)
 
     criterion = nn.MSELoss().to(device)
 
@@ -71,6 +76,10 @@ def test(opt):
     model.to(device)
 
     articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
+
+    paragraphs_limit = (
+        opt.paragraphs_limit if opt.paragraphs_limit is not None else articles.get_n_percentile_paragraph_length()
+    )
 
     loss_list = []
     columns_names = [
@@ -115,6 +124,7 @@ def test(opt):
             source_articles[WORDS_PER_SENTENCE_COLUMN],
             source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
             source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
+            paragraphs_limit,
         )
 
         loss = criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
@@ -174,6 +184,8 @@ def get_args():
         """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
     )
     parser.add_argument("--level", type=str, default="paragraph")
+    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--paragraphs_limit", type=int, default=None)
 
     return parser.parse_args()
 

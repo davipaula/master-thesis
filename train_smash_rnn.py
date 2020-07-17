@@ -86,16 +86,29 @@ class SmashRNN:
         self.criterion = nn.SmoothL1Loss().to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
+        self.batch_size = self.opt.batch_size
+
         self.model.train()
 
     def train(self, level="paragraph"):
-        training_generator = torch.load(TRAIN_DATASET_PATH)
-        print("Starting training {}".format(datetime.now()))
+        click_stream_train = torch.load(TRAIN_DATASET_PATH)
+        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
+        training_generator = torch.utils.data.DataLoader(click_stream_train, **training_params)
+
+        paragraphs_limit = (
+            self.opt.paragraphs_limit
+            if self.opt.paragraphs_limit is not None
+            else self.articles.get_n_percentile_paragraph_length()
+        )
+
+        # print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
         best_loss = 1
         best_weights = None
         best_epoch = 0
+
+        print(range(self.opt.num_epochs))
 
         for epoch in range(self.opt.num_epochs):
             self.model.train()
@@ -145,6 +158,7 @@ class SmashRNN:
                     source_articles[WORDS_PER_SENTENCE_COLUMN],
                     source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
                     source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
+                    paragraphs_limit,
                 )
 
                 loss = self.criterion(predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float())
@@ -207,7 +221,14 @@ class SmashRNN:
         return document
 
     def validate(self, validation_step, level):
-        validation_generator = torch.load(VALIDATION_DATASET_PATH)
+        click_stream_validation = torch.load(VALIDATION_DATASET_PATH)
+
+        validation_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        validation_generator = torch.utils.data.DataLoader(click_stream_validation, **validation_params)
         validation_step = int(validation_step) + 1
 
         loss_list = []
@@ -304,7 +325,9 @@ class SmashRNN:
 
         parser.add_argument("--num_epochs", type=int, default=1)
         parser.add_argument("--validation_interval", type=int, default=1)
+        parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
+        parser.add_argument("--paragraphs_limit", type=int, default=None)
 
         return parser.parse_args()
 

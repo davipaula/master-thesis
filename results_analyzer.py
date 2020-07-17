@@ -8,6 +8,8 @@ import os
 from tqdm import tqdm
 from typing import List
 
+IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
+
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
 WIKIPEDIA2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_level_test.csv"
@@ -36,14 +38,19 @@ class ResultsAnalyzer:
         self.results = self.build_models_results()
         self.source_articles = self.results["source_article"].unique().tolist()
 
-        self.top_articles = self.build_top_5_matrix_by_article()
+        self.top_articles = self.build_top_10_matrix_by_article()
 
     def build_models_results(self):
+        # __models = {
+        #     "doc2vec": DOC2VEC_RESULTS_PATH,
+        #     "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
+        #     "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
+        #     "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,
+        #     "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
+        # }
+
         __models = {
-            "doc2vec": DOC2VEC_RESULTS_PATH,
-            "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
             "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
-            "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,
             "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
         }
 
@@ -63,8 +70,8 @@ class ResultsAnalyzer:
 
         return results
 
-    def get_top_5_predicted_by_article_and_model(self, source_article: str, model: str):
-        n = 5
+    def get_top_10_predicted_by_article_and_model(self, source_article: str, model: str):
+        n = 10
 
         model_results = self.results[
             (self.results["model"] == model) & (self.results["source_article"] == source_article)
@@ -73,19 +80,19 @@ class ResultsAnalyzer:
             model_results.sort_values("predicted_click_rate", ascending=False).groupby("source_article").head(n)
         )
 
-        model_results["is_in_top_5"] = False
+        model_results[IS_IN_TOP_ARTICLES_COLUMN] = False
         actual_top_articles = self.top_articles[self.top_articles["source_article"] == source_article][
             "target_article"
         ].unique()
-        model_results.loc[model_results["target_article"].isin(actual_top_articles), "is_in_top_5"] = True
+        model_results.loc[model_results["target_article"].isin(actual_top_articles), IS_IN_TOP_ARTICLES_COLUMN] = True
 
         return model_results
 
-    def build_top_5_matrix_by_article(self):
-        n = 5
+    def build_top_10_matrix_by_article(self):
+        n = 10
 
         actual_results = (
-            self.results[self.results["model"] == "paragraph"]
+            self.results[self.results["model"] == "word"]
             .sort_values(by=["source_article", "actual_click_rate"], ascending=[True, False])
             .groupby("source_article")
             .head(n)
@@ -171,7 +178,9 @@ class ResultsAnalyzer:
 
             for source_article in self.source_articles:
                 predictions.append(
-                    self.get_top_5_predicted_by_article_and_model(source_article, model)["is_in_top_5"].tolist()
+                    self.get_top_10_predicted_by_article_and_model(source_article, model)[
+                        IS_IN_TOP_ARTICLES_COLUMN
+                    ].tolist()
                 )
 
             predictions_by_model[model] = round(self.calculate_mean_average_precision_at_k(predictions, k), 4)
@@ -189,7 +198,9 @@ class ResultsAnalyzer:
 
             for source_article in self.source_articles:
                 model_predictions.append(
-                    self.get_top_5_predicted_by_article_and_model(source_article, model)["is_in_top_5"].tolist()
+                    self.get_top_10_predicted_by_article_and_model(source_article, model)[
+                        IS_IN_TOP_ARTICLES_COLUMN
+                    ].tolist()
                 )
 
             ndcg_by_model[model] = self.calculate_ndcg(model_predictions, k)
