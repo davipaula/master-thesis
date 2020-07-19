@@ -49,6 +49,9 @@ WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 RESULTS_PATH = "./results/"
 
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.enabled = True
+
 
 def test(opt):
     if torch.cuda.is_available():
@@ -63,11 +66,7 @@ def test(opt):
     click_stream_test = torch.load(TEST_DATASET_PATH)
 
     batch_size = opt.batch_size
-    test_params = {
-        "batch_size": batch_size,
-        "shuffle": True,
-        "drop_last": False,
-    }
+    test_params = {"batch_size": batch_size, "shuffle": True, "drop_last": False, "pin_memory": True, "num_workers": 4}
     test_generator = torch.utils.data.DataLoader(click_stream_test, **test_params)
 
     criterion = nn.MSELoss().to(device)
@@ -93,27 +92,28 @@ def test(opt):
 
     logger.info(f"Model Smash-RNN {opt.level} level. Starting evaluation")
 
+    i = 0
     for row in tqdm(test_generator):
         source_articles = articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
         target_articles = articles.get_articles(row[TARGET_ARTICLE_COLUMN])
 
         if opt.level == "sentence":
-            source_articles = transform_to_sentence_level(source_articles)
-            target_articles = transform_to_sentence_level(target_articles)
+            source_articles = transform_to_sentence_level(source_articles, device)
+            target_articles = transform_to_sentence_level(target_articles, device)
 
         elif opt.level == "word":
-            source_articles = transform_to_word_level(source_articles)
-            target_articles = transform_to_word_level(target_articles)
+            source_articles = transform_to_word_level(source_articles, device)
+            target_articles = transform_to_word_level(target_articles, device)
 
         row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(device)
-        source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].to(device)
-        source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
-        source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
-        source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
-        target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].to(device)
-        target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
-        target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
-        target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
+        # source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].to(device)
+        # source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
+        # source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
+        # source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
+        # target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].to(device)
+        # target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
+        # target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
+        # target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
 
         predictions = model(
             target_articles[TEXT_IDS_COLUMN],
@@ -190,12 +190,12 @@ def get_args():
     return parser.parse_args()
 
 
-def transform_to_word_level(document):
+def transform_to_word_level(document, device):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
     document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(document[WORDS_PER_SENTENCE_COLUMN])
     document[TEXT_IDS_COLUMN] = get_document_at_word_level(
-        document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN]
+        document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], device
     )
     document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones((batch_size, 1), dtype=int)
     document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
@@ -203,11 +203,13 @@ def transform_to_word_level(document):
     return document
 
 
-def transform_to_sentence_level(document):
+def transform_to_sentence_level(document, device):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-    document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN])
-    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(document[WORDS_PER_SENTENCE_COLUMN])
+    document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN], device)
+    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
+        document[WORDS_PER_SENTENCE_COLUMN], device
+    )
     document[SENTENCES_PER_PARAGRAPH_COLUMN] = get_sentences_per_paragraph_at_sentence_level(
         document[SENTENCES_PER_PARAGRAPH_COLUMN]
     )

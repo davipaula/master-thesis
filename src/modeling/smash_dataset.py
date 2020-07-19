@@ -26,6 +26,13 @@ class SMASHDataset(Dataset):
     def __init__(self, dataset_path: str):
         super(SMASHDataset, self).__init__()
 
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
+        else:
+            torch.manual_seed(123)
+            self.device = torch.device("cpu")
+
         dataset = pd.read_csv(
             dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"},
         )
@@ -75,32 +82,45 @@ class SMASHDataset(Dataset):
         max_sentence_length = max_lengths["max_sentence_length"]
         max_paragraph_length = max_lengths["max_paragraph_length"]
 
-        text_ids_tensor = np.zeros([batch_size, max_paragraph_length, max_sentence_length, max_word_length], dtype=int)
-        words_per_sentence_tensor = np.zeros([batch_size, max_paragraph_length, max_sentence_length], dtype=int)
-        sentences_per_paragraph_tensor = np.zeros([batch_size, max_paragraph_length], dtype=int)
-        paragraphs_per_document_tensor = np.zeros(batch_size, dtype=int)
+        text_ids_tensor = torch.zeros(
+            [batch_size, max_paragraph_length, max_sentence_length, max_word_length], dtype=int, device=self.device
+        )
+        words_per_sentence_tensor = torch.zeros(
+            [batch_size, max_paragraph_length, max_sentence_length], dtype=int, device=self.device
+        )
+        sentences_per_paragraph_tensor = torch.zeros([batch_size, max_paragraph_length], dtype=int, device=self.device)
+        paragraphs_per_document_tensor = torch.zeros(batch_size, dtype=int, device=self.device)
 
         for index, _ in enumerate(articles):
             article = articles_list[index]
-            text_ids_tensor[index, :] = torch.LongTensor(
+            text_ids_tensor[index, :] = (
                 self.get_padded_document(
                     article[TEXT_IDS_COLUMN], max_paragraph_length, max_sentence_length, max_word_length
                 )
+                .detach()
+                .clone()
             )
-            words_per_sentence_tensor[index, :] = torch.LongTensor(
+
+            words_per_sentence_tensor[index, :] = torch.tensor(
                 self.get_padded_words_per_sentence(
                     article["words_per_sentence"], max_paragraph_length, max_sentence_length
-                )
+                ),
+                device=self.device,
+                dtype=torch.int,
             )
-            sentences_per_paragraph_tensor[index, :] = torch.LongTensor(
-                self.get_padded_sentences_per_paragraph(article["sentences_per_paragraph"], max_paragraph_length)
+            sentences_per_paragraph_tensor[index, :] = torch.tensor(
+                self.get_padded_sentences_per_paragraph(article["sentences_per_paragraph"], max_paragraph_length),
+                device=self.device,
+                dtype=torch.int,
             )
-            paragraphs_per_document_tensor[index] = torch.LongTensor([article["paragraphs_per_document"]])
+            paragraphs_per_document_tensor[index] = torch.tensor(
+                [article["paragraphs_per_document"]], device=self.device, dtype=torch.int
+            )
 
-        text_ids_tensor = torch.from_numpy(text_ids_tensor)
-        words_per_sentence_tensor = torch.from_numpy(words_per_sentence_tensor)
-        sentences_per_paragraph_tensor = torch.from_numpy(sentences_per_paragraph_tensor)
-        paragraphs_per_document_tensor = torch.from_numpy(paragraphs_per_document_tensor)
+        # text_ids_tensor = torch.from_numpy(text_ids_tensor)
+        # words_per_sentence_tensor = torch.from_numpy(words_per_sentence_tensor)
+        # sentences_per_paragraph_tensor = torch.from_numpy(sentences_per_paragraph_tensor)
+        # paragraphs_per_document_tensor = torch.from_numpy(paragraphs_per_document_tensor)
 
         articles_list = {
             TITLE_COLUMN: articles,
@@ -136,15 +156,16 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    @staticmethod
-    def get_padded_document(document, max_paragraph_length: int, max_sentence_length: int, max_word_length: int):
+    def get_padded_document(self, document, max_paragraph_length: int, max_sentence_length: int, max_word_length: int):
         document_placeholder = torch.full(
-            (max_paragraph_length, max_sentence_length, max_word_length), -1, dtype=torch.int64
+            (max_paragraph_length, max_sentence_length, max_word_length), -1, dtype=torch.int, device=self.device
         )
 
         for paragraph_index, paragraph in enumerate(document):
             for sentence_index, sentence in enumerate(paragraph):
-                document_placeholder[paragraph_index, sentence_index, : len(sentence)] = torch.tensor(sentence)
+                document_placeholder[paragraph_index, sentence_index, : len(sentence)] = (
+                    torch.tensor(sentence, dtype=torch.int, device=self.device).clone().detach()
+                )
 
         document_placeholder += 1
 
@@ -204,9 +225,13 @@ class SMASHDataset(Dataset):
 
     def get_n_percentile_paragraph_length(self, n=90):
         articles_text = self.text_embeddings
-        paragraphs_size = [len(article_text) for article_text in articles_text]
+        paragraphs_per_article = [len(article_text) for article_text in articles_text]
+        # sentences_per_paragraph_per_article = [
+        #     [len(sentences) for sentences in article_text] for article_text in articles_text
+        # ]
+        # sentences_per_paragraph_per_article = [max(sentence) for sentence in sentences_per_paragraph_per_article]
 
-        return int(np.percentile(paragraphs_size, n))
+        return int(np.percentile(paragraphs_per_article, n))
 
 
 if __name__ == "__main__":
@@ -219,7 +244,7 @@ if __name__ == "__main__":
         "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english_complete.csv"
     )
 
-    test.get_sizes()
+    test.get_n_percentile_paragraph_length()
 
     articles_to_get = [
         "Curtis Axel",

@@ -101,7 +101,7 @@ class SmashRNN:
             else self.articles.get_n_percentile_paragraph_length()
         )
 
-        # print("Starting training {}".format(datetime.now()))
+        print("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
         best_loss = 1
@@ -128,24 +128,7 @@ class SmashRNN:
                     source_articles = self.transform_to_word_level(source_articles)
                     target_articles = self.transform_to_word_level(target_articles)
 
-                if torch.cuda.is_available():
-                    row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].cuda()
-                    source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-                    source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-                    source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[
-                        SENTENCES_PER_PARAGRAPH_COLUMN
-                    ].cuda()
-                    source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[
-                        PARAGRAPHS_PER_DOCUMENT_COLUMN
-                    ].cuda()
-                    target_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-                    target_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-                    target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[
-                        SENTENCES_PER_PARAGRAPH_COLUMN
-                    ].cuda()
-                    target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[
-                        PARAGRAPHS_PER_DOCUMENT_COLUMN
-                    ].cuda()
+                row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(self.device)
 
                 self.optimizer.zero_grad()
 
@@ -192,31 +175,29 @@ class SmashRNN:
         self.save_model()
         print(f"Training finished {datetime.now()}. Best epoch {best_epoch + 1}")
 
-    @staticmethod
-    def transform_to_word_level(document):
+    def transform_to_word_level(self, document):
         batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
         document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(document[WORDS_PER_SENTENCE_COLUMN])
         document[TEXT_IDS_COLUMN] = get_document_at_word_level(
-            document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN]
+            document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], self.device
         )
-        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones((batch_size, 1), dtype=int)
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
+        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones((batch_size, 1), dtype=int, device=self.device)
+        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int, device=self.device)
 
         return document
 
-    @staticmethod
-    def transform_to_sentence_level(document):
+    def transform_to_sentence_level(self, document):
         batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN])
+        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN], self.device)
         document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
-            document[WORDS_PER_SENTENCE_COLUMN]
+            document[WORDS_PER_SENTENCE_COLUMN], self.device
         )
         document[SENTENCES_PER_PARAGRAPH_COLUMN] = get_sentences_per_paragraph_at_sentence_level(
             document[SENTENCES_PER_PARAGRAPH_COLUMN]
         )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
+        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int, device=self.device)
 
         return document
 
@@ -251,17 +232,6 @@ class SmashRNN:
             elif level == "word":
                 source_articles = self.transform_to_word_level(source_articles)
                 target_articles = self.transform_to_word_level(target_articles)
-
-            if torch.cuda.is_available():
-                row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].cuda()
-                source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].cuda()
-                source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-                source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
-                source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
-                target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].cuda()
-                target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].cuda()
-                target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].cuda()
-                target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].cuda()
 
             with torch.no_grad():
                 predictions = self.model(

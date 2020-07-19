@@ -1,8 +1,12 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import gc
 import logging
+import os
+import sys
 
+import psutil
 import torch
 import torch.nn as nn
 import numpy as np
@@ -96,6 +100,12 @@ class SmashRNNModel(nn.Module):
             words_per_sentence_target_article,
             paragraphs_limit,
         )
+
+        del target_article
+        del paragraphs_per_article_target_article
+        del sentences_per_paragraph_target_article
+        del words_per_sentence_target_article
+
         source_article_representation = self.get_document_representation(
             source_article,
             paragraphs_per_article_source_article,
@@ -103,6 +113,11 @@ class SmashRNNModel(nn.Module):
             words_per_sentence_source_article,
             paragraphs_limit,
         )
+
+        del source_article
+        del paragraphs_per_article_source_article
+        del sentences_per_paragraph_source_article
+        del words_per_sentence_source_article
 
         # Concatenates document representations. This is the siamese part of the model
         concatenated_articles_representation = torch.cat(
@@ -115,6 +130,9 @@ class SmashRNNModel(nn.Module):
             1,
         )
 
+        del source_article_representation
+        del target_article_representation
+
         articles_similarity = self.classifier(concatenated_articles_representation)
 
         return articles_similarity
@@ -122,6 +140,8 @@ class SmashRNNModel(nn.Module):
     def get_document_representation(
         self, articles_batch, paragraphs_per_article, sentences_per_paragraph, words_per_sentence, paragraphs_limit=None
     ):
+
+        words_per_sentence_limit = 50
 
         # TODO this should be in the dataset class
         if paragraphs_limit and articles_batch.shape[1] > paragraphs_limit:
@@ -134,10 +154,14 @@ class SmashRNNModel(nn.Module):
 
             articles_batch = articles_batch[:, :paragraphs_limit, :max_sentences_per_paragraph, :max_words_per_sentence]
 
+        # if articles_batch.shape[3] > words_per_sentence_limit:
+        #     words_per_sentence = words_per_sentence.clamp(1, words_per_sentence_limit)
+        #     articles_batch = articles_batch[:, :, :, :words_per_sentence_limit]
+
         batch_size = articles_batch.shape[0]
         max_paragraphs_per_article = articles_batch.shape[1]
         max_sentences_per_paragraph = articles_batch.shape[2]
-        max_words_per_sentence = articles_batch.shape[3]
+        max_words_per_sentence = words_per_sentence.max()
 
         flatten_size = batch_size * max_paragraphs_per_article * max_sentences_per_paragraph
         flatten_word_ids = articles_batch.reshape((flatten_size, max_words_per_sentence))
@@ -148,34 +172,56 @@ class SmashRNNModel(nn.Module):
         del articles_batch
         del words_per_sentence
 
-        # attention over words
-        word_level_importance, word_level_representation = self.get_word_level_representation(
-            batch_size,
-            flatten_word_ids,
-            flatten_words_per_sentence,
-            max_paragraphs_per_article,
-            max_sentences_per_paragraph,
-            max_words_per_sentence,
+        # Limit of number of elements per tensor
+        TENSOR_SIZE_LIMIT = 1000000
+
+        split_factor = max(1, int(np.prod(flatten_word_ids.shape) / TENSOR_SIZE_LIMIT))
+        split_size = int(len(flatten_word_ids) / split_factor)
+        flatten_word_ids = flatten_word_ids.split(split_size)
+        flatten_words_per_sentence = flatten_words_per_sentence.split(split_size)
+
+        word_level_importance_list = []
+        word_level_representation_list = []
+        for index, _ in enumerate(flatten_word_ids):
+            # attention over words
+            word_level_importance, word_level_representation = self.get_word_level_representation(
+                batch_size,
+                flatten_word_ids[index],
+                flatten_words_per_sentence[index],
+                max_paragraphs_per_article,
+                max_sentences_per_paragraph,
+                max_words_per_sentence,
+            )
+
+            word_level_representation_list.append(word_level_representation)
+            word_level_importance_list.append(word_level_importance)
+
+        word_level_representation = torch.cat(word_level_representation_list)
+        word_level_importance = torch.cat(word_level_importance_list)
+
+        word_level_representation = word_level_representation.reshape(
+            (batch_size * max_paragraphs_per_article, max_sentences_per_paragraph, word_level_representation.shape[-1])
+        )
+        word_level_importance = word_level_importance.reshape(
+            (batch_size * max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence)
         )
 
-        flatten_sentences_shape = (
-            batch_size * max_paragraphs_per_article,
-            max_sentences_per_paragraph,
-            word_level_representation.shape[-1],
-        )
-        flatten_sentences = word_level_representation.reshape(flatten_sentences_shape)
+        del flatten_word_ids
+        del flatten_words_per_sentence
 
         # attention over sentences
         sentence_level_importance, sentence_level_representation = self.get_sentence_level_representation(
             batch_size,
-            flatten_sentences,
+            word_level_representation,
             max_paragraphs_per_article,
             max_sentences_per_paragraph,
             sentences_per_paragraph,
         )
 
+        del sentences_per_paragraph
+
         # attention over paragraphs
-        document_representation, paragraph_alphas = self.get_paragraph_level_representation(
+        paragraph_alphas, document_representation = self.get_paragraph_level_representation(
             paragraphs_per_article, sentence_level_representation
         )
         # (batch_size, self.paragraph_gru_out_size)
@@ -194,7 +240,7 @@ class SmashRNNModel(nn.Module):
         # maximum_sentence_indices = [
         #     (document == document.max()).nonzero().squeeze(1).item() for document in maximum_sentence
         # ]
-        # #
+        #
         # # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
         # # per document in batch
         # maximum_words_indices = []
@@ -235,7 +281,7 @@ class SmashRNNModel(nn.Module):
         paragraph_gru_out, _ = pad_packed_sequence(paragraph_gru_out, batch_first=True)
         # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
         document_representation = (paragraph_gru_out.float() * paragraph_alphas.unsqueeze(2)).sum(dim=1)
-        return document_representation, paragraph_alphas
+        return paragraph_alphas, document_representation
 
     def get_sentence_level_representation(
         self,
@@ -257,7 +303,7 @@ class SmashRNNModel(nn.Module):
         sentence_alphas = self.get_alphas(sentence_level_attention)
 
         sentence_level_importance = sentence_alphas.reshape(
-            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph)
+            (batch_size, max_paragraphs_per_article, sentences_per_paragraph.max())
         )
 
         # Similarly re-arrange word-level RNN outputs as sentence by re-padding with 0s (WORDS -> SENTENCES)
@@ -298,9 +344,6 @@ class SmashRNNModel(nn.Module):
         )
 
         word_level_alphas = self.get_alphas(word_level_attention)
-        word_level_importance = word_level_alphas.reshape(
-            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence)
-        )
 
         # Clean memory here
         del flatten_word_ids
@@ -325,11 +368,7 @@ class SmashRNNModel(nn.Module):
 
         word_level_representation = self.get_representation(word_level_alphas, word_level_gru)
 
-        word_level_representation = word_level_representation.reshape(
-            (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, word_level_gru.shape[-1])
-        )
-
-        return word_level_importance, word_level_representation
+        return word_level_alphas, word_level_representation
 
     def get_sentence_level_attention(self, sentence_level_gru):
         sentence_level_attention = torch.tanh(self.sentence_attention(sentence_level_gru.data))
@@ -394,6 +433,22 @@ class SmashRNNModel(nn.Module):
         alphas = torch.where(torch.isnan(alphas), torch.zeros_like(alphas), alphas)
 
         return alphas.unsqueeze(2)  # (n_sentences, max(words_per_sentence))
+
+
+def memReport():
+    for obj in gc.get_objects():
+        if torch.is_tensor(obj):
+            print(type(obj), obj.size())
+
+
+def cpuStats():
+    # print(sys.version)
+    # print(psutil.cpu_percent())
+    print(psutil.virtual_memory())  # physical memory usage
+    pid = os.getpid()
+    py = psutil.Process(pid)
+    memoryUse = py.memory_info()[0] / 2.0 ** 30  # memory use in GB...I think
+    print("memory GB:", memoryUse)
 
 
 if __name__ == "__main__":

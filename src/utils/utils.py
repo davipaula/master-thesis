@@ -17,12 +17,14 @@ def get_words_per_document_at_word_level(words_per_sentence):
     return words_per_sentence.sum(dim=2).sum(dim=1).unsqueeze(1).unsqueeze(1)
 
 
-def get_words_per_sentence_at_sentence_level(words_per_sentence):
+def get_words_per_sentence_at_sentence_level(words_per_sentence, device):
     batch_size = words_per_sentence.shape[0]
     paragraph_length = words_per_sentence.shape[1]
     sentence_length = words_per_sentence.shape[2]
 
-    words_per_sentence_placeholder = torch.zeros((batch_size, 1, paragraph_length * sentence_length), dtype=int)
+    words_per_sentence_placeholder = torch.zeros(
+        (batch_size, 1, paragraph_length * sentence_length), dtype=int, device=device
+    )
 
     flat_words_per_sentence = words_per_sentence.flatten(start_dim=1)
 
@@ -39,14 +41,14 @@ def get_sentences_per_paragraph_at_sentence_level(sentences_per_paragraph):
     return sentences_per_paragraph.sum(dim=1).unsqueeze(1)
 
 
-def get_document_at_word_level(document_batch, words_per_sentence_at_word_level):
+def get_document_at_word_level(document_batch, words_per_sentence_at_word_level, device):
     batch_size = document_batch.shape[0]
     paragraph_length = 1
     sentence_length = 1
     word_length = max(words_per_sentence_at_word_level).item()
 
     word_level_document_placeholder = torch.zeros(
-        (batch_size, paragraph_length, sentence_length, word_length), dtype=int
+        (batch_size, paragraph_length, sentence_length, word_length), dtype=int, device=device
     )
 
     for document_index, document in enumerate(document_batch):
@@ -59,14 +61,14 @@ def get_document_at_word_level(document_batch, words_per_sentence_at_word_level)
     return word_level_document_placeholder
 
 
-def get_document_at_sentence_level(documents_in_batch):
+def get_document_at_sentence_level(documents_in_batch, device):
     batch_size = documents_in_batch.shape[0]
     paragraph_length = documents_in_batch.shape[1]
     sentence_length = documents_in_batch.shape[2]
     word_length = documents_in_batch.shape[3]
 
     document_at_sentence_level_tensor = torch.zeros(
-        (batch_size, 1, paragraph_length * sentence_length, word_length), dtype=int
+        (batch_size, 1, paragraph_length * sentence_length, word_length), dtype=int, device=device
     )
 
     for document_index, document_in_batch in enumerate(documents_in_batch):
