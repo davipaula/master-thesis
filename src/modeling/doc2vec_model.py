@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 
 ARTICLE_COLUMN = "article"
 RAW_TEXT_COLUMN = "raw_text"
@@ -26,6 +27,12 @@ class Doc2VecModel:
     def __init__(
         self, dbow_path="./trained_models/doc2vec_dbow_model", dm_path="./trained_models/doc2vec_dm_model",
     ):
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
+        else:
+            torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
         self.__articles = WikiArticlesDataset().get_articles(level="word")
 
@@ -63,7 +70,7 @@ class Doc2VecModel:
         return ConcatenatedDoc2Vec([dbow_model, dm_model])
 
     def get_entity_vector(self, articles: List[str]):
-        entity_vectors = torch.Tensor(len(articles), self.get_hidden_size())
+        entity_vectors = torch.zeros((len(articles), self.get_hidden_size()), dtype=torch.float, device=self.device)
 
         for article_index, article in enumerate(articles):
             entity_vectors[article_index] = torch.from_numpy(self.model.docvecs[article])
@@ -71,7 +78,7 @@ class Doc2VecModel:
         return entity_vectors
 
     def get_inferred_vector(self, articles: List[str]):
-        inferred_vectors = torch.Tensor(len(articles), self.get_hidden_size())
+        inferred_vectors = torch.zeros((len(articles), self.get_hidden_size()), dtype=torch.float, device=self.device)
 
         for article_index, article in enumerate(articles):
             article_raw_text = self.__articles[RAW_TEXT_COLUMN][self.__articles[ARTICLE_COLUMN] == article]
@@ -92,11 +99,25 @@ class Doc2VecModel:
 
     def generate_tagged_documents(self):
         tagged_documents = []
-        train_articles = self.__articles[self.__articles[FOLD_COLUMN] == TRAIN_FOLD]
+        train_documents = []
+
+        click_stream_train_dataset = torch.load(TRAIN_DATASET_PATH)
+        train_articles_titles = list(
+            set(
+                (
+                    click_stream_train_dataset.dataset["source_article"].tolist()
+                    + click_stream_train_dataset.dataset["target_article"].tolist()
+                )
+            )
+        )
+
+        train_articles = self.__articles[self.__articles[ARTICLE_COLUMN].isin(train_articles_titles)]
 
         for i in range(len(train_articles)):
             tagged_documents.append(
-                TaggedDocument(train_articles[RAW_TEXT_COLUMN][i].split(), [train_articles[ARTICLE_COLUMN][i]],)
+                TaggedDocument(
+                    train_articles[RAW_TEXT_COLUMN].iloc[i].split(), [train_articles[ARTICLE_COLUMN].iloc[i]],
+                )
             )
 
         return tagged_documents

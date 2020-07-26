@@ -80,7 +80,7 @@ class DatasetCreator:
         # logger.info(f"Generating Available Titles")
         # AvailableTitlesExtractor(wiki_titles_path).run(available_titles_save_path)
         #
-        # logger.info("Extractiing Wiki articles")
+        # logger.info("Extracting Wiki articles")
         # extract_wiki_articles(wiki_dump_path=wiki_dump_path, output_path=wiki_pre_processed_path, limit=100)
 
         # logger.info(f"Generating Click Stream Dataset")

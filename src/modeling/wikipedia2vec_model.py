@@ -6,15 +6,22 @@ from typing import List
 from wikipedia2vec import Wikipedia2Vec
 from src.utils.utils import cosine_similarity
 
+MODEL_FILE = "./trained_models/wikipedia2vec_model"
+
 
 class Wikipedia2VecModel:
     def __init__(self):
-        model_file = "./trained_models/wikipedia2vec_model"
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
+        else:
+            torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
-        self.model = Wikipedia2Vec.load(model_file)
+        self.model = Wikipedia2Vec.load(MODEL_FILE)
 
     def get_entity_vector(self, articles: List[str]):
-        entity_vectors = torch.Tensor(len(articles), 100)
+        entity_vectors = torch.zeros((len(articles), 100), dtype=torch.float, device=self.device)
 
         for article_index, article in enumerate(articles):
             try:

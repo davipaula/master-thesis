@@ -10,12 +10,10 @@ RAW_TEXT_COLUMN = "raw_text"
 
 class WikiArticlesDataset:
     def __init__(self):
-        __selected_articles_path = "./data/processed/selected_articles.csv"
-        __wiki_articles_path = "./data/dataset/wiki_articles_english.csv"
+        __wiki_articles_path = "./data/dataset/wiki_articles_english_complete.csv"
 
-        __selected_articles = pd.read_csv(__selected_articles_path)
         __wiki_articles = pd.read_csv(__wiki_articles_path)
-        self.dataset = pd.merge(__selected_articles, __wiki_articles, on=["article"])
+        self.dataset = __wiki_articles
 
     def __len__(self):
         return len(self.dataset)

@@ -15,6 +15,8 @@ import pandas as pd
 
 from src.modeling.doc2vec_model import Doc2VecModel
 
+TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
+
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
@@ -25,12 +27,20 @@ class TestDoc2Vec:
     def __init__(self):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
         else:
             torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
-        logger.info("Initializing parameters")
-        click_stream_path = "./data/dataset/click_stream_test.pth"
-        self.click_stream_validation = torch.load(click_stream_path)
+        self.batch_size = 32
+
+        click_stream_validation_dataset = torch.load(TEST_DATASET_PATH)
+        validation_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        self.click_stream_validation = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
         self.doc2vec = Doc2VecModel()
 
         self.models = {"doc2vec": self.doc2vec}
@@ -49,7 +59,7 @@ class TestDoc2Vec:
 
     def run(self):
         for model_name, model in self.models.items():
-            regression_model = torch.load(f"./trained_models/{str(model_name)}_regression_model")
+            regression_model = torch.load(f"./trained_models/{str(model_name)}_regression_model").to(self.device)
             self.test(model_name, model, regression_model)
 
     def test(self, model_name, model, regression_model):
@@ -66,7 +76,7 @@ class TestDoc2Vec:
 
             prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.squeeze(1), row["click_rate"])
+            loss = self.criterion(prediction.to(self.device).squeeze(1), row["click_rate"].to(self.device).float())
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(

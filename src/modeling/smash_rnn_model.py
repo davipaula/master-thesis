@@ -76,8 +76,12 @@ class SmashRNNModel(nn.Module):
         self.out_dim = 1
 
         # These layers compute the semantic similarity between two documents
+        # self.classifier = nn.Sequential(
+        #     nn.Linear(self.input_dim, self.mlp_dim), nn.ReLU(), nn.Linear(self.mlp_dim, self.out_dim), nn.Sigmoid()
+        # ).to(self.device)
+
         self.classifier = nn.Sequential(
-            nn.Linear(self.input_dim, self.mlp_dim), nn.ReLU(), nn.Linear(self.mlp_dim, self.out_dim), nn.Sigmoid()
+            nn.Linear(self.input_dim, self.mlp_dim), nn.ReLU(), nn.Linear(self.mlp_dim, self.out_dim)
         ).to(self.device)
 
     def forward(
@@ -173,7 +177,7 @@ class SmashRNNModel(nn.Module):
         del words_per_sentence
 
         # Limit of number of elements per tensor
-        TENSOR_SIZE_LIMIT = 1000000
+        TENSOR_SIZE_LIMIT = 500000
 
         split_factor = max(1, int(np.prod(flatten_word_ids.shape) / TENSOR_SIZE_LIMIT))
         split_size = int(len(flatten_word_ids) / split_factor)
@@ -184,7 +188,7 @@ class SmashRNNModel(nn.Module):
         word_level_representation_list = []
         for index, _ in enumerate(flatten_word_ids):
             # attention over words
-            word_level_importance, word_level_representation = self.get_word_level_representation(
+            word_level_representation, word_level_importance = self.get_word_level_representation(
                 batch_size,
                 flatten_word_ids[index],
                 flatten_words_per_sentence[index],
@@ -210,7 +214,7 @@ class SmashRNNModel(nn.Module):
         del flatten_words_per_sentence
 
         # attention over sentences
-        sentence_level_importance, sentence_level_representation = self.get_sentence_level_representation(
+        sentence_level_representation, sentence_level_importance = self.get_sentence_level_representation(
             batch_size,
             word_level_representation,
             max_paragraphs_per_article,
@@ -221,38 +225,30 @@ class SmashRNNModel(nn.Module):
         del sentences_per_paragraph
 
         # attention over paragraphs
-        paragraph_alphas, document_representation = self.get_paragraph_level_representation(
+        document_representation, paragraph_level_importance = self.get_paragraph_level_representation(
             paragraphs_per_article, sentence_level_representation
         )
         # (batch_size, self.paragraph_gru_out_size)
 
-        # # Calculating most important words
-        # # Gets the paragraph with max attention per document in batch
-        # maximum_paragraph_indices = [
-        #     (document == document.max()).nonzero().squeeze(1).item() for document in paragraph_alphas
-        # ]
-        #
-        # # Gets the sentence with max attention per sentence in the max paragraph in document in batch
-        # maximum_sentence = []
-        # for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
-        #     maximum_sentence.append(sentence_level_importance[document_index][document_max_paragraph])
-        #
-        # maximum_sentence_indices = [
-        #     (document == document.max()).nonzero().squeeze(1).item() for document in maximum_sentence
-        # ]
-        #
-        # # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
-        # # per document in batch
-        # maximum_words_indices = []
-        # for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
-        #     document_max_paragraph = maximum_paragraph_indices[document_index]
-        #     maximum_words_indices.append(
-        #         word_level_importance[document_index, document_max_paragraph, document_max_sentence]
-        #     )
-        #
-        # maximum_word_indices = [
-        #     (document == document.max()).nonzero().squeeze(1).item() for document in maximum_words_indices
-        # ]
+        # Calculating most important words
+        # Gets the paragraph with max attention per document in batch
+        maximum_paragraph_indices = paragraph_level_importance.argmax(dim=1)
+
+        # Gets the sentence with max attention per sentence in the max paragraph in document in batch
+        maximum_sentence_indices = []
+        for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
+            maximum_sentence_indices.append(sentence_level_importance[document_index, document_max_paragraph].argmax())
+
+        # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
+        # per document in batch
+        maximum_words_indices = []
+        for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
+            document_max_paragraph = maximum_paragraph_indices[document_index]
+            maximum_words_indices.append(
+                word_level_importance[document_index, document_max_paragraph, document_max_sentence].argmax()
+            )
+
+        most_important_word = list(zip(maximum_paragraph_indices, maximum_sentence_indices, maximum_words_indices))
 
         return document_representation
 
@@ -281,7 +277,7 @@ class SmashRNNModel(nn.Module):
         paragraph_gru_out, _ = pad_packed_sequence(paragraph_gru_out, batch_first=True)
         # (n_sentences, max(words_per_sentence), 2 * word_rnn_size)
         document_representation = (paragraph_gru_out.float() * paragraph_alphas.unsqueeze(2)).sum(dim=1)
-        return paragraph_alphas, document_representation
+        return document_representation, paragraph_alphas
 
     def get_sentence_level_representation(
         self,
@@ -312,7 +308,7 @@ class SmashRNNModel(nn.Module):
             (batch_size, max_paragraphs_per_article, sentence_level_gru.shape[-1])
         )
 
-        return sentence_level_importance, sentence_level_representation
+        return sentence_level_representation, sentence_level_importance
 
     def get_word_level_representation(
         self,
@@ -368,7 +364,7 @@ class SmashRNNModel(nn.Module):
 
         word_level_representation = self.get_representation(word_level_alphas, word_level_gru)
 
-        return word_level_alphas, word_level_representation
+        return word_level_representation, word_level_alphas
 
     def get_sentence_level_attention(self, sentence_level_gru):
         sentence_level_attention = torch.tanh(self.sentence_attention(sentence_level_gru.data))

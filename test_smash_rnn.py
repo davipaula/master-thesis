@@ -145,7 +145,7 @@ def test(opt):
 
     final_loss = sum(loss_list) / len(loss_list)
 
-    predictions_list.to_csv(f"./results/test/results_{opt.level}_level.csv", index=False)
+    predictions_list.to_csv(f"./results/test/results_{opt.level}_level_{opt.model_name}.csv", index=False)
 
     logger.info(f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}")
 
@@ -161,7 +161,7 @@ def load_model(model_folder, level, word2vec_path):
     # Siamese + Attention model
     model = SmashRNNModel(dict, dict_len, embed_dim)
 
-    model_path = model_folder + os.sep + level + "_level_model.pt"
+    model_path = f"{model_folder}/{level}_level_{opt.model_name}_model.pt"
     if torch.cuda.is_available():
         model_state_dict = torch.load(model_path)
     else:
@@ -186,6 +186,7 @@ def get_args():
     parser.add_argument("--level", type=str, default="paragraph")
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--paragraphs_limit", type=int, default=None)
+    parser.add_argument("--model_name", type=str, default="base")
 
     return parser.parse_args()
 

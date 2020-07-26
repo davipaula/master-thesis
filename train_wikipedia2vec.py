@@ -23,6 +23,9 @@ TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 MODEL_COLUMN = "model"
 
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
@@ -33,12 +36,26 @@ class TrainWikipedia2Vec:
     def __init__(self):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
         else:
             torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
         logger.info("Initializing parameters")
-        self.click_stream_train = torch.load("./data/dataset/click_stream_train.pth")
-        self.click_stream_validation = torch.load("./data/dataset/click_stream_validation.pth")
+
+        self.batch_size = 32
+
+        click_stream_train_dataset = torch.load(TRAIN_DATASET_PATH)
+        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
+        self.click_stream_train = torch.utils.data.DataLoader(click_stream_train_dataset, **training_params)
+
+        click_stream_validation_dataset = torch.load(VALIDATION_DATASET_PATH)
+        validation_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        self.click_stream_validation = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
 
         self.wikipedia2vec = Wikipedia2VecModel()
         logger.info("Loaded models")
@@ -49,6 +66,7 @@ class TrainWikipedia2Vec:
 
         self.num_epochs = options.num_epochs
         self.patience = options.patience
+        self.model_name = options.model_name
 
         self.criterion = nn.SmoothL1Loss()
 
@@ -71,7 +89,11 @@ class TrainWikipedia2Vec:
         mlp_dim = int(input_dim / 2)
         output_dim = 1
 
-        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),)
+        # nn.Sequential(
+        #     nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),
+        # ).to(self.device)
+
+        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),).to(self.device)
 
     def train(self):
         for model_name, model in self.models.items():
@@ -99,7 +121,7 @@ class TrainWikipedia2Vec:
 
                     prediction = regression_model(siamese_representation)
 
-                    loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN])
+                    loss = self.criterion(prediction.squeeze(1).float(), row[CLICK_RATE_COLUMN].to(self.device).float())
                     loss.backward()
                     optimizer.step()
 
@@ -122,7 +144,7 @@ class TrainWikipedia2Vec:
 
             # This code may throw the warning UserWarning: Couldn't retrieve source code for container of type Sigmoid.
             # This warning is not problematic https://discuss.pytorch.org/t/got-warning-couldnt-retrieve-source-code-for-container/7689/13
-            torch.save(regression_model, f"./trained_models/{str(model_name)}_regression_model")
+            torch.save(regression_model, f"./trained_models/{str(model_name)}_{self.model_name}_regression_model")
 
             logger.info("Models saved")
 
@@ -139,7 +161,7 @@ class TrainWikipedia2Vec:
 
                 prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN])
+            loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN].to(self.device))
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(
@@ -183,6 +205,7 @@ class TrainWikipedia2Vec:
         )
         parser.add_argument("--num_epochs", type=int, default=20)
         parser.add_argument("--patience", type=int, default=5)
+        parser.add_argument("--model_name", type=str, default="base")
 
         return parser.parse_args()
 

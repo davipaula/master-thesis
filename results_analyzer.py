@@ -12,10 +12,16 @@ IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
-WIKIPEDIA2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_level_test.csv"
+DOC2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_no_sigmoid_test.csv"
+WIKIPEDIA2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_base_test.csv"
+WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_no_sigmoid_test.csv"
 SMASH_RNN_WORD_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level.csv"
 SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level.csv"
 SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level.csv"
+SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_no_sigmoid.csv"
+SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_no_sigmoid.csv"
+SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_no_sigmoid.csv"
+
 
 # For debugging purposes only
 BASE_VALIDATION_RESULTS_PATH = "./results/"
@@ -51,7 +57,15 @@ class ResultsAnalyzer:
 
         __models = {
             "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
+            "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,
             "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
+            "smash_rnn_word_level_no_sigmoid": SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH,
+            "smash_rnn_sentence_level_no_sigmoid": SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH,
+            "smash_rnn_paragraph_level_no_sigmoid": SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH,
+            "doc2vec": DOC2VEC_RESULTS_PATH,
+            "doc2vec_no_sigmoid": DOC2VEC_NO_SIGMOID_RESULTS_PATH,
+            "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
+            "wikipedia2vec_no_sigmoid": WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH,
         }
 
         columns_names = [

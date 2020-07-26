@@ -61,7 +61,7 @@ class SmashRNN:
 
         # Basic config. Should be customizable in the future
         self.learning_rate = 10e-5
-        self.patience = 3
+        self.patience = 5
 
         self.opt = self.get_args()
         self.num_validations = int(self.opt.num_epochs / self.opt.validation_interval)
@@ -233,6 +233,8 @@ class SmashRNN:
                 source_articles = self.transform_to_word_level(source_articles)
                 target_articles = self.transform_to_word_level(target_articles)
 
+            row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(self.device)
+
             with torch.no_grad():
                 predictions = self.model(
                     target_articles[TEXT_IDS_COLUMN],
@@ -280,7 +282,7 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = MODEL_FOLDER + self.opt.level + "_level_model.pt"
+        model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.opt.model_name}_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod
@@ -298,6 +300,7 @@ class SmashRNN:
         parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
         parser.add_argument("--paragraphs_limit", type=int, default=None)
+        parser.add_argument("--model_name", type=str, default="base")
 
         return parser.parse_args()
 

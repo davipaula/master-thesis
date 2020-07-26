@@ -28,16 +28,32 @@ logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
+TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+
 
 class TrainDoc2Vec:
     def __init__(self):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
+            self.device = torch.device("cuda")
         else:
             torch.manual_seed(123)
+            self.device = torch.device("cpu")
 
-        self.click_stream_train = torch.load("./data/dataset/click_stream_train.pth")
-        self.click_stream_validation = torch.load("./data/dataset/click_stream_validation.pth")
+        self.batch_size = 32
+
+        click_stream_train_dataset = torch.load(TRAIN_DATASET_PATH)
+        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
+        self.click_stream_train = torch.utils.data.DataLoader(click_stream_train_dataset, **training_params)
+
+        click_stream_validation_dataset = torch.load(VALIDATION_DATASET_PATH)
+        validation_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": False,
+        }
+        self.click_stream_validation = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
 
         self.doc2vec = Doc2VecModel()
         logger.info("Loaded models")
@@ -48,6 +64,7 @@ class TrainDoc2Vec:
 
         self.num_epochs = options.num_epochs
         self.patience = options.patience
+        self.model_name = options.model_name
 
         self.criterion = nn.SmoothL1Loss()
 
@@ -60,8 +77,10 @@ class TrainDoc2Vec:
         ]
         logger.info("Parameters initialized")
 
-    def get_optimizer(self, regression_model):
+    @staticmethod
+    def get_optimizer(regression_model):
         learning_rate = 10e-5
+
         return torch.optim.Adam(regression_model.parameters(), lr=learning_rate)
 
     def get_regression_model(self, hidden_size):
@@ -70,7 +89,11 @@ class TrainDoc2Vec:
         mlp_dim = int(input_dim / 2)
         output_dim = 1
 
-        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),)
+        # nn.Sequential(
+        #     nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),
+        # ).to(self.device)
+
+        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),).to(self.device)
 
     def train(self):
         for model_name, model in self.models.items():
@@ -98,7 +121,7 @@ class TrainDoc2Vec:
 
                     prediction = regression_model(siamese_representation)
 
-                    loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN])
+                    loss = self.criterion(prediction.squeeze(1).float(), row[CLICK_RATE_COLUMN].to(self.device).float())
                     loss.backward()
                     optimizer.step()
 
@@ -121,7 +144,7 @@ class TrainDoc2Vec:
 
             # This code may throw the warning UserWarning: Couldn't retrieve source code for container of type Sigmoid.
             # This warning is not problematic https://discuss.pytorch.org/t/got-warning-couldnt-retrieve-source-code-for-container/7689/13
-            torch.save(regression_model, f"./trained_models/{str(model_name)}_regression_model")
+            torch.save(regression_model, f"./trained_models/{str(model_name)}_{self.model_name}_regression_model")
 
             logger.info("Models saved")
 
@@ -138,7 +161,7 @@ class TrainDoc2Vec:
 
                 prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN])
+            loss = self.criterion(prediction.squeeze(1).float(), row[CLICK_RATE_COLUMN].to(self.device).float())
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(
@@ -182,6 +205,7 @@ class TrainDoc2Vec:
         )
         parser.add_argument("--num_epochs", type=int, default=30)
         parser.add_argument("--patience", type=int, default=10)
+        parser.add_argument("--model_name", type=str, default="base")
 
         return parser.parse_args()
 
