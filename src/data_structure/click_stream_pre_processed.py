@@ -1,6 +1,8 @@
 import pandas as pd
 from torch.utils.data.dataset import Dataset
 
+from utils.constants import CLICK_STREAM_PROCESSED_PATH
+
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
 NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
@@ -11,9 +13,8 @@ class ClickStreamPreProcessed(Dataset):
     def __init__(self):
         super(ClickStreamPreProcessed, self).__init__()
 
-        dataset_path = "./data/processed/click_stream.csv"
         self.dataset = pd.read_csv(
-            dataset_path,
+            CLICK_STREAM_PROCESSED_PATH,
             dtype={
                 SOURCE_ARTICLE_COLUMN: "unicode_",
                 TARGET_ARTICLE_COLUMN: "unicode_",

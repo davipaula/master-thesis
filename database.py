@@ -8,6 +8,8 @@ import json
 from tqdm import tqdm
 import pandas as pd
 
+from utils.constants import AVAILABLE_TITLES_PATH
+
 logger = logging.getLogger(__name__)
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
@@ -20,12 +22,23 @@ class ArticlesDatabase:
         self.cursor.arraysize = 10
 
     def create_table(self):
-        self.cursor.execute("DROP TABLE IF EXISTS ARTICLES")
         self.cursor.execute("CREATE TABLE ARTICLES (title TEXT, sections TEXT, links TEXT)")
         self.conn.commit()
 
+    def create_tokenized_table(self):
+        self.cursor.execute("CREATE TABLE PROCESSED_ARTICLES (title TEXT, tokenized_text TEXT, raw_text TEXT)")
+        self.cursor.execute("CREATE INDEX idx_article_title ON PROCESSED_ARTICLES (title)")
+        self.conn.commit()
+
+    def add_tokenized_articles(self, title, tokenized_text, raw_text):
+        query = (
+            "INSERT INTO PROCESSED_ARTICLES (title, tokenized_text, raw_text) VALUES (?, ?, ?) "
+            "ON CONFLICT(title) DO NOTHING"
+        )
+        self.cursor.execute(query, (title, json.dumps(tokenized_text), json.dumps(raw_text)))
+
     def add_articles(self, title, sections, links):
-        query = "INSERT INTO ARTICLES (title, sections, links) VALUES (?, ?, ?)"
+        query = "INSERT INTO ARTICLES (title, sections, links) VALUES (?, ?, ?) ON CONFLICT(title) DO NOTHING"
         self.cursor.execute(query, (title, json.dumps(sections), json.dumps(links)))
 
     def import_articles(self):
@@ -44,12 +57,12 @@ class ArticlesDatabase:
         return self.cursor.execute(query, (article,)).fetchmany()
 
     def get_links_from_articles(self, articles):
-        query = f"SELECT TITLE, LINKS FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
+        query = f"SELECT TITLE, LINKS FROM ARTICLES WHERE TITLE IN ({','.join(['?'] * len(articles))})"
         return self.cursor.execute(query, articles).fetchall()
 
     def get_valid_articles(self, articles):
         self.cursor.row_factory = lambda cursor, row: row[0]
-        query = f"SELECT TITLE FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
+        query = f"SELECT TITLE FROM ARTICLES WHERE TITLE IN ({','.join(['?'] * len(articles))})"
         results = self.cursor.execute(query, articles).fetchall()
         self.cursor.row_factory = None
 
@@ -67,7 +80,7 @@ class ArticlesDatabase:
         return self.cursor.execute(query, (article,)).fetchone()
 
     def get_text_from_articles(self, articles):
-        query = f"SELECT TITLE, SECTIONS FROM ARTICLES WHERE TITLE IN ({','.join(['?']*len(articles))})"
+        query = f"SELECT TITLE, SECTIONS FROM ARTICLES WHERE TITLE IN ({','.join(['?'] * len(articles))})"
         result = self.cursor.execute(query, articles).fetchall()
 
         return result
@@ -76,7 +89,7 @@ class ArticlesDatabase:
         self.cursor.row_factory = lambda cursor, row: row[0]
         query = "SELECT DISTINCT TITLE FROM ARTICLES"
         available_articles = self.cursor.execute(query).fetchall()
-        pd.Series(available_articles).to_csv("./data/processed/available_titles.txt", header=False, index=False)
+        pd.Series(available_articles).to_csv(AVAILABLE_TITLES_PATH, header=False, index=False)
         self.cursor.row_factory = None
 
 

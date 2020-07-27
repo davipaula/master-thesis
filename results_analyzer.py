@@ -47,14 +47,6 @@ class ResultsAnalyzer:
         self.top_articles = self.build_top_10_matrix_by_article()
 
     def build_models_results(self):
-        # __models = {
-        #     "doc2vec": DOC2VEC_RESULTS_PATH,
-        #     "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
-        #     "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
-        #     "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,
-        #     "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
-        # }
-
         __models = {
             "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
             "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,

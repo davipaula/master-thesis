@@ -40,6 +40,10 @@ from gensim.scripts.segment_wiki import segment
 from typing import List
 from tqdm import tqdm
 
+from utils.constants import WIKI_DUMP_PATH
+
+from database import ArticlesDatabase
+
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
@@ -171,61 +175,39 @@ def process_dump(page_xml):
     }
 
 
-def extract_wiki_articles(wiki_dump_path: str, output_path: str, limit=0, append=True):
-    if append:
-        logger.info(f"Appending to output: {output_path}")
-        open_mode = "a"
-    else:
-        logger.info(f"Creating new output file: {output_path}")
-        open_mode = "w"
-
-    if not os.path.exists(wiki_dump_path):
-        logger.error(f"Wiki dump does not exist at: {wiki_dump_path}")
+def extract_wiki_articles() -> None:
+    """
+    Extracts XML from wiki dump and stores it into the database
+    :return:
+    """
+    if not os.path.exists(WIKI_DUMP_PATH):
+        logger.error(f"Wiki dump does not exist at: {WIKI_DUMP_PATH}")
         exit(1)
 
-    xml_fileobj = bz2.open(wiki_dump_path, "rb")
-    page_xmls = extract_page_xmls(xml_fileobj)
-
-    # with bz2.open(wiki_dump_path, "rb") as xml_fileobj:
-    #     page_xmls = extract_page_xmls(xml_fileobj)
-    #
-    #     logger.info("Opening XMLs")
-    #     pages = [page_xml for page_xml in tqdm(page_xmls)]
+    wiki_dump_xml = bz2.open(WIKI_DUMP_PATH, "rb")
+    wiki_pages_xml = extract_page_xmls(wiki_dump_xml)
 
     logger.info("Articles loaded. Starting extraction")
 
     start = datetime.now()
 
-    for page_xml in page_xmls:
-        process_dump(page_xml)
+    # To disable multiprocessing, use workers = 1
+    workers = max(1, multiprocessing.cpu_count() - 1)
 
-    # # workers = max(1, multiprocessing.cpu_count() - 1)
-    # workers = 1
-    #
-    # pool = multiprocessing.Pool(workers)
-    #
-    # pool_out = pool.map(process_dump, page_xmls)
-    #
-    # pool.close()
-    # pool.join()
-    #
-    # time_elapsed = datetime.now() - start
-    # logger.info(f"Finished extracting. Time elapsed {time_elapsed}")
+    pool = multiprocessing.Pool(workers)
 
-    with open(output_path, "w+") as f:
-        for doc in pool_out:
-            if doc:
-                f.write(json.dumps(doc) + "\n")
+    pool_output = pool.map(process_dump, wiki_pages_xml)
+
+    pool.close()
+    pool.join()
+
+    time_elapsed = datetime.now() - start
+    logger.info(f"Finished extracting. Time elapsed {time_elapsed}")
+
+    articles_db = ArticlesDatabase()
+
+    for page in pool_output:
+        if page:
+            articles_db.add_articles(page["title"], page["sessions"], page["links"])
 
     logger.info("Tokens saved")
-
-    # with open(output_path, open_mode) as f:
-    #     for doc in process_dump(wiki_dump_path, limit):
-    #         f.write(json.dumps(doc) + "\n")
-
-
-if __name__ == "__main__":
-    _wiki_dump_path = "../../data/source/enwiki-20200401-pages-articles.xml.bz2"
-    _wiki_pre_processed_path = "../../data/processed/enwiki_raw_text___.jsonl"
-
-    extract_wiki_articles(wiki_dump_path=_wiki_dump_path, output_path=_wiki_pre_processed_path)

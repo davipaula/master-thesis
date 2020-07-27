@@ -15,12 +15,21 @@ from data_structure.click_stream_dataset import ClickStreamDataset
 from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
 from torch.utils.data import TensorDataset, random_split
 
+from utils.constants import (
+    WIKI_ARTICLES_DATASET_PATH,
+    CLICK_STREAM_TRAIN_DATASET_PATH,
+    CLICK_STREAM_VALIDATION_DATASET_PATH,
+    CLICK_STREAM_TEST_DATASET_PATH,
+    SELECTED_ARTICLES_PATH,
+    AVAILABLE_TITLES_PATH,
+)
+
 NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
 
 SOURCE_ARTICLE_COLUMN = "source_article"
 TARGET_ARTICLE_COLUMN = "target_article"
 
-ARTICLE_CLICKS_THRESHOLD = 10000
+ARTICLE_TOTAL_CLICKS_THRESHOLD = 10000
 TARGET_CLICKS_THRESHOLD = 200
 
 TRAIN_DATASET_SPLIT = 0.7
@@ -45,9 +54,11 @@ class ClickStreamProcessor:
 
         self.articles_database = database.ArticlesDatabase()
 
+        self.tokenized_articles = pd.read_csv(WIKI_ARTICLES_DATASET_PATH)
+
     @staticmethod
     def get_available_titles_in_wiki_articles():
-        with open("./data/processed/available_titles.txt") as f:
+        with open(AVAILABLE_TITLES_PATH) as f:
             selected_articles = f.read().splitlines()
 
         return selected_articles
@@ -70,7 +81,7 @@ class ClickStreamProcessor:
     def filter_number_of_clicks_threshold(click_stream):
         number_of_clicks_per_source_article = click_stream.groupby(SOURCE_ARTICLE_COLUMN)[NUMBER_OF_CLICKS_COLUMN].sum()
         articles_above_threshold = number_of_clicks_per_source_article[
-            number_of_clicks_per_source_article > ARTICLE_CLICKS_THRESHOLD
+            number_of_clicks_per_source_article > ARTICLE_TOTAL_CLICKS_THRESHOLD
         ].index
 
         return click_stream[
@@ -83,36 +94,7 @@ class ClickStreamProcessor:
 
         self.split_datasets()
 
-        # click_stream_train = ClickStreamDataset(train_dataset)
-        # click_stream_validation = ClickStreamDataset(validation_dataset)
-        # click_stream_test = ClickStreamDataset(test_dataset)
-        #
-        # logger.info("Datasets split. Starting saving them")
-        #
-        # training_params = {"batch_size": batch_size, "shuffle": True, "drop_last": True}
-        # train_loader = torch.utils.data.DataLoader(click_stream_train, **training_params)
-        #
-        # validation_and_test_params = {
-        #     "batch_size": batch_size,
-        #     "shuffle": True,
-        #     "drop_last": False,
-        # }
-        # validation_loader = torch.utils.data.DataLoader(click_stream_validation, **validation_and_test_params)
-        #
-        # test_loader = torch.utils.data.DataLoader(click_stream_test, **validation_and_test_params)
-        #
-        # torch.save(train_loader, os.path.join(save_folder, "click_stream_train.pth"))
-        # torch.save(validation_loader, os.path.join(save_folder, "click_stream_validation.pth"))
-        # torch.save(test_loader, os.path.join(save_folder, "click_stream_test.pth"))
-        #
-        # logger.info(
-        #     f"Datasets saved successfully. \n"
-        #     f"Train size: {len(train_loader.dataset)} \n"
-        #     f"Validation size: {len(validation_loader.dataset)} \n"
-        #     f"Test size: {len(test_loader.dataset)} \n"
-        # )
-
-    def generate_dataset_sample(self, destination_path="./data/dataset/click_stream_random_sample.csv"):
+    def generate_dataset_sample(self):
         _pre_processed_dataset = ClickStreamPreProcessed().dataset
         logger.info(f"Clickstream dataset original size {len(_pre_processed_dataset)}")
         logger.info("Filtering dataset")
@@ -132,7 +114,6 @@ class ClickStreamProcessor:
         selected_articles = unique_source_articles[unique_source_articles.index.isin(selected_indices)]
 
         dataset_sample = dataset[dataset[SOURCE_ARTICLE_COLUMN].isin(selected_articles)].reset_index(drop=True)
-        dataset_sample.to_csv(destination_path, index=False)
 
         self.save_selected_articles_file(dataset_sample)
 
@@ -144,7 +125,7 @@ class ClickStreamProcessor:
             dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates(), dataset[TARGET_ARTICLE_COLUMN].drop_duplicates(),
         ).reset_index(drop=True)
 
-        selected_articles.to_csv("./data/processed/selected_articles.txt", header=False, index=False)
+        selected_articles.to_csv(SELECTED_ARTICLES_PATH, header=False, index=False)
 
     def split_datasets(self):
         random.seed(123)
@@ -193,40 +174,14 @@ class ClickStreamProcessor:
             & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(validation_and_test_all_articles)
         ]
 
-        train_articles_dict = [
-            (article, "train")
-            for article in set(
-                train_dataset[SOURCE_ARTICLE_COLUMN].tolist() + train_dataset[TARGET_ARTICLE_COLUMN].tolist()
-            )
-        ]
-
-        validation_articles_dict = [
-            (article, "validation")
-            for article in set(
-                validation_dataset[SOURCE_ARTICLE_COLUMN].tolist() + validation_dataset[TARGET_ARTICLE_COLUMN].tolist()
-            )
-        ]
-
-        test_articles_dict = [
-            (article, "test")
-            for article in set(
-                test_dataset[SOURCE_ARTICLE_COLUMN].tolist() + test_dataset[TARGET_ARTICLE_COLUMN].tolist()
-            )
-        ]
-
-        articles_fold = pd.DataFrame(
-            train_articles_dict + validation_articles_dict + test_articles_dict, columns=["article", "fold"],
-        )
-
-        articles_fold.to_csv("./data/processed/selected_articles.csv", index=False)
-        train_dataset.to_csv("./data/processed/train.csv", index=False)
-        validation_dataset.to_csv("./data/processed/validation.csv", index=False)
-        test_dataset.to_csv("./data/processed/test.csv", index=False)
+        self.normalize_and_save_dataset(train_dataset, CLICK_STREAM_TRAIN_DATASET_PATH)
+        self.normalize_and_save_dataset(validation_dataset, CLICK_STREAM_VALIDATION_DATASET_PATH)
+        self.normalize_and_save_dataset(test_dataset, CLICK_STREAM_TEST_DATASET_PATH)
 
     def add_negative_sampling(self, click_stream_dataset):
         unique_source_articles_titles = click_stream_dataset["source_article"].unique()
         logger.info("Getting wiki articles links")
-        wiki_articles_links = self.get_wiki_articles_links(unique_source_articles_titles)
+        wiki_articles_links = self.articles_database.get_links_from_articles(unique_source_articles_titles)
         wiki_articles_links = pd.DataFrame(wiki_articles_links, columns=["article", "links"])
 
         # wiki_articles_links["links"] = wiki_articles_links["links"].map(literal_eval)
@@ -279,6 +234,17 @@ class ClickStreamProcessor:
 
     def get_valid_articles(self, target_articles):
         return self.articles_database.get_valid_articles(target_articles)
+
+    def remove_empty_articles(self, tokenized_articles, dataset):
+        return dataset[
+            dataset[SOURCE_ARTICLE_COLUMN].isin(tokenized_articles["article"])
+            & dataset[TARGET_ARTICLE_COLUMN].isin(tokenized_articles["article"])
+        ]
+
+    def normalize_and_save_dataset(self, dataset_source, dataset_output_path: str) -> None:
+        click_stream_dataset = self.remove_empty_articles(self.tokenized_articles, dataset_source)
+
+        torch.save(click_stream_dataset, dataset_output_path)
 
 
 if __name__ == "__main__":

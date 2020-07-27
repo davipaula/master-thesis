@@ -1,5 +1,6 @@
 import pandas as pd
 from utils.utils import clean_title
+from utils.constants import CLICK_STREAM_DUMP_PATH, CLICK_STREAM_PROCESSED_PATH
 
 CLICK_RATE_COLUMN = "click_rate"
 NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
@@ -10,24 +11,18 @@ TYPE_COLUMN = "type"
 
 
 class ClickStreamExtractor:
-    def __init__(self, click_stream_dump_path: str):
-        self.__click_stream_dump_path = click_stream_dump_path
-
-        # working_directory = os.getcwd()
-        # save_path = os.path.join(working_directory, 'data', 'processed', 'click_stream.csv')
-        self.__save_path = "./data/processed/click_stream.csv"
-
     def run(self):
         click_stream = self.__extract_click_stream_data()
         click_stream = self.__add_metrics(click_stream)
 
-        click_stream.to_csv(self.__save_path, index=False)
+        click_stream.to_csv(CLICK_STREAM_PROCESSED_PATH, index=False)
 
         return click_stream
 
-    def __extract_click_stream_data(self):
+    @staticmethod
+    def __extract_click_stream_data():
         click_stream_dataset = pd.read_csv(
-            self.__click_stream_dump_path,
+            CLICK_STREAM_DUMP_PATH,
             sep="\t",
             quoting=3,
             header=None,
@@ -74,5 +69,5 @@ class ClickStreamExtractor:
 
 
 if __name__ == "__main__":
-    cs = ClickStreamExtractor("../data/clickstream-enwiki-2020-12.tsv")
+    cs = ClickStreamExtractor()
     cs.run()

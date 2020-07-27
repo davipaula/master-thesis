@@ -8,33 +8,20 @@ import logging
 
 from preparation import convert_to_word2vec
 from preparation.click_stream_extractor import ClickStreamExtractor
-from preparation.available_titles_extractor import AvailableTitlesExtractor
 from preparation.wiki_articles_extractor import extract_wiki_articles
 from preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
 from processing.click_stream_processor import ClickStreamProcessor
 from processing.wiki_articles_processor import WikiArticlesProcessor
 
-click_stream_dump_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/clickstream-enwiki-2020-03.tsv"
-)
-wiki_titles_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-all-titles-in-ns0.gz"
-)
-wiki_dump_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/enwiki-20200401-pages-articles.xml.bz2"
-)
-available_titles_save_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/available_titles.txt"
-)
+from database import ArticlesDatabase
 
-wiki_pre_processed_path = (
-    "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/processed/enwiki_articles.jsonl"
+from utils.constants import (
+    CLICK_STREAM_DUMP_PATH,
+    WIKI_TITLES_PATH,
+    WIKI_DUMP_PATH,
+    WIKI_ARTICLES_TOKENIZED_PATH,
+    WORD2VEC_PATH,
 )
-
-wiki_articles_tokenized_path = "./data/processed/enwiki_tokenized_selected_articles.jsonl"
-
-# Problem. This doesn't exist before running convert_to_word2vec
-w2v_path = "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/source/glove.6B.50d.w2vformat.txt"
 
 logger = logging.getLogger(__name__)
 
@@ -75,22 +62,23 @@ class DatasetCreator:
         # convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
         #
         # logger.info(f"Extracting Click Stream data")
-        # ClickStreamExtractor(click_stream_dump_path).run()
-        #
-        # logger.info(f"Generating Available Titles")
-        # AvailableTitlesExtractor(wiki_titles_path).run(available_titles_save_path)
+        # ClickStreamExtractor().run()
         #
         # logger.info("Extracting Wiki articles")
-        # extract_wiki_articles(wiki_dump_path=wiki_dump_path, output_path=wiki_pre_processed_path, limit=100)
+        # extract_wiki_articles()
+        #
+        # logger.info(f"Generating Available Titles")
+        # articles_db = ArticlesDatabase()
+        # articles_db.generate_available_articles()
 
         # logger.info(f"Generating Click Stream Dataset")
         # ClickStreamProcessor().run()
 
-        # logger.info("Tokenizing articles")
-        # WikiArticlesTokenizer(wiki_pre_processed_path, wiki_articles_tokenized_path, w2v_path).process()
-        #
-        logger.info("Creating dataset with Wiki Articles")
-        WikiArticlesProcessor(wiki_articles_tokenized_path).run()
+        logger.info("Tokenizing articles")
+        WikiArticlesTokenizer().process()
+
+        # logger.info("Creating dataset with Wiki Articles")
+        # WikiArticlesProcessor().run()
 
 
 if __name__ == "__main__":

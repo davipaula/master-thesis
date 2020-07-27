@@ -13,40 +13,21 @@ from tqdm import tqdm
 from utils.utils import clean_title
 from ast import literal_eval
 
-SAVE_PATH = "./data/processed/wiki_articles_english_complete.csv"
-WIKI_DOCUMENTS_PATH = "./data/processed/enwiki_tokenized_selected_articles.jsonl"
+from utils.constants import WIKI_ARTICLES_DATASET_PATH, WIKI_ARTICLES_TOKENIZED_PATH
 
 
 class WikiArticlesProcessor:
-    def __init__(self, wiki_articles_path):
-        self.__wiki_articles_path = wiki_articles_path
-
-        self.__save_path = SAVE_PATH
-        self.__articles = self.load_wiki_articles()
-
     def run(self):
-        self.__articles.to_csv(self.__save_path, index=False)
-
-    def get_wiki_articles_data(self):
-        return self.__articles
-
-    def get_articles_at_word_level(self):
-        return self.__articles["raw_text"].map(self.extract_articles_at_word_level)
+        wiki_articles = self.create_wiki_articles_dataset()
+        wiki_articles.to_csv(WIKI_ARTICLES_DATASET_PATH, index=False)
 
     @staticmethod
-    def extract_articles_at_word_level(text):
-        paragraph_level = list(itertools.chain.from_iterable(literal_eval(text)))
-        word_level = list(itertools.chain.from_iterable(paragraph_level))
-
-        return " ".join(word_level)
-
-    def load_wiki_articles(self):
+    def create_wiki_articles_dataset():
         text_ids = []
         text_string = []
         articles = []
-        articles_to_remove = []
 
-        with open(self.__wiki_articles_path, "r") as json_file:
+        with open(WIKI_ARTICLES_TOKENIZED_PATH, "r") as json_file:
             json_list = list(json_file)
 
         for json_str in tqdm(json_list):
@@ -75,5 +56,5 @@ class WikiArticlesProcessor:
 
 if __name__ == "__main__":
     os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/")
-    wiki = WikiArticlesProcessor(WIKI_DOCUMENTS_PATH)
+    wiki = WikiArticlesProcessor()
     wiki.run()
