@@ -1,5 +1,7 @@
+import json
 import logging
 import math
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -7,21 +9,29 @@ import os
 
 from tqdm import tqdm
 from typing import List
+import glob
+
+from database import ArticlesDatabase
+from utils.constants import RESULT_FILE_COLUMNS_NAMES
 
 IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
 DOC2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_no_sigmoid_test.csv"
+DOC2VEC_COSINE_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_cosine_level_test.csv"
 WIKIPEDIA2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_base_test.csv"
 WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_no_sigmoid_test.csv"
-SMASH_RNN_WORD_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level.csv"
-SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level.csv"
-SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level.csv"
+WIKIPEDIA2VEC_COSINE_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_cosine_level_test.csv"
+SMASH_RNN_WORD_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_base.csv"
+SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_base.csv"
+SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_base.csv"
 SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_no_sigmoid.csv"
 SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_no_sigmoid.csv"
 SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_no_sigmoid.csv"
-
+SMASH_RNN_WORD_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_200d.csv"
+SMASH_RNN_SENTENCE_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_200d.csv"
+SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_200d.csv"
 
 # For debugging purposes only
 BASE_VALIDATION_RESULTS_PATH = "./results/"
@@ -37,6 +47,29 @@ logger = logging.getLogger(__name__)
 
 LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+ARTICLES = [
+    "Serbia",
+    "IPhone XS",
+    "Tracey Ullman",
+    "Vietnam War",
+    "Cloris Leachman",
+    "Amphetamine",
+    "Harvey Weinstein",
+    "John Browning",
+    "The Irishman",
+    "Gully Boy",
+    "Kareem Abdul-Jabbar",
+    "Rob Dyrdek",
+    "Barkhad Abdi",
+    "Michael Biehn",
+    "John Cusack",
+    "McG",
+    "Murali (Tamil actor)",
+    "Blind Guardian",
+    "Tell Me a Story (TV series)",
+    "Eton College",
+]
 
 
 class ResultsAnalyzer:
@@ -54,25 +87,23 @@ class ResultsAnalyzer:
             "smash_rnn_word_level_no_sigmoid": SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH,
             "smash_rnn_sentence_level_no_sigmoid": SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH,
             "smash_rnn_paragraph_level_no_sigmoid": SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH,
+            "smash_rnn_word_level_200d": SMASH_RNN_WORD_LEVEL_200D_RESULTS_PATH,
+            "smash_rnn_sentence_level_200d": SMASH_RNN_SENTENCE_LEVEL_200D_RESULTS_PATH,
+            "smash_rnn_paragraph_level_200d": SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH,
             "doc2vec": DOC2VEC_RESULTS_PATH,
             "doc2vec_no_sigmoid": DOC2VEC_NO_SIGMOID_RESULTS_PATH,
+            "doc2vec_cosine": DOC2VEC_COSINE_RESULTS_PATH,
             "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
-            "wikipedia2vec_no_sigmoid": WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH,
+            "wikiepdia2vec_no_sigmoid": WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH,
+            "wikipedia2vec_cosine": WIKIPEDIA2VEC_COSINE_RESULTS_PATH,
         }
 
-        columns_names = [
-            "model",
-            "source_article",
-            "target_article",
-            "actual_click_rate",
-            "predicted_click_rate",
-        ]
+        results_files = [file for file in glob.glob(f"{BASE_RESULTS_PATH}*.csv")]
 
-        results = pd.DataFrame(columns=columns_names)
+        results = pd.DataFrame(columns=RESULT_FILE_COLUMNS_NAMES)
 
-        for model_path in __models.values():
-            if os.path.exists(model_path):
-                results = results.append(pd.read_csv(model_path))
+        for file_path in results_files:
+            results = results.append(pd.read_csv(file_path))
 
         return results
 
@@ -244,8 +275,9 @@ class ResultsAnalyzer:
 
 if __name__ == "__main__":
     pd.set_option("display.max_rows", 500)
-    pd.set_option("display.max_columns", 500)
-    pd.set_option("display.width", 1000)
+pd.set_option("display.max_columns", 500)
+pd.set_option("display.width", 1000)
 
-    results = ResultsAnalyzer()
-    print(results.get_ndcg_for_all_models())
+_results = ResultsAnalyzer()
+result = _results.get_ndcg_for_all_models()
+print(result)

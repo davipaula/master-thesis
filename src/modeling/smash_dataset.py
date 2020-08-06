@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
 class SMASHDataset(Dataset):
-    def __init__(self, dataset_path: str):
+    def __init__(self, dataset_path: str, introduction_only: bool = False):
         super(SMASHDataset, self).__init__()
 
         if torch.cuda.is_available():
@@ -37,6 +37,10 @@ class SMASHDataset(Dataset):
             dataset_path, usecols=["article", "text_ids"], dtype={"article": "category", "text_ids": "object"},
         )
         self.text_embeddings = dataset["text_ids"].map(json.loads)
+
+        if introduction_only:
+            self.text_embeddings = self.text_embeddings.map(lambda article: [article[0]] if article else [])
+
         self.articles = dataset["article"]
 
     def __len__(self):

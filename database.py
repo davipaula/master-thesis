@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+from collections import Counter
 from datetime import datetime
 
 import jsonlines
@@ -41,6 +42,11 @@ class ArticlesDatabase:
         query = "INSERT INTO ARTICLES (title, sections, links) VALUES (?, ?, ?) ON CONFLICT(title) DO NOTHING"
         self.cursor.execute(query, (title, json.dumps(sections), json.dumps(links)))
 
+    def add_new_columns(self):
+        query = "ALTER TABLE articles ADD COLUMN in_links_count INTEGER"
+        self.cursor.execute(query)
+        self.conn.commit()
+
     def import_articles(self):
         json_path = "./data/processed/enwiki_raw_text.jsonl"
 
@@ -77,6 +83,7 @@ class ArticlesDatabase:
 
     def get_text_from_article(self, article):
         query = "SELECT TITLE, SECTIONS FROM ARTICLES WHERE TITLE = ?"
+
         return self.cursor.execute(query, (article,)).fetchone()
 
     def get_text_from_articles(self, articles):
@@ -92,118 +99,135 @@ class ArticlesDatabase:
         pd.Series(available_articles).to_csv(AVAILABLE_TITLES_PATH, header=False, index=False)
         self.cursor.row_factory = None
 
+    def get_all_titles(self):
+        self.cursor.row_factory = lambda cursor, row: row[0]
+        query = "SELECT title FROM articles"
+        result = self.cursor.execute(query).fetchall()
+        self.cursor.row_factory = None
+
+        return result
+
+    def insert_word_count(self, article_title, word_count):
+        query = f"UPDATE articles SET word_count = ? WHERE title = ?"
+
+        try:
+            self.cursor.execute(query, (word_count, article_title))
+        except Exception as e:
+            logger.error("Error inserting data")
+            logger.info(query)
+            logger.info(e)
+            exit(1)
+
+    def insert_out_links_count(self, article_title, number_of_links):
+        query = f"UPDATE articles SET out_links_count = ? WHERE title = ?"
+
+        try:
+            self.cursor.execute(query, (number_of_links, article_title))
+        except Exception as e:
+            logger.error("Error inserting data")
+            logger.info(query)
+            logger.info(e)
+            exit(1)
+
+    def insert_in_links_count(self, article_title, number_of_links):
+        query = f"UPDATE articles SET in_links_count = ? WHERE title = ?"
+
+        try:
+            self.cursor.execute(query, (number_of_links, article_title))
+        except Exception as e:
+            logger.error("Error inserting data")
+            logger.info(query)
+            logger.info(e)
+            exit(1)
+
+    def calculate_number_of_words(self):
+
+        all_titles = self.get_all_titles()
+        titles_count = len(all_titles)
+
+        chunk_size = 10000
+        start = 0
+        end = chunk_size
+
+        logger.info(f"Started inserting")
+        start_time = datetime.now()
+        for n in tqdm(range(int(titles_count / chunk_size))):
+            current_titles = all_titles[start:end]
+            articles_text = self.get_text_from_articles(current_titles)
+
+            for article in articles_text:
+                word_count = 0
+                if not json.loads(article[1]):
+                    continue
+
+                for section in json.loads(article[1]):
+                    word_count += len(section["text"].split())
+
+                self.insert_word_count(article[0], word_count)
+
+            self.conn.commit()
+
+            start = end
+            end += min(chunk_size, titles_count)
+
+        logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
+
+    def calculate_out_links_count(self):
+        all_titles = self.get_all_titles()
+        titles_count = len(all_titles)
+
+        chunk_size = 10000
+        start = 0
+        end = chunk_size
+
+        logger.info(f"Started inserting")
+        start_time = datetime.now()
+        for n in tqdm(range(int(titles_count / chunk_size))):
+            current_titles = all_titles[start:end]
+            articles_link = self.get_links_from_articles(current_titles)
+
+            for article in articles_link:
+                number_of_links = len(json.loads(article[1]))
+                self.insert_out_links_count(article[0], number_of_links)
+
+            self.conn.commit()
+
+            start = end
+            end += min(chunk_size, titles_count)
+
+        logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
+
+    def calculate_in_links_count(self):
+        all_titles = self.get_all_titles()
+        titles_count = len(all_titles)
+
+        chunk_size = 10000
+        start = 0
+        end = chunk_size
+
+        logger.info(f"Started counting")
+        links_counter = Counter()
+        start_time = datetime.now()
+        for n in tqdm(range(int(titles_count / chunk_size))):
+            current_titles = all_titles[start:end]
+            articles_link = self.get_links_from_articles(current_titles)
+
+            for article in articles_link:
+                articles_link = json.loads(article[1])
+                links_counter.update(articles_link)
+
+            start = end
+            end += min(chunk_size, titles_count)
+
+        logger.info(f"Finished counting. Starting insertion")
+
+        for title, in_links in tqdm(links_counter.items()):
+            self.insert_in_links_count(title, in_links)
+
+        self.conn.commit()
+        logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
+
 
 if __name__ == "__main__":
-    source_articles = [
-        "Anarchism",
-        "Autism",
-        "Albedo",
-        "A",
-        "Alabama",
-        "Achilles",
-        "Abraham Lincoln",
-        "Aristotle",
-        "An American in Paris",
-        "Academy Award for Best Production Design",
-        "Academy Awards",
-        "Actrius",
-        "Animalia (book)",
-        "International Atomic Time",
-        "Altruism",
-        "Ayn Rand",
-        "Alain Connes",
-        "Allan Dwan",
-        "Algeria",
-        "List of Atlas Shrugged characters",
-        "Anthropology",
-        "Agricultural science",
-        "Alchemy",
-        "Alien",
-        "Astronomer",
-        "ASCII",
-        "Austin (disambiguation)",
-        "Animation",
-        "Apollo",
-        "Andre Agassi",
-        "Austroasiatic languages",
-        "Afroasiatic languages",
-        "Andorra",
-        "Arithmetic mean",
-        "American Football Conference",
-        "Animal Farm",
-        "Amphibian",
-        "Alaska",
-        "Agriculture",
-        "Aldous Huxley",
-        "Ada",
-        "Aberdeen (disambiguation)",
-        "Algae",
-        "Analysis of variance",
-        "Alkane",
-        "Appellate procedure in the United States",
-        "Answer (law)",
-        "Appellate court",
-        "Arraignment",
-        "America the Beautiful",
-        "Assistive technology",
-        "Abacus",
-        "Acid",
-        "Asphalt",
-        "American National Standards Institute",
-        "Argument (disambiguation)",
-        "Apollo 11",
-        "Apollo 8",
-        "Astronaut",
-        "A Modest Proposal",
-        "Alkali metal",
-        "Alphabet",
-        "Atomic number",
-        "Anatomy",
-        "Affirming the consequent",
-        "Andrei Tarkovsky",
-        "Ambiguity",
-        "Animal (disambiguation)",
-        "Aardvark",
-        "Aardwolf",
-        "Adobe",
-        "Adventure",
-        "Asia",
-        "Aruba",
-        "Articles of Confederation",
-        "Asia Minor (disambiguation)",
-        "Atlantic Ocean",
-        "Arthur Schopenhauer",
-        "Angola",
-        "Demographics of Angola",
-        "Politics of Angola",
-        "Economy of Angola",
-        "Transport in Angola",
-        "Angolan Armed Forces",
-        "Foreign relations of Angola",
-        "Albert Sidney Johnston",
-        "Android (robot)",
-        "Alberta",
-        "List of anthropologists",
-        "Actinopterygii",
-        "Albert Einstein",
-        "Afghanistan",
-        "Albania",
-        "Allah",
-        "Algorithms (journal)",
-        "Azerbaijan",
-        "Amateur astronomy",
-        "Aikido",
-        "Art",
-        "Agnostida",
-    ]
-
     articles_database = ArticlesDatabase()
-    value = articles_database.get_text_from_article("Lage Raho Munna Bhai")
-    print(value)
-    # logger.info("Creating table")
-    # articles_database.create_table()
-    # logger.info("Creating index")
-    # articles_database.create_index()
-    # logger.info("Importing articles")
-
-    # articles_database.import_articles()
+    articles_database.calculate_in_links_count()

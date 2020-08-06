@@ -27,10 +27,13 @@ from utils.utils import (
 from modeling.smash_rnn_model import SmashRNNModel
 from modeling.smash_dataset import SMASHDataset
 from datetime import datetime
+from utils.utils import get_word2vec_path
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
@@ -44,8 +47,7 @@ SOURCE_ARTICLE_COLUMN = "source_article"
 TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 MODEL_FOLDER = "./trained_models/"
-WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
-RESULTS_PATH = "./results/"
+RESULTS_PATH = "./results/validation/"
 
 WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
@@ -67,24 +69,41 @@ class SmashRNN:
         self.num_validations = int(self.opt.num_epochs / self.opt.validation_interval)
         # End of configs
 
-        self.articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
+        self.model_name = (
+            self.opt.model_name + "_introduction_only"
+            if self.opt.introduction_only
+            else self.opt.model_name
+        )
+
+        self.articles = SMASHDataset(
+            WIKI_ARTICLES_DATASET_PATH, introduction_only=self.opt.introduction_only
+        )
+
+        word2vec_path = get_word2vec_path(self.opt.w2v_dimension)
 
         # Load from txt file (in word2vec format)
-        dict = pd.read_csv(filepath_or_buffer=WORD2VEC_PATH, header=None, sep=" ", quoting=csv.QUOTE_NONE,).values[
-            :, 1:
-        ]
+        dict = pd.read_csv(
+            filepath_or_buffer=word2vec_path,
+            header=None,
+            sep="\s",
+            engine="python",
+            quoting=csv.QUOTE_NONE,
+        ).values[:, 1:]
         dict_len, embed_dim = dict.shape
         dict_len += 1
         unknown_word = np.zeros((1, embed_dim))
-        dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
+        dict = torch.from_numpy(
+            np.concatenate([unknown_word, dict], axis=0).astype(np.float)
+        )
 
-        # Paragraph level model
         self.model = SmashRNNModel(dict, dict_len, embed_dim)
         self.model.to(self.device)
 
         # Overall model optimization and evaluation parameters
         self.criterion = nn.SmoothL1Loss().to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.learning_rate
+        )
 
         self.batch_size = self.opt.batch_size
 
@@ -92,8 +111,14 @@ class SmashRNN:
 
     def train(self, level="paragraph"):
         click_stream_train = torch.load(TRAIN_DATASET_PATH)
-        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
-        training_generator = torch.utils.data.DataLoader(click_stream_train, **training_params)
+        training_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": True,
+        }
+        training_generator = torch.utils.data.DataLoader(
+            click_stream_train, **training_params
+        )
 
         paragraphs_limit = (
             self.opt.paragraphs_limit
@@ -144,7 +169,9 @@ class SmashRNN:
                     paragraphs_limit,
                 )
 
-                loss = self.criterion(predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float())
+                loss = self.criterion(
+                    predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float()
+                )
                 loss.backward()
                 self.optimizer.step()
 
@@ -154,15 +181,23 @@ class SmashRNN:
 
             print(
                 "Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}".format(
-                    epoch + 1, self.opt.num_epochs, self.optimizer.param_groups[0]["lr"], loss, datetime.now(),
+                    epoch + 1,
+                    self.opt.num_epochs,
+                    self.optimizer.param_groups[0]["lr"],
+                    loss,
+                    datetime.now(),
                 )
             )
 
-            validation_loss = self.validate(int(epoch / self.opt.validation_interval), level)
+            validation_loss = self.validate(
+                int(epoch / self.opt.validation_interval), level
+            )
 
             if validation_loss < best_loss:
                 best_loss = validation_loss
-                best_weights = {k: v.to("cpu").clone() for k, v in self.model.state_dict().items()}
+                best_weights = {
+                    k: v.to("cpu").clone() for k, v in self.model.state_dict().items()
+                }
                 best_epoch = epoch
                 num_epochs_without_improvement = 0
             else:
@@ -178,26 +213,38 @@ class SmashRNN:
     def transform_to_word_level(self, document):
         batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(document[WORDS_PER_SENTENCE_COLUMN])
+        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
+            document[WORDS_PER_SENTENCE_COLUMN]
+        )
         document[TEXT_IDS_COLUMN] = get_document_at_word_level(
             document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], self.device
         )
-        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones((batch_size, 1), dtype=int, device=self.device)
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int, device=self.device)
+        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones(
+            (batch_size, 1), dtype=int, device=self.device
+        )
+        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
+            batch_size, dtype=int, device=self.device
+        )
 
         return document
 
     def transform_to_sentence_level(self, document):
         batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN], self.device)
+        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
+            document[TEXT_IDS_COLUMN], self.device
+        )
         document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
             document[WORDS_PER_SENTENCE_COLUMN], self.device
         )
-        document[SENTENCES_PER_PARAGRAPH_COLUMN] = get_sentences_per_paragraph_at_sentence_level(
+        document[
+            SENTENCES_PER_PARAGRAPH_COLUMN
+        ] = get_sentences_per_paragraph_at_sentence_level(
             document[SENTENCES_PER_PARAGRAPH_COLUMN]
         )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int, device=self.device)
+        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
+            batch_size, dtype=int, device=self.device
+        )
 
         return document
 
@@ -209,7 +256,9 @@ class SmashRNN:
             "shuffle": True,
             "drop_last": False,
         }
-        validation_generator = torch.utils.data.DataLoader(click_stream_validation, **validation_params)
+        validation_generator = torch.utils.data.DataLoader(
+            click_stream_validation, **validation_params
+        )
         validation_step = int(validation_step) + 1
 
         loss_list = []
@@ -266,7 +315,10 @@ class SmashRNN:
         final_loss = self.calculate_loss(loss_list)
 
         predictions_list.to_csv(
-            "{}results_{}_level_validation_{}.csv".format(RESULTS_PATH, level, datetime.now()), index=False,
+            "{}results_{}_level_validation_{}.csv".format(
+                RESULTS_PATH, self.model_name, datetime.now()
+            ),
+            index=False,
         )
 
         print(
@@ -282,7 +334,9 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.opt.model_name}_model.pt"
+        model_path = (
+            f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
+        )
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod
@@ -301,6 +355,8 @@ class SmashRNN:
         parser.add_argument("--level", type=str, default="paragraph")
         parser.add_argument("--paragraphs_limit", type=int, default=None)
         parser.add_argument("--model_name", type=str, default="base")
+        parser.add_argument("--w2v_dimension", type=int, default=50)
+        parser.add_argument("--introduction_only", type=bool, default=False)
 
         return parser.parse_args()
 

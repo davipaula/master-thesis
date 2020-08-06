@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import torch
 
+from utils.constants import WORD2VEC_50D_PATH, WORD2VEC_200D_PATH
+
 
 def remove_zeros(elements_in_sequence):
     return [element if element else 1 for element in elements_in_sequence.tolist()]
@@ -32,7 +34,9 @@ def get_words_per_sentence_at_sentence_level(words_per_sentence, device):
         non_zero_indices = document.nonzero(as_tuple=True)
         non_zero_sentences = document[non_zero_indices]
 
-        words_per_sentence_placeholder[document_index, 0, : len(non_zero_sentences)] = non_zero_sentences
+        words_per_sentence_placeholder[
+            document_index, 0, : len(non_zero_sentences)
+        ] = non_zero_sentences
 
     return words_per_sentence_placeholder
 
@@ -41,22 +45,26 @@ def get_sentences_per_paragraph_at_sentence_level(sentences_per_paragraph):
     return sentences_per_paragraph.sum(dim=1).unsqueeze(1)
 
 
-def get_document_at_word_level(document_batch, words_per_sentence_at_word_level, device):
+def get_document_at_word_level(
+    document_batch, words_per_sentence_at_word_level, device
+):
     batch_size = document_batch.shape[0]
     paragraph_length = 1
     sentence_length = 1
     word_length = max(words_per_sentence_at_word_level).item()
 
     word_level_document_placeholder = torch.zeros(
-        (batch_size, paragraph_length, sentence_length, word_length), dtype=int, device=device
+        (batch_size, paragraph_length, sentence_length, word_length),
+        dtype=int,
+        device=device,
     )
 
     for document_index, document in enumerate(document_batch):
         non_zero_indices = document.nonzero(as_tuple=True)
 
-        word_level_document_placeholder[document_index, 0, 0, : len(document[non_zero_indices])] = document[
-            non_zero_indices
-        ]
+        word_level_document_placeholder[
+            document_index, 0, 0, : len(document[non_zero_indices])
+        ] = document[non_zero_indices]
 
     return word_level_document_placeholder
 
@@ -68,13 +76,17 @@ def get_document_at_sentence_level(documents_in_batch, device):
     word_length = documents_in_batch.shape[3]
 
     document_at_sentence_level_tensor = torch.zeros(
-        (batch_size, 1, paragraph_length * sentence_length, word_length), dtype=int, device=device
+        (batch_size, 1, paragraph_length * sentence_length, word_length),
+        dtype=int,
+        device=device,
     )
 
     for document_index, document_in_batch in enumerate(documents_in_batch):
         non_zero_sentences = document_in_batch[document_in_batch.sum(dim=2) > 0]
 
-        document_at_sentence_level_tensor[document_index, 0, : len(non_zero_sentences), :] = non_zero_sentences
+        document_at_sentence_level_tensor[
+            document_index, 0, : len(non_zero_sentences), :
+        ] = non_zero_sentences
 
     return document_at_sentence_level_tensor
 
@@ -101,7 +113,13 @@ current_document = next(iter(training_generator))[0]
         """
 
     print("starting")
-    print(timeit.timeit("get_document_at_sentence_level(current_document['text'])", setup=setup, number=100))
+    print(
+        timeit.timeit(
+            "get_document_at_sentence_level(current_document['text'])",
+            setup=setup,
+            number=100,
+        )
+    )
     print("finished")
 
 
@@ -121,7 +139,9 @@ current_document = next(iter(training_generator))[0]
     print("starting")
     print(
         timeit.timeit(
-            "get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])", setup=setup, number=100
+            "get_words_per_sentence_at_sentence_level(current_document['words_per_sentence'])",
+            setup=setup,
+            number=100,
         )
     )
     print("finished")
@@ -132,7 +152,9 @@ def test_sentence_level():
 
     for current_document, previous_document, click_rate_tensor in training_generator:
         current_document_ = get_document_at_sentence_level(current_document["text"])
-        words_per_sentence = get_words_per_sentence_at_sentence_level(current_document["words_per_sentence"])
+        words_per_sentence = get_words_per_sentence_at_sentence_level(
+            current_document["words_per_sentence"]
+        )
 
         break
 
@@ -174,6 +196,22 @@ def clean_title(title):
         title = title.replace(r"_", " ")
 
     return title
+
+
+def get_word2vec_path(w2v_dimension: int):
+    word2vec_paths = {50: WORD2VEC_50D_PATH, 200: WORD2VEC_200D_PATH}
+
+    w2v_dimension = 50 if w2v_dimension in word2vec_paths.keys() else w2v_dimension
+
+    return word2vec_paths[w2v_dimension]
+
+
+def get_model_name(level: str, model_name: str, introduction_only: bool):
+    model_name = f"{level}_level_{model_name}"
+
+    model_name = model_name + "_introduction_only" if introduction_only else model_name
+
+    return model_name
 
 
 if __name__ == "__main__":

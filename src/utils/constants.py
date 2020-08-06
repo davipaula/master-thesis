@@ -7,7 +7,8 @@ WIKI_DUMP_PATH = "./data/source/enwiki-20200401-pages-articles.xml.bz2"
 
 AVAILABLE_TITLES_PATH = "./data/processed/available_titles.txt"
 
-WORD2VEC_PATH = "./data/source/glove.6B.50d.w2vformat.txt"
+WORD2VEC_50D_PATH = "./data/source/glove.6B.50d.w2vformat.txt"
+WORD2VEC_200D_PATH = "./data/source/glove.6B.200d.w2vformat.txt"
 
 SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.txt"
 
@@ -22,3 +23,17 @@ TEST_DATASET_PATH = "./data/processed/test.csv"
 CLICK_STREAM_TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 CLICK_STREAM_VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 CLICK_STREAM_TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
+
+MODEL_COLUMN = "model"
+PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
+ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
+TARGET_ARTICLE_COLUMN = "target_article"
+SOURCE_ARTICLE_COLUMN = "source_article"
+
+RESULT_FILE_COLUMNS_NAMES = [
+    MODEL_COLUMN,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    ACTUAL_CLICK_RATE_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+]

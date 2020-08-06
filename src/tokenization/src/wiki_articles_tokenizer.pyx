@@ -27,7 +27,7 @@ LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
-class WikiArticlesTokenizer:
+cdef class WikiArticlesTokenizer:
     def __init__(self, is_development: bool = False):
         __spacy_model = "en_core_web_sm"
 
@@ -38,7 +38,7 @@ class WikiArticlesTokenizer:
         logger.info(f"Spacy model loaded: {__spacy_model}")
 
         if is_development:
-            os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
+            os.chdir("/")
             _w2v_path = "./data/source/glove.6B.200d.w2vformat.1k.txt"
         else:
             _w2v_path = WORD2VEC_200D_PATH
@@ -108,10 +108,9 @@ class WikiArticlesTokenizer:
 
     def process(self) -> None:
         logger.info("Loading selected articles")
+
         with open(SELECTED_ARTICLES_PATH, "r") as selected_articles_file:
             selected_articles = [article_title.rstrip("\n") for article_title in selected_articles_file]
-
-        selected_articles = selected_articles[:200]
 
         logger.info("Loaded selected articles")
         start = datetime.now()

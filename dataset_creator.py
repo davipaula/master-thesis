@@ -20,7 +20,7 @@ from utils.constants import (
     WIKI_TITLES_PATH,
     WIKI_DUMP_PATH,
     WIKI_ARTICLES_TOKENIZED_PATH,
-    WORD2VEC_PATH,
+    WORD2VEC_200D_PATH,
 )
 
 logger = logging.getLogger(__name__)

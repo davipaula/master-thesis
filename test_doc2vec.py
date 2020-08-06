@@ -34,13 +34,13 @@ class TestDoc2Vec:
 
         self.batch_size = 32
 
-        click_stream_validation_dataset = torch.load(TEST_DATASET_PATH)
-        validation_params = {
+        click_stream_test_dataset = torch.load(TEST_DATASET_PATH)
+        test_params = {
             "batch_size": self.batch_size,
             "shuffle": True,
             "drop_last": False,
         }
-        self.click_stream_validation = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
+        self.click_stream_test = torch.utils.data.DataLoader(click_stream_test_dataset, **test_params)
         self.doc2vec = Doc2VecModel()
 
         self.models = {"doc2vec": self.doc2vec}
@@ -68,7 +68,7 @@ class TestDoc2Vec:
 
         logger.info(f"Model {model_name}. Starting evaluation")
 
-        for row in tqdm(self.click_stream_validation):
+        for row in tqdm(self.click_stream_test):
             source_article_vector = model.get_inferred_vector(row["source_article"])
             target_article_vector = model.get_inferred_vector(row["target_article"])
 

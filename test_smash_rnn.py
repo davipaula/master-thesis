@@ -28,6 +28,10 @@ from src.utils.utils import (
     get_sentences_per_paragraph_at_sentence_level,
 )
 
+from utils.constants import RESULT_FILE_COLUMNS_NAMES
+
+from utils.utils import get_word2vec_path, get_model_name
+
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
 WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
@@ -38,19 +42,17 @@ SOURCE_ARTICLE_COLUMN = "source_article"
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 MODEL_FOLDER = "./trained_models/"
 FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-WORD2VEC_PATH = "./data/source/glove.6B.50d.txt"
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 RESULTS_PATH = "./results/"
-
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.enabled = True
 
 
 def test(opt):
@@ -66,29 +68,32 @@ def test(opt):
     click_stream_test = torch.load(TEST_DATASET_PATH)
 
     batch_size = opt.batch_size
-    test_params = {"batch_size": batch_size, "shuffle": True, "drop_last": False, "pin_memory": True, "num_workers": 4}
+    test_params = {
+        "batch_size": batch_size,
+        "shuffle": True,
+        "drop_last": False,
+        "pin_memory": True,
+        "num_workers": 4,
+    }
     test_generator = torch.utils.data.DataLoader(click_stream_test, **test_params)
 
     criterion = nn.MSELoss().to(device)
 
-    model = load_model(MODEL_FOLDER, opt.level, WORD2VEC_PATH)
+    model_name = get_model_name(opt.level, opt.model_name, opt.introduction_only)
+
+    model = load_model(MODEL_FOLDER, model_name, opt)
     model.to(device)
 
     articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
 
     paragraphs_limit = (
-        opt.paragraphs_limit if opt.paragraphs_limit is not None else articles.get_n_percentile_paragraph_length()
+        opt.paragraphs_limit
+        if opt.paragraphs_limit is not None
+        else articles.get_n_percentile_paragraph_length()
     )
 
     loss_list = []
-    columns_names = [
-        "model",
-        "source_article",
-        "target_article",
-        "actual_click_rate",
-        "predicted_click_rate",
-    ]
-    predictions_list = pd.DataFrame(columns=columns_names)
+    predictions_list = pd.DataFrame(columns=RESULT_FILE_COLUMNS_NAMES)
 
     logger.info(f"Model Smash-RNN {opt.level} level. Starting evaluation")
 
@@ -106,14 +111,6 @@ def test(opt):
             target_articles = transform_to_word_level(target_articles, device)
 
         row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(device)
-        # source_articles[TEXT_IDS_COLUMN] = source_articles[TEXT_IDS_COLUMN].to(device)
-        # source_articles[WORDS_PER_SENTENCE_COLUMN] = source_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
-        # source_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = source_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
-        # source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
-        # target_articles[TEXT_IDS_COLUMN] = target_articles[TEXT_IDS_COLUMN].to(device)
-        # target_articles[WORDS_PER_SENTENCE_COLUMN] = target_articles[WORDS_PER_SENTENCE_COLUMN].to(device)
-        # target_articles[SENTENCES_PER_PARAGRAPH_COLUMN] = target_articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(device)
-        # target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN] = target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(device)
 
         predictions = model(
             target_articles[TEXT_IDS_COLUMN],
@@ -132,40 +129,55 @@ def test(opt):
 
         batch_results = pd.DataFrame(
             zip(
-                [opt.level] * 32,
+                [model_name] * batch_size,
                 row[SOURCE_ARTICLE_COLUMN],
                 row[TARGET_ARTICLE_COLUMN],
                 row[CLICK_RATE_COLUMN].tolist(),
                 predictions.squeeze(1).tolist(),
             ),
-            columns=columns_names,
+            columns=RESULT_FILE_COLUMNS_NAMES,
         )
 
         predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
     final_loss = sum(loss_list) / len(loss_list)
 
-    predictions_list.to_csv(f"./results/test/results_{opt.level}_level_{opt.model_name}.csv", index=False)
+    predictions_list.to_csv(
+        f"./results/test/results_{opt.level}_level_{model_name}.csv", index=False
+    )
 
-    logger.info(f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}")
+    logger.info(
+        f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}"
+    )
 
-
-def load_model(model_folder, level, word2vec_path):
+def load_model(model_folder, model_name, opt):
     # Load from txt file (in word2vec format)
-    dict = pd.read_csv(filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE).values[:, 1:]
+    word2vec_path = get_word2vec_path(opt.w2v_dimension)
+    dict = pd.read_csv(
+        filepath_or_buffer=word2vec_path,
+        header=None,
+        sep="\s",
+        engine="python",
+        quoting=csv.QUOTE_NONE,
+    ).values[:, 1:]
     dict_len, embed_dim = dict.shape
     dict_len += 1
     unknown_word = np.zeros((1, embed_dim))
-    dict = torch.from_numpy(np.concatenate([unknown_word, dict], axis=0).astype(np.float))
+    dict = torch.from_numpy(
+        np.concatenate([unknown_word, dict], axis=0).astype(np.float)
+    )
 
     # Siamese + Attention model
     model = SmashRNNModel(dict, dict_len, embed_dim)
 
-    model_path = f"{model_folder}/{level}_level_{opt.model_name}_model.pt"
+    model_path = f"{model_folder}{model_name}_model.pt"
+    logger.info(f"Model path: {model_path}")
     if torch.cuda.is_available():
         model_state_dict = torch.load(model_path)
     else:
-        model_state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
+        model_state_dict = torch.load(
+            model_path, map_location=lambda storage, loc: storage
+        )
 
     model.load_state_dict(model_state_dict)
     for parameter in model.parameters():
@@ -187,14 +199,17 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=2)
     parser.add_argument("--paragraphs_limit", type=int, default=None)
     parser.add_argument("--model_name", type=str, default="base")
+    parser.add_argument("--w2v_dimension", type=int, default=50)
+    parser.add_argument("--introduction_only", type=bool, default=False)
 
     return parser.parse_args()
-
 
 def transform_to_word_level(document, device):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(document[WORDS_PER_SENTENCE_COLUMN])
+    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
+        document[WORDS_PER_SENTENCE_COLUMN]
+    )
     document[TEXT_IDS_COLUMN] = get_document_at_word_level(
         document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], device
     )
@@ -207,11 +222,15 @@ def transform_to_word_level(document, device):
 def transform_to_sentence_level(document, device):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
 
-    document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(document[TEXT_IDS_COLUMN], device)
+    document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
+        document[TEXT_IDS_COLUMN], device
+    )
     document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
         document[WORDS_PER_SENTENCE_COLUMN], device
     )
-    document[SENTENCES_PER_PARAGRAPH_COLUMN] = get_sentences_per_paragraph_at_sentence_level(
+    document[
+        SENTENCES_PER_PARAGRAPH_COLUMN
+    ] = get_sentences_per_paragraph_at_sentence_level(
         document[SENTENCES_PER_PARAGRAPH_COLUMN]
     )
     document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
@@ -220,5 +239,5 @@ def transform_to_sentence_level(document, device):
 
 
 if __name__ == "__main__":
-    opt = get_args()
-    test(opt)
+    _opt = get_args()
+    test(_opt)

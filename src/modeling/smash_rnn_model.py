@@ -144,9 +144,6 @@ class SmashRNNModel(nn.Module):
     def get_document_representation(
         self, articles_batch, paragraphs_per_article, sentences_per_paragraph, words_per_sentence, paragraphs_limit=None
     ):
-
-        words_per_sentence_limit = 50
-
         # TODO this should be in the dataset class
         if paragraphs_limit and articles_batch.shape[1] > paragraphs_limit:
             paragraphs_per_article = paragraphs_per_article.clamp(1, paragraphs_limit)
@@ -157,10 +154,6 @@ class SmashRNNModel(nn.Module):
             max_words_per_sentence = words_per_sentence.max()
 
             articles_batch = articles_batch[:, :paragraphs_limit, :max_sentences_per_paragraph, :max_words_per_sentence]
-
-        # if articles_batch.shape[3] > words_per_sentence_limit:
-        #     words_per_sentence = words_per_sentence.clamp(1, words_per_sentence_limit)
-        #     articles_batch = articles_batch[:, :, :, :words_per_sentence_limit]
 
         batch_size = articles_batch.shape[0]
         max_paragraphs_per_article = articles_batch.shape[1]
@@ -198,17 +191,17 @@ class SmashRNNModel(nn.Module):
             )
 
             word_level_representation_list.append(word_level_representation)
-            word_level_importance_list.append(word_level_importance)
+            # word_level_importance_list.append(word_level_importance)
 
         word_level_representation = torch.cat(word_level_representation_list)
-        word_level_importance = torch.cat(word_level_importance_list)
+        # word_level_importance = torch.cat(word_level_importance_list)
 
         word_level_representation = word_level_representation.reshape(
             (batch_size * max_paragraphs_per_article, max_sentences_per_paragraph, word_level_representation.shape[-1])
         )
-        word_level_importance = word_level_importance.reshape(
-            (batch_size * max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence)
-        )
+        # word_level_importance = word_level_importance.reshape(
+        #     (batch_size * max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence)
+        # )
 
         del flatten_word_ids
         del flatten_words_per_sentence
@@ -222,8 +215,6 @@ class SmashRNNModel(nn.Module):
             sentences_per_paragraph,
         )
 
-        del sentences_per_paragraph
-
         # attention over paragraphs
         document_representation, paragraph_level_importance = self.get_paragraph_level_representation(
             paragraphs_per_article, sentence_level_representation
@@ -232,23 +223,23 @@ class SmashRNNModel(nn.Module):
 
         # Calculating most important words
         # Gets the paragraph with max attention per document in batch
-        maximum_paragraph_indices = paragraph_level_importance.argmax(dim=1)
-
-        # Gets the sentence with max attention per sentence in the max paragraph in document in batch
-        maximum_sentence_indices = []
-        for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
-            maximum_sentence_indices.append(sentence_level_importance[document_index, document_max_paragraph].argmax())
-
-        # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
-        # per document in batch
-        maximum_words_indices = []
-        for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
-            document_max_paragraph = maximum_paragraph_indices[document_index]
-            maximum_words_indices.append(
-                word_level_importance[document_index, document_max_paragraph, document_max_sentence].argmax()
-            )
-
-        most_important_word = list(zip(maximum_paragraph_indices, maximum_sentence_indices, maximum_words_indices))
+        # maximum_paragraph_indices = paragraph_level_importance.argmax(dim=1)
+        #
+        # # Gets the sentence with max attention per sentence in the max paragraph in document in batch
+        # maximum_sentence_indices = []
+        # for document_index, document_max_paragraph in enumerate(maximum_paragraph_indices):
+        #     maximum_sentence_indices.append(sentence_level_importance[document_index, document_max_paragraph].argmax())
+        #
+        # # Gets the word with max attention in the sentence with max attention in the paragraph with max attention
+        # # per document in batch
+        # maximum_words_indices = []
+        # for document_index, document_max_sentence in enumerate(maximum_sentence_indices):
+        #     document_max_paragraph = maximum_paragraph_indices[document_index]
+        #     maximum_words_indices.append(
+        #         word_level_importance[document_index, document_max_paragraph, sentences_per_paragraph.max()].argmax()
+        #     )
+        #
+        # most_important_word = list(zip(maximum_paragraph_indices, maximum_sentence_indices, maximum_words_indices))
 
         return document_representation
 

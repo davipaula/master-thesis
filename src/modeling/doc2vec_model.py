@@ -99,7 +99,6 @@ class Doc2VecModel:
 
     def generate_tagged_documents(self):
         tagged_documents = []
-        train_documents = []
 
         click_stream_train_dataset = torch.load(TRAIN_DATASET_PATH)
         train_articles_titles = list(
