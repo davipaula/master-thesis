@@ -1,41 +1,88 @@
-import json
+import os
+import sys
+
+NDCG_COLUMN = "ndcg"
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(os.getcwd(), "src")
+sys.path.extend([os.getcwd(), src_path])
+
 import logging
 import math
-from datetime import datetime
 
 import numpy as np
 import pandas as pd
-import os
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from typing import List
 import glob
 
 from database import ArticlesDatabase
-from utils.constants import RESULT_FILE_COLUMNS_NAMES
+from utils.constants import (
+    RESULT_FILE_COLUMNS_NAMES,
+    TEST_DATASET_PATH,
+    TARGET_ARTICLE_COLUMN,
+    SOURCE_ARTICLE_COLUMN,
+    MODEL_COLUMN,
+    ACTUAL_CLICK_RATE_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+    ARTICLE_COLUMN,
+    WORD_COUNT_COLUMN,
+    OUT_LINKS_COUNT_COLUMN,
+    IN_LINKS_COUNT_COLUMN,
+)
+
+WORD_COUNT_BIN = "word_count_bin"
 
 IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
-DOC2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_no_sigmoid_test.csv"
-DOC2VEC_COSINE_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_cosine_level_test.csv"
+DOC2VEC_NO_SIGMOID_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_doc2vec_no_sigmoid_test.csv"
+)
+DOC2VEC_COSINE_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_doc2vec_cosine_level_test.csv"
+)
 WIKIPEDIA2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_base_test.csv"
-WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_no_sigmoid_test.csv"
-WIKIPEDIA2VEC_COSINE_RESULTS_PATH = BASE_RESULTS_PATH + "results_wikipedia2vec_cosine_level_test.csv"
+WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_wikipedia2vec_no_sigmoid_test.csv"
+)
+WIKIPEDIA2VEC_COSINE_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_wikipedia2vec_cosine_level_test.csv"
+)
 SMASH_RNN_WORD_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_base.csv"
-SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_base.csv"
-SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_base.csv"
-SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_no_sigmoid.csv"
-SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_no_sigmoid.csv"
-SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_no_sigmoid.csv"
-SMASH_RNN_WORD_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_word_level_200d.csv"
-SMASH_RNN_SENTENCE_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_sentence_level_200d.csv"
-SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH = BASE_RESULTS_PATH + "results_paragraph_level_200d.csv"
+SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_sentence_level_base.csv"
+)
+SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_paragraph_level_base.csv"
+)
+SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_word_level_no_sigmoid.csv"
+)
+SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_sentence_level_no_sigmoid.csv"
+)
+SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_paragraph_level_no_sigmoid.csv"
+)
+SMASH_RNN_WORD_LEVEL_200D_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_word_level_200d.csv"
+)
+SMASH_RNN_SENTENCE_LEVEL_200D_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_sentence_level_200d.csv"
+)
+SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH = (
+    BASE_RESULTS_PATH + "results_paragraph_level_200d.csv"
+)
 
 # For debugging purposes only
 BASE_VALIDATION_RESULTS_PATH = "./results/"
-SMASH_RNN_WORD_LEVEL_VALIDATION_RESULTS_PATH = BASE_VALIDATION_RESULTS_PATH + "results_word_level_validation.csv"
+SMASH_RNN_WORD_LEVEL_VALIDATION_RESULTS_PATH = (
+    BASE_VALIDATION_RESULTS_PATH + "results_word_level_validation.csv"
+)
 SMASH_RNN_SENTENCE_LEVEL_VALIDATION_RESULTS_PATH = (
     BASE_VALIDATION_RESULTS_PATH + "results_sentence_level_validation.csv"
 )
@@ -45,7 +92,9 @@ SMASH_RNN_PARAGRAPH_LEVEL_VALIDATION_RESULTS_PATH = (
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 ARTICLES = [
@@ -75,29 +124,14 @@ ARTICLES = [
 class ResultsAnalyzer:
     def __init__(self):
         self.results = self.build_models_results()
-        self.source_articles = self.results["source_article"].unique().tolist()
+        self.source_articles = self.results[SOURCE_ARTICLE_COLUMN].unique().tolist()
 
         self.top_articles = self.build_top_10_matrix_by_article()
 
-    def build_models_results(self):
-        __models = {
-            "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_RESULTS_PATH,
-            "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_RESULTS_PATH,
-            "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_RESULTS_PATH,
-            "smash_rnn_word_level_no_sigmoid": SMASH_RNN_WORD_LEVEL_NO_SIGMOID_RESULTS_PATH,
-            "smash_rnn_sentence_level_no_sigmoid": SMASH_RNN_SENTENCE_LEVEL_NO_SIGMOID_RESULTS_PATH,
-            "smash_rnn_paragraph_level_no_sigmoid": SMASH_RNN_PARAGRAPH_LEVEL_NO_SIGMOID_RESULTS_PATH,
-            "smash_rnn_word_level_200d": SMASH_RNN_WORD_LEVEL_200D_RESULTS_PATH,
-            "smash_rnn_sentence_level_200d": SMASH_RNN_SENTENCE_LEVEL_200D_RESULTS_PATH,
-            "smash_rnn_paragraph_level_200d": SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH,
-            "doc2vec": DOC2VEC_RESULTS_PATH,
-            "doc2vec_no_sigmoid": DOC2VEC_NO_SIGMOID_RESULTS_PATH,
-            "doc2vec_cosine": DOC2VEC_COSINE_RESULTS_PATH,
-            "wikipedia2vec": WIKIPEDIA2VEC_RESULTS_PATH,
-            "wikiepdia2vec_no_sigmoid": WIKIPEDIA2VEC_NO_SIGMOID_RESULTS_PATH,
-            "wikipedia2vec_cosine": WIKIPEDIA2VEC_COSINE_RESULTS_PATH,
-        }
+        self.predictions_by_model = None
+        self.predictions_by_model_and_article = None
 
+    def build_models_results(self):
         results_files = [file for file in glob.glob(f"{BASE_RESULTS_PATH}*.csv")]
 
         results = pd.DataFrame(columns=RESULT_FILE_COLUMNS_NAMES)
@@ -107,21 +141,29 @@ class ResultsAnalyzer:
 
         return results
 
-    def get_top_10_predicted_by_article_and_model(self, source_article: str, model: str):
+    def get_top_10_predicted_by_article_and_model(self, model: str):
         n = 10
 
-        model_results = self.results[
-            (self.results["model"] == model) & (self.results["source_article"] == source_article)
-        ]
+        model_results = self.results[(self.results[MODEL_COLUMN] == model)]
         model_results = (
-            model_results.sort_values("predicted_click_rate", ascending=False).groupby("source_article").head(n)
+            model_results.sort_values(PREDICTED_CLICK_RATE_COLUMN, ascending=False)
+            .groupby(SOURCE_ARTICLE_COLUMN)
+            .head(n)
         )
-
         model_results[IS_IN_TOP_ARTICLES_COLUMN] = False
-        actual_top_articles = self.top_articles[self.top_articles["source_article"] == source_article][
-            "target_article"
-        ].unique()
-        model_results.loc[model_results["target_article"].isin(actual_top_articles), IS_IN_TOP_ARTICLES_COLUMN] = True
+
+        source_articles = set(self.results[SOURCE_ARTICLE_COLUMN])
+
+        for article in source_articles:
+            actual_top_articles = self.top_articles[
+                self.top_articles[SOURCE_ARTICLE_COLUMN] == article
+            ][TARGET_ARTICLE_COLUMN].unique()
+
+            model_results.loc[
+                (model_results[SOURCE_ARTICLE_COLUMN] == article)
+                & (model_results[TARGET_ARTICLE_COLUMN].isin(actual_top_articles)),
+                IS_IN_TOP_ARTICLES_COLUMN,
+            ] = True
 
         return model_results
 
@@ -129,30 +171,33 @@ class ResultsAnalyzer:
         n = 10
 
         actual_results = (
-            self.results[self.results["model"] == "word"]
-            .sort_values(by=["source_article", "actual_click_rate"], ascending=[True, False])
-            .groupby("source_article")
+            self.results[self.results[MODEL_COLUMN] == "word"]
+            .sort_values(
+                by=[SOURCE_ARTICLE_COLUMN, ACTUAL_CLICK_RATE_COLUMN],
+                ascending=[True, False],
+            )
+            .groupby(SOURCE_ARTICLE_COLUMN)
             .head(n)
-            .drop(["actual_click_rate", "predicted_click_rate"], axis=1)
+            .drop([ACTUAL_CLICK_RATE_COLUMN, PREDICTED_CLICK_RATE_COLUMN], axis=1)
         )
 
-        actual_results["model"] = "actual click rate"
+        actual_results[MODEL_COLUMN] = "actual click rate"
 
         return actual_results
 
     def get_sample_source_articles(self, n=10):
-        return self.results["source_article"].sample(n=n)
+        return self.results[SOURCE_ARTICLE_COLUMN].sample(n=n)
 
     def get_models(self):
-        return self.results["model"].unique()
+        return self.results[MODEL_COLUMN].unique()
 
     def build_validation_models_results(self):
         # For debugging purposes only
         columns_names_validation = [
-            "source_article",
-            "target_article",
-            "actual_click_rate",
-            "predicted_click_rate",
+            SOURCE_ARTICLE_COLUMN,
+            TARGET_ARTICLE_COLUMN,
+            ACTUAL_CLICK_RATE_COLUMN,
+            PREDICTED_CLICK_RATE_COLUMN,
         ]
         __models_validation = {
             "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_VALIDATION_RESULTS_PATH,
@@ -205,49 +250,83 @@ class ResultsAnalyzer:
         return model_map
 
     def get_map_for_all_models(self, k=5):
-        models = self.get_models()
+        predictions_by_model = self.get_predictions_by_model()
 
-        predictions_by_model = {model: [] for model in models}
+        map_by_model = {
+            model: round(
+                self.calculate_mean_average_precision_at_k(model_prediction), 4
+            )
+            for model, model_prediction in predictions_by_model.items()
+        }
 
-        logger.info("Calculating MAP for each model")
-        for model in tqdm(models):
-            predictions = []
-
-            for source_article in self.source_articles:
-                predictions.append(
-                    self.get_top_10_predicted_by_article_and_model(source_article, model)[
-                        IS_IN_TOP_ARTICLES_COLUMN
-                    ].tolist()
-                )
-
-            predictions_by_model[model] = round(self.calculate_mean_average_precision_at_k(predictions, k), 4)
-
-        return predictions_by_model
+        return map_by_model
 
     def get_ndcg_for_all_models(self, k=5):
-        models = self.get_models()
+        predictions_by_model = self.get_predictions_by_model()
 
-        ndcg_by_model = {model: [] for model in models}
-
-        logger.info("Calculating NDCG for each model")
-        for model in tqdm(models):
-            model_predictions = []
-
-            for source_article in self.source_articles:
-                model_predictions.append(
-                    self.get_top_10_predicted_by_article_and_model(source_article, model)[
-                        IS_IN_TOP_ARTICLES_COLUMN
-                    ].tolist()
-                )
-
-            ndcg_by_model[model] = self.calculate_ndcg(model_predictions, k)
+        ndcg_by_model = {
+            model: self.calculate_ndcg(model_prediction)
+            for model, model_prediction in predictions_by_model.items()
+        }
 
         return ndcg_by_model
 
+    def get_predictions_by_model(self):
+        if self.predictions_by_model is not None:
+            return self.predictions_by_model
+
+        models = self.get_models()
+
+        results = pd.DataFrame(
+            columns=[
+                MODEL_COLUMN,
+                SOURCE_ARTICLE_COLUMN,
+                TARGET_ARTICLE_COLUMN,
+                ACTUAL_CLICK_RATE_COLUMN,
+                PREDICTED_CLICK_RATE_COLUMN,
+                IS_IN_TOP_ARTICLES_COLUMN,
+            ]
+        )
+        logger.info("Calculating predictions for each model")
+        for model in tqdm(models):
+            results = results.append(
+                self.get_top_10_predicted_by_article_and_model(model)
+            )
+
+        self.predictions_by_model = results
+
+        return self.predictions_by_model
+
     def calculate_idcg(self, predictions):
-        sorted_predictions = [sorted(article_predictions, reverse=True) for article_predictions in predictions]
+        sorted_predictions = [
+            sorted(article_predictions, reverse=True)
+            for article_predictions in predictions
+        ]
 
         return self.calculate_dcg(sorted_predictions)
+
+    def calculate_idcg_at_k_by_article(self, article_predictions, k):
+        article_predictions_at_k = article_predictions[:k]
+        article_predictions_at_k = article_predictions_at_k.sort_values(ascending=False)
+
+        return self.calculate_dcg_at_k_by_article(article_predictions_at_k, k)
+
+    @staticmethod
+    def calculate_dcg_at_k_by_article(article_predictions, k):
+        try:
+            article_predictions_at_k = article_predictions[:k]
+
+            dcg = (2 ** article_predictions_at_k[1:] - 1) / np.log2(
+                np.arange(3, article_predictions_at_k.size + 2)
+            )
+
+            dcg = np.concatenate(([float(article_predictions_at_k.iloc[0])], dcg))
+
+            return np.sum(dcg)
+        except Exception as err:
+            print(str(err))
+
+            exit(1)
 
     @staticmethod
     def calculate_dcg(predictions: List[List[bool]]):
@@ -256,13 +335,15 @@ class ResultsAnalyzer:
         for article_predictions in predictions:
             article_cumulative_gain = []
             for i, article_prediction in enumerate(article_predictions, 1):
-                article_cumulative_gain.append((2 ** article_prediction - 1) / (math.log2(i + 1)))
+                article_cumulative_gain.append(
+                    (2 ** article_prediction - 1) / (math.log2(i + 1))
+                )
 
             cumulative_gain_list.append(sum(article_cumulative_gain))
 
         return cumulative_gain_list
 
-    def calculate_ndcg(self, predictions, k=5):
+    def calculate_ndcg(self, predictions):
         np.seterr(divide="ignore", invalid="ignore")
         dcg = np.array(self.calculate_dcg(predictions))
         idcg = np.array(self.calculate_idcg(predictions))
@@ -272,12 +353,179 @@ class ResultsAnalyzer:
 
         return ndcg
 
+    def calculate_statistics_per_group(self):
+        db = ArticlesDatabase()
+
+        test_articles = list(
+            set(
+                self.results[SOURCE_ARTICLE_COLUMN].to_list()
+                + self.results[TARGET_ARTICLE_COLUMN].to_list()
+            )
+        )
+
+        logger.info("Getting features from DB")
+        articles_features_df = pd.DataFrame.from_dict(
+            db.get_features_from_articles(test_articles),
+        )
+
+        articles_features_df = articles_features_df.rename(
+            columns={
+                0: ARTICLE_COLUMN,
+                1: WORD_COUNT_COLUMN,
+                2: OUT_LINKS_COUNT_COLUMN,
+                3: IN_LINKS_COUNT_COLUMN,
+            }
+        )
+
+        logger.info("Getting predictions by model")
+        predictions_df = pd.DataFrame.from_dict(self.get_predictions_by_model())
+
+        predictions_df = predictions_df.merge(
+            articles_features_df,
+            left_on=[SOURCE_ARTICLE_COLUMN],
+            right_on=[ARTICLE_COLUMN],
+        ).drop(columns=[ARTICLE_COLUMN])
+
+        source_articles = set(predictions_df[SOURCE_ARTICLE_COLUMN])
+        selected_models = [
+            "doc2vec_cosine",
+            "doc2vec_no_sigmoid",
+            "paragraph_no_sigmoid",
+            "sentence_no_sigmoid",
+            "wikipedia2vec_cosine",
+            "wikipedia2vec_no_sigmoid",
+            "word_no_sigmoid",
+        ]
+
+        logger.info("Calculating results by model")
+        ndcg_by_model_and_article = self.get_ndcg_by_model_and_article(
+            selected_models, predictions_df, source_articles
+        )
+
+        ndcg_by_model_and_article = ndcg_by_model_and_article.merge(
+            articles_features_df,
+            left_on=[SOURCE_ARTICLE_COLUMN],
+            right_on=[ARTICLE_COLUMN],
+        ).drop(columns=[ARTICLE_COLUMN])
+
+        return ndcg_by_model_and_article
+
+        # ndcg_by_model_and_article[WORD_COUNT_BIN] = pd.qcut(
+        #     ndcg_by_model_and_article[WORD_COUNT_COLUMN], q=1
+        # )
+        #
+        # mean_ndcg_by_word_count_and_model = ndcg_by_model_and_article.groupby(
+        #     [WORD_COUNT_BIN, MODEL_COLUMN]
+        # ).ndcg.mean()
+        #
+        # print(mean_ndcg_by_word_count_and_model)
+
+    def get_ndcg_by_model_and_article(self, models, predictions_df, source_articles):
+        ndcg_by_model_and_article = (
+            predictions_df[[MODEL_COLUMN, SOURCE_ARTICLE_COLUMN]]
+            .loc[predictions_df[MODEL_COLUMN].isin(models)]
+            .drop_duplicates()
+            .reset_index(drop=True)
+        )
+
+        for model in models:
+            for source_article in tqdm(source_articles):
+                source_article_predictions = predictions_df[
+                    (predictions_df[SOURCE_ARTICLE_COLUMN] == source_article)
+                    & (predictions_df[MODEL_COLUMN] == model)
+                ][IS_IN_TOP_ARTICLES_COLUMN]
+
+                ndcg_by_model_and_article.loc[
+                    (
+                        (
+                            ndcg_by_model_and_article[SOURCE_ARTICLE_COLUMN]
+                            == source_article
+                        )
+                        & (ndcg_by_model_and_article[MODEL_COLUMN] == model)
+                    ),
+                    NDCG_COLUMN,
+                ] = self.get_ndcg_at_k_by_article(source_article_predictions)
+
+        ndcg_by_model_and_article = ndcg_by_model_and_article.pivot(
+            index=SOURCE_ARTICLE_COLUMN, columns=MODEL_COLUMN, values=NDCG_COLUMN
+        ).reset_index()
+
+        return ndcg_by_model_and_article
+
+    def get_ndcg_at_k_by_article(self, source_article_predictions, k=5):
+        np.seterr(divide="ignore", invalid="ignore")
+        dcg_at_k = self.calculate_dcg_at_k_by_article(source_article_predictions, k)
+        idcg_at_k = self.calculate_idcg_at_k_by_article(source_article_predictions, k)
+
+        if idcg_at_k == 0:
+            return 0
+
+        try:
+            return np.nan_to_num(dcg_at_k / idcg_at_k)
+
+        except Exception as err:
+            print(err)
+
+            exit(1)
+
+
+def get_performance_figure(
+    results,
+    models,
+    feature_column,
+    x_label,
+    y_label=None,
+    figsize=(13, 6),
+    legend_columns_count=4,
+    buckets_count=5,
+    save_file_path=None,
+):
+    bin_column = f"{feature_column}_bin"
+    bins = pd.qcut(results[feature_column], q=buckets_count)
+
+    results[bin_column] = bins
+    result_by_model = results.groupby([bin_column]).mean()[models]
+
+    fig = plt.figure(figsize=figsize)
+
+    ax = result_by_model.plot(
+        kind="bar", ax=fig.gca(), rot=0, width=0.7, alpha=0.9, edgecolor=["black"],
+    )
+
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0 + box.height * 0.25, box.width, box.height * 0.75])
+
+    ax.legend(
+        ncol=legend_columns_count,
+        loc="upper center",
+        fancybox=True,
+        shadow=False,
+        bbox_to_anchor=(0.5, 1.2),
+    )
+
+    # Formats the x label as "(lower, upper]"
+    ax.set_xticklabels(
+        [f"({int(i.left)}, {int(i.right)}]" for i in bins.cat.categories]
+    )
+
+    y_label = "NDCG@k (k=5)"
+    ax.set_xlabel(x_label % len(result_by_model))
+    ax.set_ylabel(y_label)
+
+    if save_file_path:
+        pdf_dpi = 300
+
+        logger.info(f"Saved to {save_file_path}")
+        plt.savefig(save_file_path, bbox_inches="tight", dpi=pdf_dpi)
+
+    plt.show()
+
 
 if __name__ == "__main__":
     pd.set_option("display.max_rows", 500)
-pd.set_option("display.max_columns", 500)
-pd.set_option("display.width", 1000)
+    pd.set_option("display.max_columns", 500)
+    pd.set_option("display.width", 1000)
 
-_results = ResultsAnalyzer()
-result = _results.get_ndcg_for_all_models()
-print(result)
+    _results = ResultsAnalyzer()
+    _results.calculate_statistics_per_group()
+    # _results.get_ndcg_for_all_models()

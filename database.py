@@ -2,6 +2,7 @@ import logging
 import sqlite3
 from collections import Counter
 from datetime import datetime
+from typing import List
 
 import jsonlines
 import json
@@ -12,7 +13,9 @@ import pandas as pd
 from utils.constants import AVAILABLE_TITLES_PATH
 
 logger = logging.getLogger(__name__)
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -23,12 +26,18 @@ class ArticlesDatabase:
         self.cursor.arraysize = 10
 
     def create_table(self):
-        self.cursor.execute("CREATE TABLE ARTICLES (title TEXT, sections TEXT, links TEXT)")
+        self.cursor.execute(
+            "CREATE TABLE ARTICLES (title TEXT, sections TEXT, links TEXT)"
+        )
         self.conn.commit()
 
     def create_tokenized_table(self):
-        self.cursor.execute("CREATE TABLE PROCESSED_ARTICLES (title TEXT, tokenized_text TEXT, raw_text TEXT)")
-        self.cursor.execute("CREATE INDEX idx_article_title ON PROCESSED_ARTICLES (title)")
+        self.cursor.execute(
+            "CREATE TABLE PROCESSED_ARTICLES (title TEXT, tokenized_text TEXT, raw_text TEXT)"
+        )
+        self.cursor.execute(
+            "CREATE INDEX idx_article_title ON PROCESSED_ARTICLES (title)"
+        )
         self.conn.commit()
 
     def add_tokenized_articles(self, title, tokenized_text, raw_text):
@@ -36,7 +45,9 @@ class ArticlesDatabase:
             "INSERT INTO PROCESSED_ARTICLES (title, tokenized_text, raw_text) VALUES (?, ?, ?) "
             "ON CONFLICT(title) DO NOTHING"
         )
-        self.cursor.execute(query, (title, json.dumps(tokenized_text), json.dumps(raw_text)))
+        self.cursor.execute(
+            query, (title, json.dumps(tokenized_text), json.dumps(raw_text))
+        )
 
     def add_articles(self, title, sections, links):
         query = "INSERT INTO ARTICLES (title, sections, links) VALUES (?, ?, ?) ON CONFLICT(title) DO NOTHING"
@@ -52,7 +63,9 @@ class ArticlesDatabase:
 
         with jsonlines.open(json_path) as json_file:
             for article in tqdm(json_file):
-                self.add_articles(article["title"], article["sections"], article["links"])
+                self.add_articles(
+                    article["title"], article["sections"], article["links"]
+                )
 
         self.conn.commit()
 
@@ -96,7 +109,9 @@ class ArticlesDatabase:
         self.cursor.row_factory = lambda cursor, row: row[0]
         query = "SELECT DISTINCT TITLE FROM ARTICLES"
         available_articles = self.cursor.execute(query).fetchall()
-        pd.Series(available_articles).to_csv(AVAILABLE_TITLES_PATH, header=False, index=False)
+        pd.Series(available_articles).to_csv(
+            AVAILABLE_TITLES_PATH, header=False, index=False
+        )
         self.cursor.row_factory = None
 
     def get_all_titles(self):
@@ -227,7 +242,17 @@ class ArticlesDatabase:
         self.conn.commit()
         logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
 
+    def get_features_from_articles(self, articles: List[str]) -> list:
+        query_placeholders = ','.join(['?'] * len(articles))
+        query = (
+            f"SELECT title, word_count, out_links_count, in_links_count "
+            f"FROM articles WHERE title IN ({query_placeholders})"
+        )
+        result = self.cursor.execute(query, articles).fetchall()
+
+        return result
+
 
 if __name__ == "__main__":
     articles_database = ArticlesDatabase()
-    articles_database.calculate_in_links_count()
+    print(articles_database.get_features_from_articles(["Anarchism"]))
