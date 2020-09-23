@@ -46,6 +46,7 @@ SOURCE_ARTICLE_COLUMN = "source_article"
 
 TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 MODEL_FOLDER = "./trained_models/"
 RESULTS_PATH = "./results/validation/"
 
@@ -334,9 +335,7 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = (
-            f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
-        )
+        model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod

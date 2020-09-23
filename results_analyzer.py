@@ -1,8 +1,6 @@
 import os
 import sys
 
-NDCG_COLUMN = "ndcg"
-
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -12,7 +10,6 @@ import math
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 from typing import List
@@ -31,10 +28,12 @@ from utils.constants import (
     WORD_COUNT_COLUMN,
     OUT_LINKS_COUNT_COLUMN,
     IN_LINKS_COUNT_COLUMN,
+    PARAGRAPH_COUNT_COLUMN,
+    SENTENCE_COUNT_COLUMN,
 )
 
 WORD_COUNT_BIN = "word_count_bin"
-
+NDCG_COLUMN = "ndcg"
 IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
 
 BASE_RESULTS_PATH = "./results/test/"
@@ -96,29 +95,6 @@ LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-ARTICLES = [
-    "Serbia",
-    "IPhone XS",
-    "Tracey Ullman",
-    "Vietnam War",
-    "Cloris Leachman",
-    "Amphetamine",
-    "Harvey Weinstein",
-    "John Browning",
-    "The Irishman",
-    "Gully Boy",
-    "Kareem Abdul-Jabbar",
-    "Rob Dyrdek",
-    "Barkhad Abdi",
-    "Michael Biehn",
-    "John Cusack",
-    "McG",
-    "Murali (Tamil actor)",
-    "Blind Guardian",
-    "Tell Me a Story (TV series)",
-    "Eton College",
-]
 
 
 class ResultsAnalyzer:
@@ -287,7 +263,7 @@ class ResultsAnalyzer:
                 IS_IN_TOP_ARTICLES_COLUMN,
             ]
         )
-        logger.info("Calculating predictions for each model")
+        logger.info("Aggregating predictions for each model")
         for model in tqdm(models):
             results = results.append(
                 self.get_top_10_predicted_by_article_and_model(model)
@@ -374,6 +350,8 @@ class ResultsAnalyzer:
                 1: WORD_COUNT_COLUMN,
                 2: OUT_LINKS_COUNT_COLUMN,
                 3: IN_LINKS_COUNT_COLUMN,
+                4: PARAGRAPH_COUNT_COLUMN,
+                5: SENTENCE_COUNT_COLUMN,
             }
         )
 
@@ -391,10 +369,19 @@ class ResultsAnalyzer:
             "doc2vec_cosine",
             "doc2vec_no_sigmoid",
             "paragraph_no_sigmoid",
+            "paragraph_200d",
             "sentence_no_sigmoid",
+            "sentence_200d",
             "wikipedia2vec_cosine",
             "wikipedia2vec_no_sigmoid",
             "word_no_sigmoid",
+            "word_200d",
+            "paragraph_level_50d_introduction_only",
+            "sentence_level_50d_introduction_only",
+            "paragraph_level_200d_introduction_only",
+            "sentence_level_200d_introduction_only",
+            "word_level_50d_introduction_only",
+            "word_level_200d_introduction_only",
         ]
 
         logger.info("Calculating results by model")
@@ -469,63 +456,11 @@ class ResultsAnalyzer:
             exit(1)
 
 
-def get_performance_figure(
-    results,
-    models,
-    feature_column,
-    x_label,
-    y_label=None,
-    figsize=(13, 6),
-    legend_columns_count=4,
-    buckets_count=5,
-    save_file_path=None,
-):
-    bin_column = f"{feature_column}_bin"
-    bins = pd.qcut(results[feature_column], q=buckets_count)
-
-    results[bin_column] = bins
-    result_by_model = results.groupby([bin_column]).mean()[models]
-
-    fig = plt.figure(figsize=figsize)
-
-    ax = result_by_model.plot(
-        kind="bar", ax=fig.gca(), rot=0, width=0.7, alpha=0.9, edgecolor=["black"],
-    )
-
-    box = ax.get_position()
-    ax.set_position([box.x0, box.y0 + box.height * 0.25, box.width, box.height * 0.75])
-
-    ax.legend(
-        ncol=legend_columns_count,
-        loc="upper center",
-        fancybox=True,
-        shadow=False,
-        bbox_to_anchor=(0.5, 1.2),
-    )
-
-    # Formats the x label as "(lower, upper]"
-    ax.set_xticklabels(
-        [f"({int(i.left)}, {int(i.right)}]" for i in bins.cat.categories]
-    )
-
-    y_label = "NDCG@k (k=5)"
-    ax.set_xlabel(x_label % len(result_by_model))
-    ax.set_ylabel(y_label)
-
-    if save_file_path:
-        pdf_dpi = 300
-
-        logger.info(f"Saved to {save_file_path}")
-        plt.savefig(save_file_path, bbox_inches="tight", dpi=pdf_dpi)
-
-    plt.show()
-
-
 if __name__ == "__main__":
     pd.set_option("display.max_rows", 500)
     pd.set_option("display.max_columns", 500)
     pd.set_option("display.width", 1000)
 
     _results = ResultsAnalyzer()
-    _results.calculate_statistics_per_group()
+    _results.get_predictions_by_model()
     # _results.get_ndcg_for_all_models()

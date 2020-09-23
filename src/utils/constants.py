@@ -30,6 +30,8 @@ ARTICLE_COLUMN = "article"
 WORD_COUNT_COLUMN = "word_count"
 OUT_LINKS_COUNT_COLUMN = "out_links_count"
 IN_LINKS_COUNT_COLUMN = "in_links_count"
+PARAGRAPH_COUNT_COLUMN = "paragraph_count"
+SENTENCE_COUNT_COLUMN = "sentence_count"
 
 MODEL_COLUMN = "model"
 PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"

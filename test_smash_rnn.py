@@ -150,6 +150,7 @@ def test(opt):
         f"Model Smash-RNN {opt.level} level. Evaluation finished. Final loss: {final_loss}"
     )
 
+
 def load_model(model_folder, model_name, opt):
     # Load from txt file (in word2vec format)
     word2vec_path = get_word2vec_path(opt.w2v_dimension)
@@ -203,6 +204,7 @@ def get_args():
     parser.add_argument("--introduction_only", type=bool, default=False)
 
     return parser.parse_args()
+
 
 def transform_to_word_level(document, device):
     batch_size = document[TEXT_IDS_COLUMN].shape[0]
