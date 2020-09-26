@@ -72,8 +72,6 @@ def test(opt):
         "batch_size": batch_size,
         "shuffle": True,
         "drop_last": False,
-        "pin_memory": True,
-        "num_workers": 4,
     }
     test_generator = torch.utils.data.DataLoader(click_stream_test, **test_params)
 
@@ -84,12 +82,8 @@ def test(opt):
     model = load_model(MODEL_FOLDER, model_name, opt)
     model.to(device)
 
-    articles = SMASHDataset(WIKI_ARTICLES_DATASET_PATH)
-
-    paragraphs_limit = (
-        opt.paragraphs_limit
-        if opt.paragraphs_limit is not None
-        else articles.get_n_percentile_paragraph_length()
+    articles = SMASHDataset(
+        WIKI_ARTICLES_DATASET_PATH, introduction_only=opt.introduction_only
     )
 
     loss_list = []
@@ -102,27 +96,9 @@ def test(opt):
         source_articles = articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
         target_articles = articles.get_articles(row[TARGET_ARTICLE_COLUMN])
 
-        if opt.level == "sentence":
-            source_articles = transform_to_sentence_level(source_articles, device)
-            target_articles = transform_to_sentence_level(target_articles, device)
-
-        elif opt.level == "word":
-            source_articles = transform_to_word_level(source_articles, device)
-            target_articles = transform_to_word_level(target_articles, device)
-
         row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(device)
 
-        predictions = model(
-            target_articles[TEXT_IDS_COLUMN],
-            target_articles[WORDS_PER_SENTENCE_COLUMN],
-            target_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-            target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-            source_articles[TEXT_IDS_COLUMN],
-            source_articles[WORDS_PER_SENTENCE_COLUMN],
-            source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-            source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-            paragraphs_limit,
-        )
+        predictions = model(target_articles, source_articles)
 
         loss = criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
         loss_list.append(loss)
@@ -169,7 +145,7 @@ def load_model(model_folder, model_name, opt):
     )
 
     # Siamese + Attention model
-    model = SmashRNNModel(dict, dict_len, embed_dim)
+    model = SmashRNNModel(dict, dict_len, embed_dim, opt.level)
 
     model_path = f"{model_folder}{model_name}_model.pt"
     logger.info(f"Model path: {model_path}")
