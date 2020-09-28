@@ -38,7 +38,9 @@ DATASET_SAMPLE_PERCENT = 0.1
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -79,7 +81,9 @@ class ClickStreamProcessor:
 
     @staticmethod
     def filter_number_of_clicks_threshold(click_stream):
-        number_of_clicks_per_source_article = click_stream.groupby(SOURCE_ARTICLE_COLUMN)[NUMBER_OF_CLICKS_COLUMN].sum()
+        number_of_clicks_per_source_article = click_stream.groupby(
+            SOURCE_ARTICLE_COLUMN
+        )[NUMBER_OF_CLICKS_COLUMN].sum()
         articles_above_threshold = number_of_clicks_per_source_article[
             number_of_clicks_per_source_article > ARTICLE_TOTAL_CLICKS_THRESHOLD
         ].index
@@ -96,24 +100,33 @@ class ClickStreamProcessor:
 
     def generate_dataset_sample(self):
         _pre_processed_dataset = ClickStreamPreProcessed().dataset
+
         logger.info(f"Clickstream dataset original size {len(_pre_processed_dataset)}")
         logger.info("Filtering dataset")
         dataset = self.filter_dataset(_pre_processed_dataset)
+
         logger.info(f"Filtered clickstream dataset size {len(dataset)}")
         logger.info("Adding negative sampling")
         dataset = self.add_negative_sampling(dataset)
+
         logger.info(f"Finished adding negative sampling. Dataset size {len(dataset)}")
 
-        unique_source_articles = dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates().reset_index(drop=True)
+        unique_source_articles = (
+            dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates().reset_index(drop=True)
+        )
 
         num_articles = len(unique_source_articles)
         sample_dataset_size = int(num_articles * DATASET_SAMPLE_PERCENT)
 
         selected_indices = random.sample(range(num_articles), sample_dataset_size)
 
-        selected_articles = unique_source_articles[unique_source_articles.index.isin(selected_indices)]
+        selected_articles = unique_source_articles[
+            unique_source_articles.index.isin(selected_indices)
+        ]
 
-        dataset_sample = dataset[dataset[SOURCE_ARTICLE_COLUMN].isin(selected_articles)].reset_index(drop=True)
+        dataset_sample = dataset[
+            dataset[SOURCE_ARTICLE_COLUMN].isin(selected_articles)
+        ].reset_index(drop=True)
 
         self.save_selected_articles_file(dataset_sample)
 
@@ -122,7 +135,8 @@ class ClickStreamProcessor:
     @staticmethod
     def save_selected_articles_file(dataset):
         selected_articles = pd.Series.append(
-            dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates(), dataset[TARGET_ARTICLE_COLUMN].drop_duplicates(),
+            dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates(),
+            dataset[TARGET_ARTICLE_COLUMN].drop_duplicates(),
         ).reset_index(drop=True)
 
         selected_articles.to_csv(SELECTED_ARTICLES_PATH, header=False, index=False)
@@ -136,7 +150,9 @@ class ClickStreamProcessor:
         click_stream_size = len(source_articles)
         train_dataset_size = int(click_stream_size * TRAIN_DATASET_SPLIT)
         validation_dataset_size = int((click_stream_size - train_dataset_size) / 2)
-        test_dataset_size = click_stream_size - train_dataset_size - validation_dataset_size
+        test_dataset_size = (
+            click_stream_size - train_dataset_size - validation_dataset_size
+        )
 
         random.shuffle(source_articles)
 
@@ -146,43 +162,67 @@ class ClickStreamProcessor:
         ]
         test_source_articles = source_articles[-test_dataset_size:]
 
-        train_and_validation_source_articles = set(train_source_articles + validation_source_articles)
+        train_and_validation_source_articles = set(
+            train_source_articles + validation_source_articles
+        )
         test_dataset = click_stream_data[
             click_stream_data[SOURCE_ARTICLE_COLUMN].isin(test_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(train_and_validation_source_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(
+                train_and_validation_source_articles
+            )
         ]
 
         test_all_articles = list(
-            set(test_dataset[SOURCE_ARTICLE_COLUMN].tolist() + test_dataset[TARGET_ARTICLE_COLUMN].tolist())
+            set(
+                test_dataset[SOURCE_ARTICLE_COLUMN].tolist()
+                + test_dataset[TARGET_ARTICLE_COLUMN].tolist()
+            )
         )
 
-        test_all_articles_and_train_source_articles = set(test_all_articles + train_source_articles)
+        test_all_articles_and_train_source_articles = set(
+            test_all_articles + train_source_articles
+        )
 
         validation_dataset = click_stream_data[
             click_stream_data[SOURCE_ARTICLE_COLUMN].isin(validation_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(test_all_articles_and_train_source_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(
+                test_all_articles_and_train_source_articles
+            )
         ]
 
         validation_all_articles = list(
-            set(validation_dataset[SOURCE_ARTICLE_COLUMN].tolist() + validation_dataset[TARGET_ARTICLE_COLUMN].tolist())
+            set(
+                validation_dataset[SOURCE_ARTICLE_COLUMN].tolist()
+                + validation_dataset[TARGET_ARTICLE_COLUMN].tolist()
+            )
         )
 
-        validation_and_test_all_articles = set(validation_all_articles + test_all_articles)
+        validation_and_test_all_articles = set(
+            validation_all_articles + test_all_articles
+        )
 
         train_dataset = click_stream_data[
             click_stream_data[SOURCE_ARTICLE_COLUMN].isin(train_source_articles)
-            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(validation_and_test_all_articles)
+            & ~click_stream_data[TARGET_ARTICLE_COLUMN].isin(
+                validation_and_test_all_articles
+            )
         ]
 
         self.normalize_and_save_dataset(train_dataset, CLICK_STREAM_TRAIN_DATASET_PATH)
-        self.normalize_and_save_dataset(validation_dataset, CLICK_STREAM_VALIDATION_DATASET_PATH)
+        self.normalize_and_save_dataset(
+            validation_dataset, CLICK_STREAM_VALIDATION_DATASET_PATH
+        )
         self.normalize_and_save_dataset(test_dataset, CLICK_STREAM_TEST_DATASET_PATH)
 
     def add_negative_sampling(self, click_stream_dataset):
         unique_source_articles_titles = click_stream_dataset["source_article"].unique()
         logger.info("Getting wiki articles links")
-        wiki_articles_links = self.articles_database.get_links_from_articles(unique_source_articles_titles)
-        wiki_articles_links = pd.DataFrame(wiki_articles_links, columns=["article", "links"])
+        wiki_articles_links = self.articles_database.get_links_from_articles(
+            unique_source_articles_titles
+        )
+        wiki_articles_links = pd.DataFrame(
+            wiki_articles_links, columns=["article", "links"]
+        )
 
         # wiki_articles_links["links"] = wiki_articles_links["links"].map(literal_eval)
         logger.info("Finished getting wiki articles links")
@@ -209,7 +249,9 @@ class ClickStreamProcessor:
             right_on=["source_article", "target_article"],
             how="left",
         )
-        non_visited_articles = non_visited_articles[non_visited_articles["target_article"].isna()]
+        non_visited_articles = non_visited_articles[
+            non_visited_articles["target_article"].isna()
+        ]
         non_visited_articles = non_visited_articles.drop(["target_article"], axis=1)
         non_visited_articles.columns = ["source_article", "target_article"]
 
@@ -217,8 +259,12 @@ class ClickStreamProcessor:
 
         # Gets only up to 20 negative sampling articles to reduce set size and speed up tokenization
         size = 20  # sample size
-        random_function = lambda obj: obj.loc[np.random.RandomState(123).choice(obj.index, size), :]
-        non_visited_articles = non_visited_articles.groupby("source_article", as_index=False).apply(random_function)
+        random_function = lambda obj: obj.loc[
+            np.random.RandomState(123).choice(obj.index, size), :
+        ]
+        non_visited_articles = non_visited_articles.groupby(
+            "source_article", as_index=False
+        ).apply(random_function)
 
         # Adds the non visited links data
         logger.info("Adding columns")
@@ -241,8 +287,14 @@ class ClickStreamProcessor:
             & dataset[TARGET_ARTICLE_COLUMN].isin(tokenized_articles["article"])
         ]
 
-    def normalize_and_save_dataset(self, dataset_source, dataset_output_path: str) -> None:
-        click_stream_dataset = self.remove_empty_articles(self.tokenized_articles, dataset_source)
+    def normalize_and_save_dataset(
+        self, dataset_source, dataset_output_path: str
+    ) -> None:
+        click_stream_dataset = self.remove_empty_articles(
+            self.tokenized_articles, dataset_source
+        )
+
+        click_stream_dataset.to_csv(dataset_output_path + ".csv", index=False)
 
         torch.save(click_stream_dataset, dataset_output_path)
 

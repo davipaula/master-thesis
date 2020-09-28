@@ -46,6 +46,7 @@ SOURCE_ARTICLE_COLUMN = "source_article"
 
 TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
 VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 MODEL_FOLDER = "./trained_models/"
 RESULTS_PATH = "./results/validation/"
 
@@ -96,7 +97,7 @@ class SmashRNN:
             np.concatenate([unknown_word, dict], axis=0).astype(np.float)
         )
 
-        self.model = SmashRNNModel(dict, dict_len, embed_dim)
+        self.model = SmashRNNModel(dict, dict_len, embed_dim, levels=self.opt.level)
         self.model.to(self.device)
 
         # Overall model optimization and evaluation parameters
@@ -111,6 +112,7 @@ class SmashRNN:
 
     def train(self, level="paragraph"):
         click_stream_train = torch.load(TRAIN_DATASET_PATH)
+        click_stream_train.dataset = click_stream_train.dataset
         training_params = {
             "batch_size": self.batch_size,
             "shuffle": True,
@@ -145,28 +147,12 @@ class SmashRNN:
                 source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
                 target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
 
-                if level == "sentence":
-                    source_articles = self.transform_to_sentence_level(source_articles)
-                    target_articles = self.transform_to_sentence_level(target_articles)
-
-                elif level == "word":
-                    source_articles = self.transform_to_word_level(source_articles)
-                    target_articles = self.transform_to_word_level(target_articles)
-
                 row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(self.device)
 
                 self.optimizer.zero_grad()
 
                 predictions = self.model(
-                    target_articles[TEXT_IDS_COLUMN],
-                    target_articles[WORDS_PER_SENTENCE_COLUMN],
-                    target_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-                    target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-                    source_articles[TEXT_IDS_COLUMN],
-                    source_articles[WORDS_PER_SENTENCE_COLUMN],
-                    source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-                    source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-                    paragraphs_limit,
+                    target_articles, source_articles, paragraphs_limit,
                 )
 
                 loss = self.criterion(
@@ -274,27 +260,10 @@ class SmashRNN:
             source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
             target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])
 
-            if level == "sentence":
-                source_articles = self.transform_to_sentence_level(source_articles)
-                target_articles = self.transform_to_sentence_level(target_articles)
-
-            elif level == "word":
-                source_articles = self.transform_to_word_level(source_articles)
-                target_articles = self.transform_to_word_level(target_articles)
-
             row[CLICK_RATE_COLUMN] = row[CLICK_RATE_COLUMN].to(self.device)
 
             with torch.no_grad():
-                predictions = self.model(
-                    target_articles[TEXT_IDS_COLUMN],
-                    target_articles[WORDS_PER_SENTENCE_COLUMN],
-                    target_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-                    target_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-                    source_articles[TEXT_IDS_COLUMN],
-                    source_articles[WORDS_PER_SENTENCE_COLUMN],
-                    source_articles[SENTENCES_PER_PARAGRAPH_COLUMN],
-                    source_articles[PARAGRAPHS_PER_DOCUMENT_COLUMN],
-                )
+                predictions = self.model(target_articles, source_articles)
 
             loss = self.criterion(predictions.squeeze(1), row[CLICK_RATE_COLUMN])
 
@@ -334,9 +303,7 @@ class SmashRNN:
         return round(final_loss.item(), 8)
 
     def save_model(self):
-        model_path = (
-            f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
-        )
+        model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod

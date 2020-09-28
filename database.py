@@ -54,7 +54,7 @@ class ArticlesDatabase:
         self.cursor.execute(query, (title, json.dumps(sections), json.dumps(links)))
 
     def add_new_columns(self):
-        query = "ALTER TABLE articles ADD COLUMN in_links_count INTEGER"
+        query = "ALTER TABLE articles ADD COLUMN sentence_count INTEGER"
         self.cursor.execute(query)
         self.conn.commit()
 
@@ -127,6 +127,19 @@ class ArticlesDatabase:
 
         try:
             self.cursor.execute(query, (word_count, article_title))
+        except Exception as e:
+            logger.error("Error inserting data")
+            logger.info(query)
+            logger.info(e)
+            exit(1)
+
+    def insert_paragraph_and_sentence_count(
+        self, article_title: str, paragraph_count: int, sentence_count: int
+    ) -> None:
+        query = f"UPDATE articles SET paragraph_count = ?, sentence_count = ? WHERE title = ?"
+
+        try:
+            self.cursor.execute(query, (paragraph_count, sentence_count, article_title))
         except Exception as e:
             logger.error("Error inserting data")
             logger.info(query)
@@ -242,10 +255,54 @@ class ArticlesDatabase:
         self.conn.commit()
         logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
 
+    def calculate_paragraph_and_sentence_count(self):
+        all_titles = self.get_all_titles()
+        titles_count = len(all_titles)
+
+        chunk_size = 10000
+        start = 0
+        end = chunk_size
+
+        logger.info(f"Started calculating paragraph and sentence counts")
+        start_time = datetime.now()
+        for n in tqdm(range(int(titles_count / chunk_size))):
+            current_titles = all_titles[start:end]
+            articles_text = self.get_text_from_articles(current_titles)
+
+            for article_title, article_text in articles_text:
+                normalized_article_text = json.loads(article_text)
+                if not normalized_article_text:
+                    continue
+
+                number_of_paragraphs = sum(
+                    [
+                        len(section["text"].split("\n\n"))
+                        for section in normalized_article_text
+                    ]
+                )
+
+                number_of_sentences = sum(
+                    [
+                        len(section["text"].replace("\n\n", " ").split(". "))
+                        for section in normalized_article_text
+                    ]
+                )
+
+                self.insert_paragraph_and_sentence_count(
+                    article_title, number_of_paragraphs, number_of_sentences
+                )
+
+            self.conn.commit()
+
+            start = end
+            end += min(chunk_size, titles_count)
+
+        logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
+
     def get_features_from_articles(self, articles: List[str]) -> list:
-        query_placeholders = ','.join(['?'] * len(articles))
+        query_placeholders = ",".join(["?"] * len(articles))
         query = (
-            f"SELECT title, word_count, out_links_count, in_links_count "
+            f"SELECT title, word_count, out_links_count, in_links_count, paragraph_count, sentence_count "
             f"FROM articles WHERE title IN ({query_placeholders})"
         )
         result = self.cursor.execute(query, articles).fetchall()
@@ -255,4 +312,5 @@ class ArticlesDatabase:
 
 if __name__ == "__main__":
     articles_database = ArticlesDatabase()
-    print(articles_database.get_features_from_articles(["Anarchism"]))
+    articles_database.calculate_paragraph_and_sentence_count()
+    # print(articles_database.get_features_from_articles(["Anarchism"]))

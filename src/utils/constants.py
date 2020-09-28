@@ -30,12 +30,20 @@ ARTICLE_COLUMN = "article"
 WORD_COUNT_COLUMN = "word_count"
 OUT_LINKS_COUNT_COLUMN = "out_links_count"
 IN_LINKS_COUNT_COLUMN = "in_links_count"
+PARAGRAPH_COUNT_COLUMN = "paragraph_count"
+SENTENCE_COUNT_COLUMN = "sentence_count"
 
 MODEL_COLUMN = "model"
 PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
 ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
+
+TEXT_IDS_COLUMN = "text_ids"
+CLICK_RATE_COLUMN = "click_rate"
+PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
+SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
+WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
 
 RESULT_FILE_COLUMNS_NAMES = [
     MODEL_COLUMN,

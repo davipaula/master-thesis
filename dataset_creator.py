@@ -25,7 +25,9 @@ from utils.constants import (
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -72,7 +74,7 @@ class DatasetCreator:
         # articles_db.generate_available_articles()
 
         # logger.info(f"Generating Click Stream Dataset")
-        # ClickStreamProcessor().run()
+        ClickStreamProcessor().run()
 
         logger.info("Tokenizing articles")
         WikiArticlesTokenizer().process()
