@@ -59,6 +59,8 @@ class SmashRNNModel(nn.Module):
 
         self.dict = dict
 
+        self.levels = LEVELS[levels]
+
         # Init embedding layer
         self.embedding = (
             nn.Embedding(num_embeddings=dict_len, embedding_dim=embedding_size)
@@ -67,17 +69,18 @@ class SmashRNNModel(nn.Module):
         )
 
         # RNN + attention layers
-        word_gru_hidden_size = GRU_HIDDEN_SIZE
-        self.word_gru_out_size = word_gru_hidden_size * 2
         self.word_gru = nn.GRU(
-            embedding_size, word_gru_hidden_size, bidirectional=True, batch_first=True
+            embedding_size, GRU_HIDDEN_SIZE, bidirectional=True, batch_first=True
         ).to(self.device)
-        self.word_attention = nn.Linear(
-            self.word_gru_out_size, self.word_gru_out_size
-        ).to(self.device)
-        self.word_context_layer = nn.Linear(self.word_gru_out_size, 1, bias=False).to(
+
+        self.word_gru_out_size = GRU_HIDDEN_SIZE * 2
+
+        self.word_attention = nn.Linear(self.word_gru_out_size, GRU_HIDDEN_SIZE).to(
             self.device
-        )  # Word context vector to take dot-product with
+        )
+        self.word_context_layer = nn.Linear(GRU_HIDDEN_SIZE, 1, bias=False).to(
+            self.device
+        )
 
         sentence_gru_hidden_size = GRU_HIDDEN_SIZE
         self.sentence_gru_out_size = sentence_gru_hidden_size * 2
@@ -88,10 +91,10 @@ class SmashRNNModel(nn.Module):
             batch_first=True,
         ).to(self.device)
         self.sentence_attention = nn.Linear(
-            self.sentence_gru_out_size, self.sentence_gru_out_size
+            self.sentence_gru_out_size, sentence_gru_hidden_size
         ).to(self.device)
         self.sentence_context_layer = nn.Linear(
-            self.sentence_gru_out_size, 1, bias=False
+            sentence_gru_hidden_size, 1, bias=False
         ).to(self.device)
 
         paragraph_gru_hidden_size = GRU_HIDDEN_SIZE
@@ -103,37 +106,36 @@ class SmashRNNModel(nn.Module):
             batch_first=True,
         ).to(self.device)
         self.paragraph_attention = nn.Linear(
-            self.paragraph_gru_out_size, self.paragraph_gru_out_size
+            self.paragraph_gru_out_size, GRU_HIDDEN_SIZE
         ).to(self.device)
-        self.paragraph_context_layer = nn.Linear(
-            self.paragraph_gru_out_size, 1, bias=False
-        ).to(self.device)
+        self.paragraph_context_layer = nn.Linear(GRU_HIDDEN_SIZE, 1, bias=False).to(
+            self.device
+        )
 
-        self.levels = LEVELS[levels]
-
-        self.classifier_input_dim = (
-            2 * paragraph_gru_hidden_size * 4 * len(self.levels)
+        # Estimator config
+        self.estimator_input_dim = (
+            2 * GRU_HIDDEN_SIZE * 4 * len(self.levels)
         )  # 4 = number of concatenations
 
-        self.classifier_output_dim = 1
+        self.estimator_output_dim = 1
 
-        self.classifier = nn.Sequential(
-            nn.Linear(self.classifier_input_dim, self.classifier_input_dim),
+        self.estimator = nn.Sequential(
+            nn.Linear(self.estimator_input_dim, self.estimator_input_dim // 2),
             nn.ReLU(),
-            nn.Linear(self.classifier_input_dim, self.classifier_output_dim),
+            nn.Linear(self.estimator_input_dim // 2, self.estimator_output_dim),
         ).to(self.device)
 
     def forward(
         self, target_article, source_article, paragraphs_limit=None,
     ):
         target_article_representation = self.get_document_representation(
-            target_article, levels=self.levels,
+            target_article, levels=self.levels, paragraphs_limit=paragraphs_limit
         )
 
         del target_article
 
         source_article_representation = self.get_document_representation(
-            source_article, levels=self.levels
+            source_article, levels=self.levels, paragraphs_limit=paragraphs_limit
         )
 
         del source_article
@@ -154,12 +156,12 @@ class SmashRNNModel(nn.Module):
         del source_article_representation
         del target_article_representation
 
-        articles_similarity = self.classifier(concatenated_articles_representation)
+        articles_similarity = self.estimator(concatenated_articles_representation)
 
         return articles_similarity
 
     def get_document_representation(
-        self, articles_batch, levels=None,
+        self, articles_batch, levels=None, paragraphs_limit=None
     ):
         document_representation_list = []
         for level in levels:
@@ -169,6 +171,25 @@ class SmashRNNModel(nn.Module):
                 sentences_per_paragraph,
                 words_per_sentence,
             ) = self.get_tensors_at_level(articles_batch, level)
+
+            if paragraphs_limit and articles.shape[1] > paragraphs_limit:
+                paragraphs_per_document = paragraphs_per_document.clamp(
+                    1, paragraphs_limit
+                )
+                sentences_per_paragraph = sentences_per_paragraph[:, :paragraphs_limit]
+                max_sentences_per_paragraph = sentences_per_paragraph.max()
+
+                words_per_sentence = words_per_sentence[
+                    :, :paragraphs_limit, :max_sentences_per_paragraph
+                ]
+                max_words_per_sentence = words_per_sentence.max()
+
+                articles = articles[
+                    :,
+                    :paragraphs_limit,
+                    :max_sentences_per_paragraph,
+                    :max_words_per_sentence,
+                ]
 
             batch_size = articles.shape[0]
             max_paragraphs_per_article = articles.shape[1]
@@ -252,10 +273,16 @@ class SmashRNNModel(nn.Module):
         else:
             articles = articles_batch
 
-        articles_text = articles[TEXT_IDS_COLUMN]
-        words_per_sentence = articles[WORDS_PER_SENTENCE_COLUMN]
-        sentences_per_paragraph = articles[SENTENCES_PER_PARAGRAPH_COLUMN]
-        paragraphs_per_document = articles[PARAGRAPHS_PER_DOCUMENT_COLUMN]
+        articles_text = articles[TEXT_IDS_COLUMN].to(self.device, non_blocking=True)
+        words_per_sentence = articles[WORDS_PER_SENTENCE_COLUMN].to(
+            self.device, non_blocking=True
+        )
+        sentences_per_paragraph = articles[SENTENCES_PER_PARAGRAPH_COLUMN].to(
+            self.device, non_blocking=True
+        )
+        paragraphs_per_document = articles[PARAGRAPHS_PER_DOCUMENT_COLUMN].to(
+            self.device, non_blocking=True
+        )
         return (
             articles_text,
             paragraphs_per_document,
@@ -281,17 +308,25 @@ class SmashRNNModel(nn.Module):
         )
 
         # Take the dot-product of the attention vectors with the context vector (i.e. parameter of linear layer)
-        paragraph_context_vector = self.paragraph_context_layer(paragraph_state)
+        paragraph_context_vector = self.paragraph_context_layer(
+            paragraph_state
+        ).squeeze(1)
 
-        paragraph_attention = paragraph_state * paragraph_context_vector
+        # max_value = paragraph_context_vector.max()
+        # exponent = torch.exp(paragraph_context_vector - max_value)
+        exponent = torch.exp(paragraph_context_vector)
 
-        softmax_function = Softmax(1)
+        # paragraph_attention = paragraph_state * paragraph_context_vector
+        del paragraph_state
+        del paragraph_context_vector
 
-        paragraph_alphas = softmax_function(paragraph_attention)
+        # softmax_function = Softmax(1)
 
-        paragraph_alphas, _ = pad_packed_sequence(
+        # paragraph_alphas = softmax_function(paragraph_attention)
+
+        paragraph_attention, _ = pad_packed_sequence(
             PackedSequence(
-                data=paragraph_alphas,
+                data=exponent,
                 batch_sizes=paragraph_gru_output.batch_sizes,
                 sorted_indices=paragraph_gru_output.sorted_indices,
                 unsorted_indices=paragraph_gru_output.unsorted_indices,
@@ -299,13 +334,17 @@ class SmashRNNModel(nn.Module):
             batch_first=True,
         )  # (n_sentences, max(words_per_sentence))
 
+        paragraph_alphas = paragraph_attention / torch.sum(
+            paragraph_attention, dim=1, keepdim=True
+        )
+
         paragraph_gru_output, _ = pad_packed_sequence(
             paragraph_gru_output, batch_first=True
         )
 
-        document_representation = (paragraph_gru_output.float() * paragraph_alphas).sum(
-            dim=1
-        )
+        document_representation = (
+            paragraph_gru_output * paragraph_alphas.unsqueeze(2)
+        ).sum(dim=1)
 
         return document_representation  # , paragraph_alphas
 
@@ -328,6 +367,7 @@ class SmashRNNModel(nn.Module):
             batch_first=True,
             enforce_sorted=False,
         )
+        del flatten_sentences
 
         sentence_level_gru_output, _ = self.sentence_gru(packed_sentences)
         sentence_alphas = self.get_sentence_alphas(sentence_level_gru_output)
@@ -338,7 +378,7 @@ class SmashRNNModel(nn.Module):
 
         try:
             sentence_level_representation = (
-                sentence_alphas * sentence_level_gru_output
+                sentence_alphas.unsqueeze(2) * sentence_level_gru_output
             ).sum(dim=1)
 
             sentence_level_representation = sentence_level_representation.reshape(
@@ -376,22 +416,13 @@ class SmashRNNModel(nn.Module):
         ).float()
         # Cleaning memory
         del word_embeddings
+        del flatten_words_per_sentence
 
         word_level_gru_output, _ = self.word_gru(packed_word_embeddings)
         # Cleaning memory
         del packed_word_embeddings
 
         word_alphas = self.get_word_alphas(word_level_gru_output)
-
-        word_alphas, _ = pad_packed_sequence(
-            PackedSequence(
-                data=word_alphas,
-                batch_sizes=word_level_gru_output.batch_sizes,
-                sorted_indices=word_level_gru_output.sorted_indices,
-                unsorted_indices=word_level_gru_output.unsorted_indices,
-            ),
-            batch_first=True,
-        )
 
         # To track when memory limit is reached
         try:
@@ -410,33 +441,42 @@ class SmashRNNModel(nn.Module):
 
             exit(1)
 
-        word_level_representation = (word_alphas * word_level_gru_output.float()).sum(
-            dim=1
-        )
+        word_level_representation = (
+            word_alphas.unsqueeze(2) * word_level_gru_output
+        ).sum(dim=1)
 
         return word_level_representation
 
     def get_sentence_alphas(self, sentence_level_gru):
         sentence_state = torch.tanh(self.sentence_attention(sentence_level_gru.data))
 
-        sentence_context_vector = self.sentence_context_layer(sentence_state)
+        sentence_context_vector = self.sentence_context_layer(sentence_state).squeeze(1)
 
-        sentence_attention = sentence_state * sentence_context_vector
+        # max_value = sentence_context_vector.max()
+        # exponent = torch.exp(sentence_context_vector - max_value)
+        exponent = torch.exp(sentence_context_vector)
 
-        softmax_function = Softmax(1)
-
-        sentence_alphas = softmax_function(sentence_attention)
+        # sentence_attention = sentence_state * sentence_context_vector
+        del sentence_context_vector
+        del sentence_state
 
         # Re-arrange as sentences by re-padding with 0s (WORDS -> SENTENCES)
-        sentence_alphas, _ = pad_packed_sequence(
+        sentence_attention, _ = pad_packed_sequence(
             PackedSequence(
-                data=sentence_alphas,
+                data=exponent,
                 batch_sizes=sentence_level_gru.batch_sizes,
                 sorted_indices=sentence_level_gru.sorted_indices,
                 unsorted_indices=sentence_level_gru.unsorted_indices,
             ),
             batch_first=True,
         )
+
+        # softmax_function = Softmax(1)
+
+        sentence_alphas = sentence_attention / torch.sum(
+            sentence_attention, dim=1, keepdim=True
+        )
+        del sentence_attention
 
         return sentence_alphas
 
@@ -445,14 +485,31 @@ class SmashRNNModel(nn.Module):
         # This equation is represented in the paper as `u_{it}`
         word_state = torch.tanh(self.word_attention(word_gru_out.data))
 
-        word_context_vector = self.word_context_layer(word_state)  # (n_words)
+        word_context_vector = self.word_context_layer(word_state).squeeze(1)
+        # (n_words)
 
-        word_attention = word_state * word_context_vector
+        # max_value = word_context_vector.max()
+        # exponent = torch.exp(word_context_vector - max_value)
+        exponent = torch.exp(word_context_vector)
+
+        # word_attention = word_state * word_context_vector
+        del word_state
+        del word_context_vector
 
         # Parameter `1` is the dimension the Softmax will be applied to
-        softmax_function = Softmax(1)
+        # softmax_function = Softmax(1)
 
-        word_alphas = softmax_function(word_attention)
+        word_attention, _ = pad_packed_sequence(
+            PackedSequence(
+                data=exponent,
+                batch_sizes=word_gru_out.batch_sizes,
+                sorted_indices=word_gru_out.sorted_indices,
+                unsorted_indices=word_gru_out.unsorted_indices,
+            ),
+            batch_first=True,
+        )
+
+        word_alphas = word_attention / torch.sum(word_attention, dim=1, keepdim=True)
 
         return word_alphas
 

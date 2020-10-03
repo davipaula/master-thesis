@@ -28,7 +28,7 @@ from src.utils.utils import (
     get_sentences_per_paragraph_at_sentence_level,
 )
 
-from utils.constants import RESULT_FILE_COLUMNS_NAMES
+from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PATH
 
 from utils.utils import get_word2vec_path, get_model_name
 
@@ -46,8 +46,6 @@ LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 MODEL_FOLDER = "./trained_models/"
 FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"

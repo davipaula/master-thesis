@@ -9,6 +9,8 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
+from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PATH
+
 from tqdm import tqdm
 import argparse
 import csv
@@ -49,8 +51,6 @@ VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 MODEL_FOLDER = "./trained_models/"
 RESULTS_PATH = "./results/validation/"
-
-WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete.csv"
 
 
 class SmashRNN:
@@ -112,7 +112,6 @@ class SmashRNN:
 
     def train(self, level="paragraph"):
         click_stream_train = torch.load(TRAIN_DATASET_PATH)
-        click_stream_train.dataset = click_stream_train.dataset
         training_params = {
             "batch_size": self.batch_size,
             "shuffle": True,
@@ -154,6 +153,8 @@ class SmashRNN:
                 predictions = self.model(
                     target_articles, source_articles, paragraphs_limit,
                 )
+                del source_articles
+                del target_articles
 
                 loss = self.criterion(
                     predictions.squeeze(1).float(), row[CLICK_RATE_COLUMN].float()
@@ -161,7 +162,7 @@ class SmashRNN:
                 loss.backward()
                 self.optimizer.step()
 
-                loss_list.append(loss)
+                loss_list.append(loss.item())
 
             loss = self.calculate_loss(loss_list)
 
@@ -248,13 +249,8 @@ class SmashRNN:
         validation_step = int(validation_step) + 1
 
         loss_list = []
-        columns_names = [
-            "source_document",
-            "target_document",
-            "actual_click_rate",
-            "predicted_click_rate",
-        ]
-        predictions_list = pd.DataFrame(columns=columns_names)
+
+        predictions_list = pd.DataFrame(columns=RESULT_FILE_COLUMNS_NAMES)
 
         for row in tqdm(validation_generator):
             source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
@@ -271,12 +267,13 @@ class SmashRNN:
 
             batch_results = pd.DataFrame(
                 zip(
+                    [self.model_name] * self.batch_size,
                     row[SOURCE_ARTICLE_COLUMN],
                     row[TARGET_ARTICLE_COLUMN],
                     row[CLICK_RATE_COLUMN].tolist(),
                     predictions.squeeze(1).tolist(),
                 ),
-                columns=columns_names,
+                columns=RESULT_FILE_COLUMNS_NAMES,
             )
 
             predictions_list = predictions_list.append(batch_results, ignore_index=True)

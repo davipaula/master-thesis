@@ -1,5 +1,6 @@
 import os
 import sys
+from collections import defaultdict
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
@@ -14,6 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 from typing import List
 import glob
+import random
 
 from database import ArticlesDatabase
 from utils.constants import (
@@ -115,7 +117,7 @@ class ResultsAnalyzer:
         for file_path in results_files:
             results = results.append(pd.read_csv(file_path))
 
-        return results
+        return results.drop_duplicates()
 
     def get_top_10_predicted_by_article_and_model(self, model: str):
         n = 10
@@ -130,13 +132,13 @@ class ResultsAnalyzer:
 
         source_articles = set(self.results[SOURCE_ARTICLE_COLUMN])
 
-        for article in source_articles:
+        for source_article in source_articles:
             actual_top_articles = self.top_articles[
-                self.top_articles[SOURCE_ARTICLE_COLUMN] == article
+                self.top_articles[SOURCE_ARTICLE_COLUMN] == source_article
             ][TARGET_ARTICLE_COLUMN].unique()
 
             model_results.loc[
-                (model_results[SOURCE_ARTICLE_COLUMN] == article)
+                (model_results[SOURCE_ARTICLE_COLUMN] == source_article)
                 & (model_results[TARGET_ARTICLE_COLUMN].isin(actual_top_articles)),
                 IS_IN_TOP_ARTICLES_COLUMN,
             ] = True
@@ -146,20 +148,21 @@ class ResultsAnalyzer:
     def build_top_10_matrix_by_article(self):
         n = 10
 
-        actual_results = (
-            self.results[self.results[MODEL_COLUMN] == "word"]
-            .sort_values(
-                by=[SOURCE_ARTICLE_COLUMN, ACTUAL_CLICK_RATE_COLUMN],
-                ascending=[True, False],
-            )
-            .groupby(SOURCE_ARTICLE_COLUMN)
-            .head(n)
-            .drop([ACTUAL_CLICK_RATE_COLUMN, PREDICTED_CLICK_RATE_COLUMN], axis=1)
+        first_model = self.results["model"].unique()[0]
+        actual_results = self.results[self.results["model"] == first_model].sort_values(
+            by=[SOURCE_ARTICLE_COLUMN, ACTUAL_CLICK_RATE_COLUMN],
+            ascending=[True, False],
         )
 
-        actual_results[MODEL_COLUMN] = "actual click rate"
+        top_n_results = (
+            actual_results.groupby(SOURCE_ARTICLE_COLUMN)
+            .head(n)
+            .drop([ACTUAL_CLICK_RATE_COLUMN], axis=1)
+        )
 
-        return actual_results
+        top_n_results[MODEL_COLUMN] = "actual click rate"
+
+        return top_n_results
 
     def get_sample_source_articles(self, n=10):
         return self.results[SOURCE_ARTICLE_COLUMN].sample(n=n)
@@ -281,28 +284,22 @@ class ResultsAnalyzer:
 
         return self.calculate_dcg(sorted_predictions)
 
-    def calculate_idcg_at_k_by_article(self, article_predictions, k):
-        article_predictions_at_k = article_predictions[:k]
-        article_predictions_at_k = article_predictions_at_k.sort_values(ascending=False)
+    def calculate_idcg_at_k_by_article(self, k):
+        perfect_predictions = pd.Series([True] * k)
 
-        return self.calculate_dcg_at_k_by_article(article_predictions_at_k, k)
+        return self.calculate_dcg_at_k_by_article(perfect_predictions, k)
 
     @staticmethod
     def calculate_dcg_at_k_by_article(article_predictions, k):
-        try:
-            article_predictions_at_k = article_predictions[:k]
+        article_predictions_at_k = article_predictions[:k]
 
-            dcg = (2 ** article_predictions_at_k[1:] - 1) / np.log2(
-                np.arange(3, article_predictions_at_k.size + 2)
-            )
+        dcg = (np.power(2, article_predictions_at_k[1:]) - 1) / np.log2(
+            np.arange(3, article_predictions_at_k.size + 2)
+        )
 
-            dcg = np.concatenate(([float(article_predictions_at_k.iloc[0])], dcg))
+        dcg = np.concatenate(([float(article_predictions_at_k.iloc[0])], dcg))
 
-            return np.sum(dcg)
-        except Exception as err:
-            print(str(err))
-
-            exit(1)
+        return np.sum(dcg)
 
     @staticmethod
     def calculate_dcg(predictions: List[List[bool]]):
@@ -328,6 +325,17 @@ class ResultsAnalyzer:
         ndcg = np.mean(ndcg)
 
         return ndcg
+
+    def get_random_article(self):
+        random_article = random.choice(self.source_articles)
+
+        predictions = self.get_predictions_by_model()
+
+        article_results = predictions[
+            predictions[SOURCE_ARTICLE_COLUMN] == random_article
+        ]
+
+        print(article_results)
 
     def calculate_statistics_per_group(self):
         db = ArticlesDatabase()
@@ -367,29 +375,40 @@ class ResultsAnalyzer:
         source_articles = set(predictions_df[SOURCE_ARTICLE_COLUMN])
         selected_models = [
             # "doc2vec_cosine",
-            # "doc2vec_no_sigmoid",
+            # "doc2vec_siamese",
             # "paragraph_no_sigmoid",
             # "paragraph_200d",
-            # "sentence_no_sigmoid",
+            # "sentence_50d",
             # "sentence_200d",
             # "wikipedia2vec_cosine",
-            # "wikipedia2vec_no_sigmoid",
-            # "word_no_sigmoid",
+            "wikipedia2vec_siamese",
+            # "word_50d",
             # "word_200d",
-            "paragraph_level_50d_introduction_only",
-            "sentence_level_50d_introduction_only",
-            "paragraph_level_200d_introduction_only",
-            "sentence_level_200d_introduction_only",
-            "word_level_50d_introduction_only",
-            "word_level_200d_introduction_only",
-            "paragraph_level_200d_concat_introduction_only",
-            "paragraph_level_50d_concat_introduction_only",
-            "paragraph_level_200d_concat_v2_introduction_only",
-            "paragraph_level_50d_concat_v2_introduction_only",
-            "sentence_level_50d_concat_v2_introduction_only",
-            "word_level_50d_concat_v2_introduction_only",
-            "sentence_level_200d_concat_v2_introduction_only",
-            "word_level_200d_concat_v2_introduction_only",
+            # "paragraph_level_50d_introduction_only",
+            # "sentence_level_50d_introduction_only",
+            # "paragraph_level_200d_introduction_only",
+            # "sentence_level_200d_introduction_only",
+            # "word_level_50d_introduction_only",
+            # "word_level_200d_introduction_only",
+            # "paragraph_level_200d_concat_introduction_only",
+            # "paragraph_level_50d_concat_introduction_only",
+            # "paragraph_level_200d_concat_v2_introduction_only",
+            # "paragraph_level_50d_concat_v2_introduction_only",
+            # "sentence_level_50d_concat_v2_introduction_only",
+            # "word_level_50d_concat_v2_introduction_only",
+            # "sentence_level_200d_concat_v2_introduction_only",
+            # "word_level_200d_concat_v2_introduction_only"
+            # "word_level_50d_new_introduction_only",
+            # "sentence_level_50d_new_introduction_only",
+            # "paragraph_level_50d_new_introduction_only",
+            # "paragraph_level_50d_final_run",
+            # "paragraph_level_50d_fixed_introduction_only",
+            # "sentence_level_50d_fixed_introduction_only",
+            # "word_level_50d_fixed_introduction_only",
+            # "paragraph_level_50d_final_fixed",
+            # "paragraph_level_50d_fixed_exponent_introduction_only",
+            # "paragraph_level_50d_fixed_layers_introduction_only",
+            # "paragraph_level_50d_fixed_layers_and_estimator_introduction_only",
         ]
 
         logger.info("Calculating results by model")
@@ -417,18 +436,24 @@ class ResultsAnalyzer:
 
     def get_ndcg_by_model_and_article(self, models, predictions_df, source_articles):
         ndcg_by_model_and_article = (
-            predictions_df[[MODEL_COLUMN, SOURCE_ARTICLE_COLUMN]]
-            .loc[predictions_df[MODEL_COLUMN].isin(models)]
+            predictions_df[predictions_df[MODEL_COLUMN].isin(models)][
+                [MODEL_COLUMN, SOURCE_ARTICLE_COLUMN]
+            ]
             .drop_duplicates()
             .reset_index(drop=True)
         )
 
+        results_by_model_and_article = defaultdict(dict)
         for model in models:
             for source_article in tqdm(source_articles):
                 source_article_predictions = predictions_df[
                     (predictions_df[SOURCE_ARTICLE_COLUMN] == source_article)
                     & (predictions_df[MODEL_COLUMN] == model)
                 ][IS_IN_TOP_ARTICLES_COLUMN]
+
+                results_by_model_and_article[model][
+                    source_article
+                ] = self.get_ndcg_at_k_by_article(source_article_predictions)
 
                 ndcg_by_model_and_article.loc[
                     (
@@ -441,6 +466,13 @@ class ResultsAnalyzer:
                     NDCG_COLUMN,
                 ] = self.get_ndcg_at_k_by_article(source_article_predictions)
 
+        # ndcg_by_model_and_article.to_csv(
+        #     "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/results/two_models.csv",
+        #     index=False,
+        # )
+        # #
+        # exit(0)
+
         ndcg_by_model_and_article = ndcg_by_model_and_article.pivot(
             index=SOURCE_ARTICLE_COLUMN, columns=MODEL_COLUMN, values=NDCG_COLUMN
         ).reset_index()
@@ -450,7 +482,10 @@ class ResultsAnalyzer:
     def get_ndcg_at_k_by_article(self, source_article_predictions, k=5):
         np.seterr(divide="ignore", invalid="ignore")
         dcg_at_k = self.calculate_dcg_at_k_by_article(source_article_predictions, k)
-        idcg_at_k = self.calculate_idcg_at_k_by_article(source_article_predictions, k)
+
+        # All source articles have 10 most visited target articles, so the perfect rank would be
+        # [True, True, True, True, True, True, True, True, True, True]
+        idcg_at_k = self.calculate_idcg_at_k_by_article(k)
 
         if idcg_at_k == 0:
             return 0
@@ -470,5 +505,6 @@ if __name__ == "__main__":
     pd.set_option("display.width", 1000)
 
     _results = ResultsAnalyzer()
-    _results.get_predictions_by_model()
+    results = _results.calculate_statistics_per_group()
+    print(results.describe())
     # _results.get_ndcg_for_all_models()

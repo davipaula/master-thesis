@@ -19,11 +19,17 @@ sys.path.extend([os.getcwd(), src_path])
 
 from database import ArticlesDatabase
 
-from utils.constants import SELECTED_ARTICLES_PATH, WIKI_ARTICLES_TOKENIZED_PATH, WORD2VEC_200D_PATH
+from utils.constants import (
+    SELECTED_ARTICLES_PATH,
+    WIKI_ARTICLES_TOKENIZED_PATH,
+    WORD2VEC_200D_PATH,
+)
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -32,7 +38,9 @@ class WikiArticlesTokenizer:
         __spacy_model = "en_core_web_sm"
 
         # disable the fancy and slow stuff and add only the pipeline needed
-        self._nlp = spacy.load(__spacy_model, disable=["tagger", "ner", "textcat", "parser"])
+        self._nlp = spacy.load(
+            __spacy_model, disable=["tagger", "ner", "textcat", "parser"]
+        )
         self._nlp.add_pipe(self._nlp.create_pipe("sentencizer"))
 
         logger.info(f"Spacy model loaded: {__spacy_model}")
@@ -61,7 +69,9 @@ class WikiArticlesTokenizer:
             paragraphs = list(self._nlp.pipe(section))
 
             for paragraph in paragraphs:
-                tokenized_paragraph, normalized_paragraph = self.process_paragraph(paragraph)
+                tokenized_paragraph, normalized_paragraph = self.process_paragraph(
+                    paragraph
+                )
 
                 if tokenized_paragraph:
                     tokenized_paragraphs.append(tokenized_paragraph)
@@ -76,7 +86,7 @@ class WikiArticlesTokenizer:
             "raw_text": raw_text,
         }
 
-    def process_paragraph(self, text: List[spacy.tokens.doc.Doc]) -> Tuple[List[int], List[str]]:
+    def process_paragraph(self, text: List[spacy.tokens.doc.Doc]):
         """
         Split plain paragraph text into sentences and tokens, and find their word vectors (with Gensim)
         :param nlp:
@@ -93,7 +103,10 @@ class WikiArticlesTokenizer:
 
             valid_words = list(compress(sentence, valid_tokens))
             if valid_words:
-                sentence_embedding_ids = [self.__w2v_model.vocab[word.lemma_.lower()].index for word in valid_words]
+                sentence_embedding_ids = [
+                    self.__w2v_model.vocab[word.lemma_.lower()].index
+                    for word in valid_words
+                ]
                 valid_words = [word.lemma_.lower() for word in valid_words]
 
                 tokenized_sentences.append(sentence_embedding_ids)
@@ -104,14 +117,20 @@ class WikiArticlesTokenizer:
     def is_valid_token(self, token: spacy.tokens.token.Token) -> bool:
         normalized_word = token.lemma_.lower()
 
-        return token.is_alpha and not token.is_stop and normalized_word in self.__w2v_model.vocab
+        return (
+            token.is_alpha
+            and not token.is_stop
+            and normalized_word in self.__w2v_model.vocab
+        )
 
     def process(self) -> None:
         logger.info("Loading selected articles")
         with open(SELECTED_ARTICLES_PATH, "r") as selected_articles_file:
-            selected_articles = [article_title.rstrip("\n") for article_title in selected_articles_file]
+            selected_articles = [
+                article_title.rstrip("\n") for article_title in selected_articles_file
+            ]
 
-        selected_articles = selected_articles[:200]
+        logger.info(f"# of selected articles: {len(selected_articles)}")
 
         logger.info("Loaded selected articles")
         start = datetime.now()
@@ -126,14 +145,18 @@ class WikiArticlesTokenizer:
                 if not article_raw_text:
                     continue
 
-                article_sessions = [section["text"].split("\n\n") for section in article_raw_text]
+                article_sessions = [
+                    section["text"].split("\n\n") for section in article_raw_text
+                ]
 
                 tokenized_article = self.tokenize(article_title, article_sessions)
+
+                f.write(json.dumps(tokenized_article) + "\n")
                 # self.db.add_tokenized_articles(
                 #     tokenized_article["article"], tokenized_article["tokenized_text"], tokenized_article["raw_text"]
                 # )
 
 
 if __name__ == "__main__":
-    tokenizer = WikiArticlesTokenizer(is_development=True)
+    tokenizer = WikiArticlesTokenizer()
     tokenizer.process()
