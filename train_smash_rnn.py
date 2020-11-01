@@ -86,6 +86,7 @@ class SmashRNN:
         dict = pd.read_csv(
             filepath_or_buffer=word2vec_path,
             header=None,
+            skiprows=1,
             sep="\s",
             engine="python",
             quoting=csv.QUOTE_NONE,

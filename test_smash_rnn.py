@@ -133,6 +133,7 @@ def load_model(model_folder, model_name, opt):
         header=None,
         sep="\s",
         engine="python",
+        skiprows=1,
         quoting=csv.QUOTE_NONE,
     ).values[:, 1:]
     dict_len, embed_dim = dict.shape
