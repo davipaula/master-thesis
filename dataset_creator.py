@@ -63,8 +63,8 @@ class DatasetCreator:
         # logger.info(f"Converting Glove file to Word2Vec format")
         # convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
         #
-        # logger.info(f"Extracting Click Stream data")
-        # ClickStreamExtractor().run()
+        logger.info(f"Extracting Click Stream data")
+        ClickStreamExtractor().run()
         #
         # logger.info("Extracting Wiki articles")
         # extract_wiki_articles()
@@ -80,7 +80,7 @@ class DatasetCreator:
         WikiArticlesTokenizer().process()
 
         # logger.info("Creating dataset with Wiki Articles")
-        # WikiArticlesProcessor().run()
+        WikiArticlesProcessor().run()
 
 
 if __name__ == "__main__":

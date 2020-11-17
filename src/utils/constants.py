@@ -14,9 +14,9 @@ SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.txt"
 
 WIKI_ARTICLES_EXTRACTED_PATH = "./data/processed/enwiki_articles.jsonl"
 WIKI_ARTICLES_TOKENIZED_PATH = (
-    "./data/processed/enwiki_tokenized_selected_articles.jsonl"
+    "./data/processed/enwiki_tokenized_selected_articles_v2.jsonl"
 )
-WIKI_ARTICLES_DATASET_PATH = "./data/processed/wiki_articles_english_complete.csv"
+WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english_complete_bkp_2.csv"
 
 TRAIN_DATASET_PATH = "./data/processed/train.csv"
 VALIDATION_DATASET_PATH = "./data/processed/validation.csv"

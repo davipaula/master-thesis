@@ -1,8 +1,12 @@
+import csv
 import logging
 import sqlite3
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from typing import List
+
+import spacy
+from bs4 import BeautifulSoup
 
 import jsonlines
 import json
@@ -10,7 +14,7 @@ import json
 from tqdm import tqdm
 import pandas as pd
 
-from utils.constants import AVAILABLE_TITLES_PATH
+from utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
 
 logger = logging.getLogger(__name__)
 LOG_FORMAT = (
@@ -170,10 +174,12 @@ class ArticlesDatabase:
 
     def calculate_number_of_words(self):
 
-        all_titles = self.get_all_titles()
+        # all_titles = self.get_all_titles()
+
+        all_titles = pd.read_csv("./data/test_articles.csv", header=None)[0].to_list()
         titles_count = len(all_titles)
 
-        chunk_size = 10000
+        chunk_size = 1000
         start = 0
         end = chunk_size
 
@@ -188,8 +194,12 @@ class ArticlesDatabase:
                 if not json.loads(article[1]):
                     continue
 
+                article_text = ""
                 for section in json.loads(article[1]):
-                    word_count += len(section["text"].split())
+                    article_text += section["text"]
+
+                clean_text = BeautifulSoup(article_text, "lxml").text
+                word_count += len(clean_text.split())
 
                 self.insert_word_count(article[0], word_count)
 
@@ -197,6 +207,80 @@ class ArticlesDatabase:
 
             start = end
             end += min(chunk_size, titles_count)
+
+        logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
+
+    def calculate_number_of_words_clean(self):
+        spacy_model = "en_core_web_sm"
+
+        # disable the fancy and slow stuff and add only the pipeline needed
+        nlp = spacy.load(spacy_model, disable=["tagger", "ner", "textcat", "parser"])
+        nlp.add_pipe(nlp.create_pipe("sentencizer"))
+
+        all_titles = pd.read_csv(
+            "./results/test/results_smash_paragraph_level.csv", usecols=[1]
+        )["source_article"].unique()
+        titles_count = len(all_titles)
+
+        word2vec = pd.read_csv(
+            filepath_or_buffer=WORD2VEC_50D_PATH,
+            header=None,
+            sep="\s",
+            engine="python",
+            quoting=csv.QUOTE_NONE,
+            skiprows=1,
+            usecols=[0],
+        )[0].to_list()
+
+        chunk_size = 1
+        start = 0
+        end = chunk_size
+
+        article_length = defaultdict(int)
+
+        logger.info(f"Started inserting")
+        start_time = datetime.now()
+        for n in tqdm(range(int(titles_count / chunk_size))):
+            current_titles = all_titles[start:end]
+            articles_text = self.get_text_from_articles(current_titles)
+
+            for article in articles_text:
+                if not json.loads(article[1]):
+                    continue
+
+                article_text = ""
+                for section in json.loads(article[1]):
+                    article_text += section["text"]
+
+                clean_text = BeautifulSoup(article_text, "lxml").text
+
+                tokenized_sentences = nlp(clean_text)
+                tokenized_words = [
+                    token.lemma_.lower()
+                    for sentence in tokenized_sentences.sents
+                    for token in sentence
+                    if token.is_alpha
+                ]
+
+                words_in_word2vec = [token in word2vec for token in tokenized_words]
+
+                word_count = sum(words_in_word2vec)
+
+                article_length[article[0]] = len(tokenized_words)
+
+                # self.insert_word_count(article[0], word_count)
+
+            # self.conn.commit()
+
+            start = end
+            end += min(chunk_size, titles_count)
+
+        df_article_length = pd.DataFrame.from_dict(
+            article_length, orient="index"
+        ).reset_index()
+        df_article_length.columns = ["article", "word_count"]
+
+        df_article_length.to_csv("./data/articles_word_count.csv", index=False)
 
         logger.info(f"Finished inserting. Time elapsed: {datetime.now() - start_time}")
 
@@ -302,7 +386,7 @@ class ArticlesDatabase:
     def get_features_from_articles(self, articles: List[str]) -> list:
         query_placeholders = ",".join(["?"] * len(articles))
         query = (
-            f"SELECT title, word_count, out_links_count, in_links_count, paragraph_count, sentence_count "
+            f"SELECT title, out_links_count, in_links_count, paragraph_count, sentence_count "
             f"FROM articles WHERE title IN ({query_placeholders})"
         )
         result = self.cursor.execute(query, articles).fetchall()
@@ -312,5 +396,5 @@ class ArticlesDatabase:
 
 if __name__ == "__main__":
     articles_database = ArticlesDatabase()
-    articles_database.calculate_paragraph_and_sentence_count()
+    articles_database.calculate_number_of_words_clean()
     # print(articles_database.get_features_from_articles(["Anarchism"]))
