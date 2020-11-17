@@ -20,5 +20,7 @@ class ClickStreamDataset(Dataset):
         return return_item
 
     def get_titles(self):
-        titles = pd.Series.append(self.dataset["source_article"], self.dataset["target_article"])
+        titles = pd.Series.append(
+            self.dataset["source_article"], self.dataset["target_article"]
+        )
         return titles.unique()

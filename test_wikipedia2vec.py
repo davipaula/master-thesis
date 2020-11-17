@@ -18,7 +18,9 @@ from modeling.wikipedia2vec_model import Wikipedia2VecModel
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
@@ -42,7 +44,9 @@ class TestWikipedia2Vec:
             "shuffle": True,
             "drop_last": False,
         }
-        self.click_stream_test = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
+        self.click_stream_test = torch.utils.data.DataLoader(
+            click_stream_validation_dataset, **validation_params
+        )
 
         self.wikipedia2vec = Wikipedia2VecModel()
 
@@ -65,9 +69,9 @@ class TestWikipedia2Vec:
 
     def run(self):
         for model_name, model in self.models.items():
-            regression_model = torch.load(f"./trained_models/{str(model_name)}_{self.model_name}_regression_model").to(
-                self.device
-            )
+            regression_model = torch.load(
+                f"./trained_models/{str(model_name)}_{self.model_name}_regression_model"
+            ).to(self.device)
             self.test(model_name, model, regression_model)
 
     def test(self, model_name, model, regression_model):
@@ -80,11 +84,15 @@ class TestWikipedia2Vec:
             source_article_vector = model.get_entity_vector(row["source_article"])
             target_article_vector = model.get_entity_vector(row["target_article"])
 
-            siamese_representation = self.get_siamese_representation(source_article_vector, target_article_vector)
+            siamese_representation = self.get_siamese_representation(
+                source_article_vector, target_article_vector
+            )
 
             prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.squeeze(1), row["click_rate"].to(self.device))
+            loss = self.criterion(
+                prediction.squeeze(1), row["click_rate"].to(self.device)
+            )
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(
@@ -101,9 +109,14 @@ class TestWikipedia2Vec:
             predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
         final_loss = sum(loss_list) / len(loss_list)
-        logger.info(f"Model {model_name}. Evaluation finished. Final loss: {final_loss}")
+        logger.info(
+            f"Model {model_name}. Evaluation finished. Final loss: {final_loss}"
+        )
 
-        predictions_list.to_csv(f"./results/test/results_{model_name}_{self.model_name}_test.csv", index=False)
+        predictions_list.to_csv(
+            f"./results/test/results_{model_name}_{self.model_name}_test.csv",
+            index=False,
+        )
 
     @staticmethod
     def get_siamese_representation(source_article, target_article):

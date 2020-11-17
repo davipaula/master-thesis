@@ -28,7 +28,9 @@ VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -46,8 +48,14 @@ class TrainWikipedia2Vec:
         self.batch_size = 32
 
         click_stream_train_dataset = torch.load(TRAIN_DATASET_PATH)
-        training_params = {"batch_size": self.batch_size, "shuffle": True, "drop_last": True}
-        self.click_stream_train = torch.utils.data.DataLoader(click_stream_train_dataset, **training_params)
+        training_params = {
+            "batch_size": self.batch_size,
+            "shuffle": True,
+            "drop_last": True,
+        }
+        self.click_stream_train = torch.utils.data.DataLoader(
+            click_stream_train_dataset, **training_params
+        )
 
         click_stream_validation_dataset = torch.load(VALIDATION_DATASET_PATH)
         validation_params = {
@@ -55,7 +63,9 @@ class TrainWikipedia2Vec:
             "shuffle": True,
             "drop_last": False,
         }
-        self.click_stream_validation = torch.utils.data.DataLoader(click_stream_validation_dataset, **validation_params)
+        self.click_stream_validation = torch.utils.data.DataLoader(
+            click_stream_validation_dataset, **validation_params
+        )
 
         self.wikipedia2vec = Wikipedia2VecModel()
         logger.info("Loaded models")
@@ -93,7 +103,9 @@ class TrainWikipedia2Vec:
         #     nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),
         # ).to(self.device)
 
-        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),).to(self.device)
+        return nn.Sequential(
+            nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),
+        ).to(self.device)
 
     def train(self):
         for model_name, model in self.models.items():
@@ -107,11 +119,17 @@ class TrainWikipedia2Vec:
 
             for epoch in range(self.num_epochs):
                 regression_model.train()
-                logger.info(f"Model {model_name}. Starting epoch {epoch + 1} / {self.num_epochs}")
+                logger.info(
+                    f"Model {model_name}. Starting epoch {epoch + 1} / {self.num_epochs}"
+                )
 
                 for row in tqdm(self.click_stream_train):
-                    source_article_vector = model.get_entity_vector(row[SOURCE_ARTICLE_COLUMN])
-                    target_article_vector = model.get_entity_vector(row[TARGET_ARTICLE_COLUMN])
+                    source_article_vector = model.get_entity_vector(
+                        row[SOURCE_ARTICLE_COLUMN]
+                    )
+                    target_article_vector = model.get_entity_vector(
+                        row[TARGET_ARTICLE_COLUMN]
+                    )
 
                     optimizer.zero_grad()
 
@@ -121,16 +139,24 @@ class TrainWikipedia2Vec:
 
                     prediction = regression_model(siamese_representation)
 
-                    loss = self.criterion(prediction.squeeze(1).float(), row[CLICK_RATE_COLUMN].to(self.device).float())
+                    loss = self.criterion(
+                        prediction.squeeze(1).float(),
+                        row[CLICK_RATE_COLUMN].to(self.device).float(),
+                    )
                     loss.backward()
                     optimizer.step()
 
-                logger.info(f"Model {model_name}. Finished epoch {epoch + 1}/ {self.num_epochs}. Starting validation")
+                logger.info(
+                    f"Model {model_name}. Finished epoch {epoch + 1}/ {self.num_epochs}. Starting validation"
+                )
                 validation_loss = self.validation(model_name, model, regression_model)
 
                 if validation_loss < best_loss:
                     best_loss = validation_loss
-                    best_weights = {k: v.to("cpu").clone() for k, v in regression_model.state_dict().items()}
+                    best_weights = {
+                        k: v.to("cpu").clone()
+                        for k, v in regression_model.state_dict().items()
+                    }
                     best_epoch = epoch
                     num_epochs_without_improvement = 0
                 else:
@@ -144,7 +170,10 @@ class TrainWikipedia2Vec:
 
             # This code may throw the warning UserWarning: Couldn't retrieve source code for container of type Sigmoid.
             # This warning is not problematic https://discuss.pytorch.org/t/got-warning-couldnt-retrieve-source-code-for-container/7689/13
-            torch.save(regression_model, f"./trained_models/{str(model_name)}_{self.model_name}_regression_model")
+            torch.save(
+                regression_model,
+                f"./trained_models/{str(model_name)}_{self.model_name}_regression_model",
+            )
 
             logger.info("Models saved")
 
@@ -157,11 +186,15 @@ class TrainWikipedia2Vec:
             target_article_vector = model.get_entity_vector(row[TARGET_ARTICLE_COLUMN])
 
             with torch.no_grad():
-                siamese_representation = self.get_siamese_representation(source_article_vector, target_article_vector)
+                siamese_representation = self.get_siamese_representation(
+                    source_article_vector, target_article_vector
+                )
 
                 prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.squeeze(1), row[CLICK_RATE_COLUMN].to(self.device))
+            loss = self.criterion(
+                prediction.squeeze(1), row[CLICK_RATE_COLUMN].to(self.device)
+            )
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(
@@ -178,7 +211,10 @@ class TrainWikipedia2Vec:
             predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
         predictions_list.to_csv(
-            "./results/results_{}_level_validation_{}.csv".format(model_name, datetime.now()), index=False,
+            "./results/results_{}_level_validation_{}.csv".format(
+                model_name, datetime.now()
+            ),
+            index=False,
         )
 
         final_loss = sum(loss_list) / len(loss_list)

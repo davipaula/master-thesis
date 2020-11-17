@@ -4,7 +4,8 @@ import re
 
 
 # match tail after wikilink
-tailRE = re.compile('\w+')
+tailRE = re.compile("\w+")
+
 
 def dropNested(text, openDelim, closeDelim):
     """
@@ -13,8 +14,8 @@ def dropNested(text, openDelim, closeDelim):
     openRE = re.compile(openDelim, re.IGNORECASE)
     closeRE = re.compile(closeDelim, re.IGNORECASE)
     # partition text in separate blocks { } { }
-    spans = []                  # pairs (s, e) for each partition
-    nest = 0                    # nesting level
+    spans = []  # pairs (s, e) for each partition
+    nest = 0  # nesting level
     start = openRE.search(text, 0)
     if not start:
         return text
@@ -22,8 +23,8 @@ def dropNested(text, openDelim, closeDelim):
     next = start
     while end:
         next = openRE.search(text, next.end())
-        if not next:            # termination
-            while nest:         # close all pending
+        if not next:  # termination
+            while nest:  # close all pending
                 nest -= 1
                 end0 = closeRE.search(text, end.end())
                 if end0:
@@ -39,7 +40,7 @@ def dropNested(text, openDelim, closeDelim):
                 # try closing more
                 last = end.end()
                 end = closeRE.search(text, end.end())
-                if not end:     # unbalanced
+                if not end:  # unbalanced
                     if spans:
                         span = (spans[0][0], last)
                     else:
@@ -51,28 +52,28 @@ def dropNested(text, openDelim, closeDelim):
                 # advance start, find next close
                 start = next
                 end = closeRE.search(text, next.end())
-                break           # { }
+                break  # { }
         if next != start:
             # { { }
             nest += 1
     # collect text outside partitions
     return dropSpans(spans, text)
 
+
 def dropSpans(spans, text):
     """
     Drop from text the blocks identified in :param spans:, possibly nested.
     """
     spans.sort()
-    res = ''
+    res = ""
     offset = 0
     for s, e in spans:
-        if offset <= s:         # handle nesting
+        if offset <= s:  # handle nesting
             if offset < s:
                 res += text[offset:s]
             offset = e
     res += text[offset:]
     return res
-
 
 
 def splitParts(paramsList):
@@ -108,7 +109,7 @@ def splitParts(paramsList):
     # and tpl parameters like:
     #    ||[[Category:People|{{#if:A|A|{{PAGENAME}}}}]]
 
-    sep = '|'
+    sep = "|"
     parameters = []
     cur = 0
 
@@ -124,7 +125,7 @@ def splitParts(paramsList):
             else:
                 parameters = par
         elif not parameters:
-            parameters = ['']  # create first param
+            parameters = [""]  # create first param
         # add span to last previous parameter
         parameters[-1] += paramsList[s:e]
         cur = e
@@ -184,11 +185,11 @@ def findMatchingBraces(text, ldelim=0):
     #   {{{link|{{ucfirst:{{{1}}}}}} interchange}}}
 
     if ldelim:  # 2-3
-        reOpen = re.compile('[{]{%d,}' % ldelim)  # at least ldelim
-        reNext = re.compile('[{]{2,}|}{2,}')  # at least 2
+        reOpen = re.compile("[{]{%d,}" % ldelim)  # at least ldelim
+        reNext = re.compile("[{]{2,}|}{2,}")  # at least 2
     else:
-        reOpen = re.compile('{{2,}|\[{2,}')
-        reNext = re.compile('{{2,}|}{2,}|\[{2,}|]{2,}')  # at least 2
+        reOpen = re.compile("{{2,}|\[{2,}")
+        reNext = re.compile("{{2,}|}{2,}|\[{2,}|]{2,}")  # at least 2
 
     cur = 0
     while True:
@@ -196,7 +197,7 @@ def findMatchingBraces(text, ldelim=0):
         if not m1:
             return
         lmatch = m1.end() - m1.start()
-        if m1.group()[0] == '{':
+        if m1.group()[0] == "{":
             stack = [lmatch]  # stack of opening braces lengths
         else:
             stack = [-lmatch]  # negative means [
@@ -209,9 +210,9 @@ def findMatchingBraces(text, ldelim=0):
             brac = m2.group()[0]
             lmatch = m2.end() - m2.start()
 
-            if brac == '{':
+            if brac == "{":
                 stack.append(lmatch)
-            elif brac == '}':
+            elif brac == "}":
                 while stack:
                     openCount = stack.pop()  # opening span
                     if openCount == 0:  # illegal unmatched [[
@@ -230,10 +231,10 @@ def findMatchingBraces(text, ldelim=0):
                     break
                 elif len(stack) == 1 and 0 < stack[0] < ldelim:
                     # ambiguous {{{{{ }}} }}
-                    #yield m1.start() + stack[0], end
+                    # yield m1.start() + stack[0], end
                     cur = end
                     break
-            elif brac == '[':  # [[
+            elif brac == "[":  # [[
                 stack.append(-lmatch)
             else:  # ]]
                 while stack and stack[-1] < 0:  # matching [[
@@ -254,7 +255,7 @@ def findMatchingBraces(text, ldelim=0):
                 cur = end
 
 
-def findBalanced(text, openDelim=['[['], closeDelim=[']]']):
+def findBalanced(text, openDelim=["[["], closeDelim=["]]"]):
     """
     Assuming that text contains a properly balanced expression using
     :param openDelim: as opening delimiters and
@@ -262,9 +263,12 @@ def findBalanced(text, openDelim=['[['], closeDelim=[']]']):
     :return: an iterator producing pairs (start, end) of start and end
     positions in text containing a balanced expression.
     """
-    openPat = '|'.join([re.escape(x) for x in openDelim])
+    openPat = "|".join([re.escape(x) for x in openDelim])
     # pattern for delimiters expected after each opening delimiter
-    afterPat = {o: re.compile(openPat + '|' + c, re.DOTALL) for o, c in zip(openDelim, closeDelim)}
+    afterPat = {
+        o: re.compile(openPat + "|" + c, re.DOTALL)
+        for o, c in zip(openDelim, closeDelim)
+    }
     stack = []
     start = 0
     cur = 0
@@ -295,6 +299,7 @@ def findBalanced(text, openDelim=['[['], closeDelim=[']]']):
                 startSet = False
         cur = next.end()
 
+
 def replaceInternalLinks(text):
     """
     Replaces internal links of the form:
@@ -305,18 +310,18 @@ def replaceInternalLinks(text):
     # call this after removal of external links, so we need not worry about
     # triple closing ]]].
     cur = 0
-    res = ''
+    res = ""
     for s, e in findBalanced(text):
         m = tailRE.match(text, e)
         if m:
             trail = m.group(0)
             end = m.end()
         else:
-            trail = ''
+            trail = ""
             end = e
-        inner = text[s + 2:e - 2]
+        inner = text[s + 2 : e - 2]
         # find first |
-        pipe = inner.find('|')
+        pipe = inner.find("|")
         if pipe < 0:
             title = inner
             label = title
@@ -325,26 +330,28 @@ def replaceInternalLinks(text):
             # find last |
             curp = pipe + 1
             for s1, e1 in findBalanced(inner):
-                last = inner.rfind('|', curp, s1)
+                last = inner.rfind("|", curp, s1)
                 if last >= 0:
                     pipe = last  # advance
                 curp = e1
-            label = inner[pipe + 1:].strip()
+            label = inner[pipe + 1 :].strip()
         res += text[cur:s] + makeInternalLink(title, label) + trail
         cur = end
     return res + text[cur:]
 
-acceptedNamespaces = ['w', 'wiktionary', 'wikt']
+
+acceptedNamespaces = ["w", "wiktionary", "wikt"]
+
 
 def makeInternalLink(title, label):
-    colon = title.find(':')
+    colon = title.find(":")
     if colon > 0 and title[:colon] not in acceptedNamespaces:
-        return ''
+        return ""
     if colon == 0:
         # drop also :File:
-        colon2 = title.find(':', colon + 1)
-        if colon2 > 1 and title[colon + 1:colon2] not in acceptedNamespaces:
-            return ''
+        colon2 = title.find(":", colon + 1)
+        if colon2 > 1 and title[colon + 1 : colon2] not in acceptedNamespaces:
+            return ""
     return label
 
 
@@ -353,10 +360,34 @@ def makeInternalLink(title, label):
 # from: https://doc.wikimedia.org/mediawiki-core/master/php/DefaultSettings_8php_source.html
 
 wgUrlProtocols = [
-    'bitcoin:', 'ftp://', 'ftps://', 'geo:', 'git://', 'gopher://', 'http://',
-    'https://', 'irc://', 'ircs://', 'magnet:', 'mailto:', 'mms://', 'news:',
-    'nntp://', 'redis://', 'sftp://', 'sip:', 'sips:', 'sms:', 'ssh://',
-    'svn://', 'tel:', 'telnet://', 'urn:', 'worldwind://', 'xmpp:', '//'
+    "bitcoin:",
+    "ftp://",
+    "ftps://",
+    "geo:",
+    "git://",
+    "gopher://",
+    "http://",
+    "https://",
+    "irc://",
+    "ircs://",
+    "magnet:",
+    "mailto:",
+    "mms://",
+    "news:",
+    "nntp://",
+    "redis://",
+    "sftp://",
+    "sip:",
+    "sips:",
+    "sms:",
+    "ssh://",
+    "svn://",
+    "tel:",
+    "telnet://",
+    "urn:",
+    "worldwind://",
+    "xmpp:",
+    "//",
 ]
 
 # from: https://doc.wikimedia.org/mediawiki-core/master/php/Parser_8php_source.html
@@ -366,18 +397,29 @@ wgUrlProtocols = [
 # \p{Zs} is unicode 'separator, space' category. It covers the space 0x20
 # as well as U+3000 is IDEOGRAPHIC SPACE for bug 19052
 EXT_LINK_URL_CLASS = r'[^][<>"\x00-\x20\x7F\s]'
-ANCHOR_CLASS = r'[^][\x00-\x08\x0a-\x1F]'
+ANCHOR_CLASS = r"[^][\x00-\x08\x0a-\x1F]"
 ExtLinkBracketedRegex = re.compile(
-    '\[(((?i)' + '|'.join(wgUrlProtocols) + ')' + EXT_LINK_URL_CLASS + r'+)' +
-    r'\s*((?:' + ANCHOR_CLASS + r'|\[\[' + ANCHOR_CLASS + r'+\]\])' + r'*?)\]',
-    re.S | re.U)
+    "\[(((?i)"
+    + "|".join(wgUrlProtocols)
+    + ")"
+    + EXT_LINK_URL_CLASS
+    + r"+)"
+    + r"\s*((?:"
+    + ANCHOR_CLASS
+    + r"|\[\["
+    + ANCHOR_CLASS
+    + r"+\]\])"
+    + r"*?)\]",
+    re.S | re.U,
+)
 # A simpler alternative:
 # ExtLinkBracketedRegex = re.compile(r'\[(.*?)\](?!])')
 
 EXT_IMAGE_REGEX = re.compile(
     r"""^(http://|https://)([^][<>"\x00-\x20\x7F\s]+)
     /([A-Za-z0-9_.,~%\-+&;#*?!=()@\x80-\xFF]+)\.((?i)gif|png|jpg|jpeg)$""",
-    re.X | re.S | re.U)
+    re.X | re.S | re.U,
+)
 
 
 def replaceExternalLinks(text):
@@ -385,10 +427,10 @@ def replaceExternalLinks(text):
     https://www.mediawiki.org/wiki/Help:Links#External_links
     [URL anchor text]
     """
-    s = ''
+    s = ""
     cur = 0
     for m in ExtLinkBracketedRegex.finditer(text):
-        s += text[cur:m.start()]
+        s += text[cur : m.start()]
         cur = m.end()
 
         url = m.group(1)
@@ -422,5 +464,5 @@ def makeExternalLink(url, anchor):
     return anchor
 
 
-def makeExternalImage(url, alt=''):
+def makeExternalImage(url, alt=""):
     return alt

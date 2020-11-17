@@ -36,7 +36,9 @@ class NegativeSamplerProcessor:
 
         source_articles["links"] = source_articles["links"].map(literal_eval)
         source_articles = source_articles.explode("links")
-        visited_articles = self.click_stream_dataset[["source_article", "target_article"]]
+        visited_articles = self.click_stream_dataset[
+            ["source_article", "target_article"]
+        ]
 
         non_visited_articles = pd.merge(
             source_articles,
@@ -45,7 +47,9 @@ class NegativeSamplerProcessor:
             right_on=["source_article", "target_article"],
             how="left",
         )
-        non_visited_articles = non_visited_articles[~non_visited_articles["target_article"].isna()]
+        non_visited_articles = non_visited_articles[
+            ~non_visited_articles["target_article"].isna()
+        ]
 
         # Adds the non visited links data
         negative_sampling = non_visited_articles.drop(["target_article"], axis=1)

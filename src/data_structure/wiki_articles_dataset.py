@@ -25,7 +25,9 @@ class WikiArticlesDataset:
         train_articles = self.dataset.copy()
 
         if level == "word":
-            train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(self.extract_articles_at_word_level)
+            train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(
+                self.extract_articles_at_word_level
+            )
         elif level == "sentence":
             train_articles[RAW_TEXT_COLUMN] = train_articles[RAW_TEXT_COLUMN].map(
                 self.extract_articles_at_sentence_level

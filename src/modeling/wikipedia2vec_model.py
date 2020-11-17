@@ -21,11 +21,15 @@ class Wikipedia2VecModel:
         self.model = Wikipedia2Vec.load(MODEL_FILE)
 
     def get_entity_vector(self, articles: List[str]):
-        entity_vectors = torch.zeros((len(articles), 100), dtype=torch.float, device=self.device)
+        entity_vectors = torch.zeros(
+            (len(articles), 100), dtype=torch.float, device=self.device
+        )
 
         for article_index, article in enumerate(articles):
             try:
-                entity_vectors[article_index, :] = torch.from_numpy(self.model.get_entity_vector(article))
+                entity_vectors[article_index, :] = torch.from_numpy(
+                    self.model.get_entity_vector(article)
+                )
             except:
                 entity_vectors[article_index, :] = torch.zeros(100)
 
@@ -34,7 +38,9 @@ class Wikipedia2VecModel:
     def get_hidden_size(self):
         return 100
 
-    def calculate_cosine_pair_documents(self, current_article_title, previous_article_title):
+    def calculate_cosine_pair_documents(
+        self, current_article_title, previous_article_title
+    ):
         current_article_vector = self.model.get_entity_vector(current_article_title)
         previous_article_vector = self.model.get_entity_vector(previous_article_title)
 

@@ -19,7 +19,9 @@ TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -40,7 +42,9 @@ class TestDoc2Vec:
             "shuffle": True,
             "drop_last": False,
         }
-        self.click_stream_test = torch.utils.data.DataLoader(click_stream_test_dataset, **test_params)
+        self.click_stream_test = torch.utils.data.DataLoader(
+            click_stream_test_dataset, **test_params
+        )
         self.doc2vec = Doc2VecModel()
 
         self.models = {"doc2vec": self.doc2vec}
@@ -59,7 +63,9 @@ class TestDoc2Vec:
 
     def run(self):
         for model_name, model in self.models.items():
-            regression_model = torch.load(f"./trained_models/{str(model_name)}_regression_model").to(self.device)
+            regression_model = torch.load(
+                f"./trained_models/{str(model_name)}_regression_model"
+            ).to(self.device)
             self.test(model_name, model, regression_model)
 
     def test(self, model_name, model, regression_model):
@@ -72,11 +78,16 @@ class TestDoc2Vec:
             source_article_vector = model.get_inferred_vector(row["source_article"])
             target_article_vector = model.get_inferred_vector(row["target_article"])
 
-            siamese_representation = self.get_siamese_representation(source_article_vector, target_article_vector)
+            siamese_representation = self.get_siamese_representation(
+                source_article_vector, target_article_vector
+            )
 
             prediction = regression_model(siamese_representation)
 
-            loss = self.criterion(prediction.to(self.device).squeeze(1), row["click_rate"].to(self.device).float())
+            loss = self.criterion(
+                prediction.to(self.device).squeeze(1),
+                row["click_rate"].to(self.device).float(),
+            )
             loss_list.append(loss)
 
             batch_results = pd.DataFrame(
@@ -93,8 +104,12 @@ class TestDoc2Vec:
             predictions_list = predictions_list.append(batch_results, ignore_index=True)
 
         final_loss = sum(loss_list) / len(loss_list)
-        predictions_list.to_csv(f"./results/test/results_{model_name}_level_test.csv", index=False)
-        logger.info(f"Model {model_name}. Evaluation finished. Final loss: {final_loss}")
+        predictions_list.to_csv(
+            f"./results/test/results_{model_name}_level_test.csv", index=False
+        )
+        logger.info(
+            f"Model {model_name}. Evaluation finished. Final loss: {final_loss}"
+        )
 
     @staticmethod
     def get_siamese_representation(source_article, target_article):
@@ -115,7 +130,12 @@ class TestDoc2Vec:
         mlp_dim = int(input_dim / 2)
         output_dim = 1
 
-        return nn.Sequential(nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),)
+        return nn.Sequential(
+            nn.Linear(input_dim, mlp_dim),
+            nn.ReLU(),
+            nn.Linear(mlp_dim, output_dim),
+            nn.Sigmoid(),
+        )
 
 
 if __name__ == "__main__":

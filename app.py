@@ -31,7 +31,9 @@ def predict(source_article: str, target_article: str):
     source_article_vector = model.get_inferred_vector([source_article])
     target_article_vector = model.get_inferred_vector([target_article])
 
-    siamese_representation = get_siamese_representation(source_article_vector, target_article_vector)
+    siamese_representation = get_siamese_representation(
+        source_article_vector, target_article_vector
+    )
 
     prediction = regression_model(siamese_representation)
 
@@ -40,5 +42,10 @@ def predict(source_article: str, target_article: str):
 
 def get_siamese_representation(source_article_vector, target_article_vector):
     return torch.cat(
-        (source_article_vector, target_article_vector, torch.abs(source_article_vector - target_article_vector),), 1,
+        (
+            source_article_vector,
+            target_article_vector,
+            torch.abs(source_article_vector - target_article_vector),
+        ),
+        1,
     )

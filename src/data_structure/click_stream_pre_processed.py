@@ -30,7 +30,9 @@ class ClickStreamPreProcessed(Dataset):
         return self.dataset.iloc[index]
 
     def get_titles(self):
-        titles = pd.Series.append(self.dataset[SOURCE_ARTICLE_COLUMN], self.dataset[TARGET_ARTICLE_COLUMN])
+        titles = pd.Series.append(
+            self.dataset[SOURCE_ARTICLE_COLUMN], self.dataset[TARGET_ARTICLE_COLUMN]
+        )
         return titles.unique()
 
 

@@ -12,7 +12,9 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
@@ -25,7 +27,9 @@ FOLD_COLUMN = "fold"
 
 class Doc2VecModel:
     def __init__(
-        self, dbow_path="./trained_models/doc2vec_dbow_model", dm_path="./trained_models/doc2vec_dm_model",
+        self,
+        dbow_path="./trained_models/doc2vec_dbow_model",
+        dm_path="./trained_models/doc2vec_dm_model",
     ):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
@@ -43,7 +47,13 @@ class Doc2VecModel:
 
     def create_models(self):
         common_model_arguments = dict(
-            vector_size=100, epochs=20, min_count=2, sample=0, workers=multiprocessing.cpu_count(), negative=5, hs=0,
+            vector_size=100,
+            epochs=20,
+            min_count=2,
+            sample=0,
+            workers=multiprocessing.cpu_count(),
+            negative=5,
+            hs=0,
         )
 
         dbow_model = Doc2Vec(dm=0, **common_model_arguments)
@@ -70,20 +80,34 @@ class Doc2VecModel:
         return ConcatenatedDoc2Vec([dbow_model, dm_model])
 
     def get_entity_vector(self, articles: List[str]):
-        entity_vectors = torch.zeros((len(articles), self.get_hidden_size()), dtype=torch.float, device=self.device)
+        entity_vectors = torch.zeros(
+            (len(articles), self.get_hidden_size()),
+            dtype=torch.float,
+            device=self.device,
+        )
 
         for article_index, article in enumerate(articles):
-            entity_vectors[article_index] = torch.from_numpy(self.model.docvecs[article])
+            entity_vectors[article_index] = torch.from_numpy(
+                self.model.docvecs[article]
+            )
 
         return entity_vectors
 
     def get_inferred_vector(self, articles: List[str]):
-        inferred_vectors = torch.zeros((len(articles), self.get_hidden_size()), dtype=torch.float, device=self.device)
+        inferred_vectors = torch.zeros(
+            (len(articles), self.get_hidden_size()),
+            dtype=torch.float,
+            device=self.device,
+        )
 
         for article_index, article in enumerate(articles):
-            article_raw_text = self.__articles[RAW_TEXT_COLUMN][self.__articles[ARTICLE_COLUMN] == article]
+            article_raw_text = self.__articles[RAW_TEXT_COLUMN][
+                self.__articles[ARTICLE_COLUMN] == article
+            ]
 
-            inferred_vectors[article_index] = torch.from_numpy(self.model.infer_vector(article_raw_text))
+            inferred_vectors[article_index] = torch.from_numpy(
+                self.model.infer_vector(article_raw_text)
+            )
 
         return inferred_vectors
 
@@ -110,12 +134,15 @@ class Doc2VecModel:
             )
         )
 
-        train_articles = self.__articles[self.__articles[ARTICLE_COLUMN].isin(train_articles_titles)]
+        train_articles = self.__articles[
+            self.__articles[ARTICLE_COLUMN].isin(train_articles_titles)
+        ]
 
         for i in range(len(train_articles)):
             tagged_documents.append(
                 TaggedDocument(
-                    train_articles[RAW_TEXT_COLUMN].iloc[i].split(), [train_articles[ARTICLE_COLUMN].iloc[i]],
+                    train_articles[RAW_TEXT_COLUMN].iloc[i].split(),
+                    [train_articles[ARTICLE_COLUMN].iloc[i]],
                 )
             )
 

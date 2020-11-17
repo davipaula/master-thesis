@@ -46,7 +46,9 @@ from database import ArticlesDatabase
 
 logger = logging.getLogger(__name__)
 
-LOG_FORMAT = "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+LOG_FORMAT = (
+    "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
+)
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
@@ -87,7 +89,9 @@ def process_text(text):
         "Bibliography",
         "Filmography",
     ]
-    headline_matches = list(re.finditer(r"^([=]{2,5})([^=]+?)([=]{2,5})", text, re.MULTILINE))
+    headline_matches = list(
+        re.finditer(r"^([=]{2,5})([^=]+?)([=]{2,5})", text, re.MULTILINE)
+    )
     sects = []
 
     # Extract sections from document text
