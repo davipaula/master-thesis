@@ -364,7 +364,6 @@ class ArticlesDatabase:
                         for section in normalized_article_text
                     ]
                 )
-
                 number_of_sentences = sum(
                     [
                         len(section["text"].replace("\n\n", " ").split(". "))
