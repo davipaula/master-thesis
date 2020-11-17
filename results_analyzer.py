@@ -1,7 +1,6 @@
 import json
 import os
 import sys
-from collections import defaultdict
 from itertools import chain
 
 K_COLUMN = "k"
@@ -24,19 +23,16 @@ import random
 from database import ArticlesDatabase
 from utils.constants import (
     RESULT_FILE_COLUMNS_NAMES,
-    TEST_DATASET_PATH,
     TARGET_ARTICLE_COLUMN,
     SOURCE_ARTICLE_COLUMN,
     MODEL_COLUMN,
     ACTUAL_CLICK_RATE_COLUMN,
     PREDICTED_CLICK_RATE_COLUMN,
     ARTICLE_COLUMN,
-    WORD_COUNT_COLUMN,
     OUT_LINKS_COUNT_COLUMN,
     IN_LINKS_COUNT_COLUMN,
     PARAGRAPH_COUNT_COLUMN,
     SENTENCE_COUNT_COLUMN,
-    WIKI_ARTICLES_DATASET_PATH,
 )
 
 WORD_COUNT_BIN = "word_count_bin"
@@ -387,8 +383,6 @@ class ResultsAnalyzer:
                 + self.results[TARGET_ARTICLE_COLUMN].to_list()
             )
         )
-
-        # pd.Series(test_articles).to_csv("./data/test_articles.csv", index=False)
 
         tokenized_words_df = pd.read_csv("./data/articles_length.csv")
 

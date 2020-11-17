@@ -1,18 +1,12 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
-import gc
 import logging
-import os
-import sys
 
 import torch
 import torch.nn as nn
 import numpy as np
-import pandas as pd
-import csv
 from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
-from torch.nn import Softmax
 
 from utils.constants import (
     TEXT_IDS_COLUMN,
@@ -248,7 +242,6 @@ class SmashRNNModel(nn.Module):
                 batch_size,
                 word_level_representation,
                 max_paragraphs_per_article,
-                max_sentences_per_paragraph,
                 sentences_per_paragraph,
             )
 
@@ -312,17 +305,10 @@ class SmashRNNModel(nn.Module):
             paragraph_state
         ).squeeze(1)
 
-        # max_value = paragraph_context_vector.max()
-        # exponent = torch.exp(paragraph_context_vector - max_value)
         exponent = torch.exp(paragraph_context_vector)
 
-        # paragraph_attention = paragraph_state * paragraph_context_vector
         del paragraph_state
         del paragraph_context_vector
-
-        # softmax_function = Softmax(1)
-
-        # paragraph_alphas = softmax_function(paragraph_attention)
 
         paragraph_attention, _ = pad_packed_sequence(
             PackedSequence(
@@ -353,7 +339,6 @@ class SmashRNNModel(nn.Module):
         batch_size,
         flatten_sentences,
         max_paragraphs_per_article,
-        max_sentences_per_paragraph,
         sentences_per_paragraph,
     ):
         sentences_per_paragraph = sentences_per_paragraph.reshape(
@@ -376,22 +361,17 @@ class SmashRNNModel(nn.Module):
             sentence_level_gru_output, batch_first=True
         )
 
-        try:
-            sentence_level_representation = (
-                sentence_alphas.unsqueeze(2) * sentence_level_gru_output
-            ).sum(dim=1)
+        sentence_level_representation = (
+            sentence_alphas.unsqueeze(2) * sentence_level_gru_output
+        ).sum(dim=1)
 
-            sentence_level_representation = sentence_level_representation.reshape(
-                batch_size,
-                max_paragraphs_per_article,
-                sentence_level_representation.shape[-1],
-            )
+        sentence_level_representation = sentence_level_representation.reshape(
+            batch_size,
+            max_paragraphs_per_article,
+            sentence_level_representation.shape[-1],
+        )
 
-        except:
-            print("check")
-            raise Exception("error")
-
-        return sentence_level_representation  # , sentence_level_importance
+        return sentence_level_representation
 
     def get_word_level_representation(
         self,
@@ -452,11 +432,8 @@ class SmashRNNModel(nn.Module):
 
         sentence_context_vector = self.sentence_context_layer(sentence_state).squeeze(1)
 
-        # max_value = sentence_context_vector.max()
-        # exponent = torch.exp(sentence_context_vector - max_value)
         exponent = torch.exp(sentence_context_vector)
 
-        # sentence_attention = sentence_state * sentence_context_vector
         del sentence_context_vector
         del sentence_state
 
@@ -470,8 +447,6 @@ class SmashRNNModel(nn.Module):
             ),
             batch_first=True,
         )
-
-        # softmax_function = Softmax(1)
 
         sentence_alphas = sentence_attention / torch.sum(
             sentence_attention, dim=1, keepdim=True
@@ -488,16 +463,10 @@ class SmashRNNModel(nn.Module):
         word_context_vector = self.word_context_layer(word_state).squeeze(1)
         # (n_words)
 
-        # max_value = word_context_vector.max()
-        # exponent = torch.exp(word_context_vector - max_value)
         exponent = torch.exp(word_context_vector)
 
-        # word_attention = word_state * word_context_vector
         del word_state
         del word_context_vector
-
-        # Parameter `1` is the dimension the Softmax will be applied to
-        # softmax_function = Softmax(1)
 
         word_attention, _ = pad_packed_sequence(
             PackedSequence(
@@ -550,37 +519,3 @@ class SmashRNNModel(nn.Module):
         )
 
         return document
-
-
-if __name__ == "__main__":
-    word2vec_path = "../../data/source/glove.6B.50d.txt"
-    dict = pd.read_csv(
-        filepath_or_buffer=word2vec_path, header=None, sep=" ", quoting=csv.QUOTE_NONE
-    ).values[:, 1:]
-    dict_len, embed_dim = dict.shape
-    dict_len += 1
-    unknown_word = np.zeros((1, embed_dim))
-    dict = torch.from_numpy(
-        np.concatenate([unknown_word, dict], axis=0).astype(np.float)
-    )
-    model = SmashRNNModel(dict, dict_len, embed_dim)
-    # batch_size = 6
-    # max_paragraphs_per_article = 111
-    # max_sentences_per_paragraph = 22
-    # max_words_per_sentence = 26
-    # test_tensor = torch.zeros(
-    #     (batch_size, max_paragraphs_per_article, max_sentences_per_paragraph, max_words_per_sentence), dtype=int
-    # )
-    #
-    # print(test_tensor.shape)
-    #
-    # paragraphs_per_article = torch.ones(batch_size, dtype=int)
-    # sentences_per_article = torch.zeros((batch_size, max_paragraphs_per_article), dtype=int)
-    # words_per_sentence = torch.zeros((batch_size, max_paragraphs_per_article, max_sentences_per_paragraph), dtype=int)
-    #
-    # print(
-    #     model.get_document_representation(
-    #         test_tensor, paragraphs_per_article, sentences_per_article, words_per_sentence
-    #     )
-    # )
-    print("a")

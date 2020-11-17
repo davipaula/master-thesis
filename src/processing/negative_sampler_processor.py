@@ -1,13 +1,7 @@
-import numpy as np
 import pandas as pd
-import os
 import random
 import torch
 from ast import literal_eval
-from datetime import datetime
-from data_structure.click_stream_dataset import ClickStreamDataset
-from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
-from torch.utils.data import TensorDataset, random_split
 
 
 class NegativeSamplerProcessor:
@@ -61,27 +55,3 @@ class NegativeSamplerProcessor:
         self.click_stream_dataset.append(negative_sampling, ignore_index=True)
 
         return self.click_stream_dataset
-
-
-if __name__ == "__main__":
-    pd.set_option("display.max_rows", 500)
-    pd.set_option("display.max_columns", 500)
-    pd.set_option("display.width", 1000)
-
-    creator = ClickStreamProcessor()
-
-    # wiki_documents_dataset = creator.extract_wiki_articles()
-    #
-    # wiki_documents_dataset.to_csv('../data/complete_wiki_dataset.csv')
-
-    # generate_click_stream_dataset(click_stream_dump_path, wiki_documents_path)
-
-    creator.import_articles()
-
-    # text_documents = creator.generate_dataset()
-    # text_documents.to_csv('../data/wiki_df.csv',
-    #                       index=False
-    #                       )
-
-    # df = pd.read_csv('../data/wiki_df_complete.csv')
-    # get_dataset_sample(df, sample_size=0.05)

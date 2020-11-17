@@ -29,16 +29,16 @@ sys.path.extend([os.getcwd(), src_path])
 
 import bz2
 import re
-import json
-import torch
 import logging
 from gensim.corpora.wikicorpus import get_namespace
 from gensim.scripts.segment_wiki import extract_page_xmls
-from utils.extractor_utils import dropNested, replaceInternalLinks, replaceExternalLinks
+from utils.extractor_utils import (
+    drop_nested,
+    replaceInternalLinks,
+    replaceExternalLinks,
+)
 from xml.etree import cElementTree
 from gensim.scripts.segment_wiki import segment
-from typing import List
-from tqdm import tqdm
 
 from utils.constants import WIKI_DUMP_PATH
 
@@ -59,8 +59,8 @@ def convert_to_plain_text(text):
     :param text:
     :return: cleaned text
     """
-    text = dropNested(text, r"{{", r"}}")
-    text = dropNested(text, r"{\|", r"\|}")
+    text = drop_nested(text, r"{{", r"}}")
+    text = drop_nested(text, r"{\|", r"\|}")
 
     # replace internal links
     text = replaceInternalLinks(text)
@@ -124,9 +124,7 @@ def process_text(text):
         plain_sect_text = convert_to_plain_text(sect_text)
 
         if plain_sect_text:
-            sects.append(
-                {"title": title, "text": plain_sect_text,}
-            )
+            sects.append({"title": title, "text": plain_sect_text})
 
     # no sections found -> article consists of only a single section
     plain_text = convert_to_plain_text(text)

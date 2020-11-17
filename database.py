@@ -127,7 +127,7 @@ class ArticlesDatabase:
         return result
 
     def insert_word_count(self, article_title, word_count):
-        query = f"UPDATE articles SET word_count = ? WHERE title = ?"
+        query = "UPDATE articles SET word_count = ? WHERE title = ?"
 
         try:
             self.cursor.execute(query, (word_count, article_title))
@@ -140,7 +140,7 @@ class ArticlesDatabase:
     def insert_paragraph_and_sentence_count(
         self, article_title: str, paragraph_count: int, sentence_count: int
     ) -> None:
-        query = f"UPDATE articles SET paragraph_count = ?, sentence_count = ? WHERE title = ?"
+        query = "UPDATE articles SET paragraph_count = ?, sentence_count = ? WHERE title = ?"
 
         try:
             self.cursor.execute(query, (paragraph_count, sentence_count, article_title))
@@ -151,7 +151,7 @@ class ArticlesDatabase:
             exit(1)
 
     def insert_out_links_count(self, article_title, number_of_links):
-        query = f"UPDATE articles SET out_links_count = ? WHERE title = ?"
+        query = "UPDATE articles SET out_links_count = ? WHERE title = ?"
 
         try:
             self.cursor.execute(query, (number_of_links, article_title))
@@ -162,7 +162,7 @@ class ArticlesDatabase:
             exit(1)
 
     def insert_in_links_count(self, article_title, number_of_links):
-        query = f"UPDATE articles SET in_links_count = ? WHERE title = ?"
+        query = "UPDATE articles SET in_links_count = ? WHERE title = ?"
 
         try:
             self.cursor.execute(query, (number_of_links, article_title))
@@ -292,7 +292,7 @@ class ArticlesDatabase:
         start = 0
         end = chunk_size
 
-        logger.info(f"Started inserting")
+        logger.info("Started inserting")
         start_time = datetime.now()
         for n in tqdm(range(int(titles_count / chunk_size))):
             current_titles = all_titles[start:end]
@@ -349,7 +349,7 @@ class ArticlesDatabase:
 
         logger.info(f"Started calculating paragraph and sentence counts")
         start_time = datetime.now()
-        for n in tqdm(range(int(titles_count / chunk_size))):
+        for _ in tqdm(range(int(titles_count / chunk_size))):
             current_titles = all_titles[start:end]
             articles_text = self.get_text_from_articles(current_titles)
 

@@ -89,7 +89,6 @@ def test(opt):
 
     logger.info(f"Model Smash-RNN {opt.level} level. Starting evaluation")
 
-    i = 0
     for row in tqdm(test_generator):
         source_articles = articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
         target_articles = articles.get_articles(row[TARGET_ARTICLE_COLUMN])
@@ -169,7 +168,7 @@ def load_model(model_folder, model_name, opt):
 
 def get_args():
     parser = argparse.ArgumentParser(
-        """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
+        """Implementation of Siamese multi-attention RNN"""
     )
     parser.add_argument("--level", type=str, default="paragraph")
     parser.add_argument("--batch_size", type=int, default=2)

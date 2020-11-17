@@ -30,7 +30,7 @@ class Wikipedia2VecModel:
                 entity_vectors[article_index, :] = torch.from_numpy(
                     self.model.get_entity_vector(article)
                 )
-            except:
+            except KeyError:
                 entity_vectors[article_index, :] = torch.zeros(100)
 
         return entity_vectors

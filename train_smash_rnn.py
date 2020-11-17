@@ -142,7 +142,6 @@ class SmashRNN:
 
             loss_list = []
 
-            i = 0
             for row in tqdm(training_generator):
                 source_articles = self.articles.get_articles(row[SOURCE_ARTICLE_COLUMN])
                 target_articles = self.articles.get_articles(row[TARGET_ARTICLE_COLUMN])

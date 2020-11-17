@@ -5,7 +5,7 @@ from datetime import datetime
 
 from tqdm import tqdm
 
-from typing import List, Tuple
+from typing import List
 
 import logging
 from itertools import compress

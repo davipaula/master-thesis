@@ -147,40 +147,22 @@ current_document = next(iter(training_generator))[0]
     print("finished")
 
 
-def test_sentence_level():
-    training_generator = torch.load("../data/training.pth")
-
-    for current_document, previous_document, click_rate_tensor in training_generator:
-        current_document_ = get_document_at_sentence_level(current_document["text"])
-        words_per_sentence = get_words_per_sentence_at_sentence_level(
-            current_document["words_per_sentence"]
-        )
-
-        break
-
-    print(current_document_.shape)
-    # print(words_per_sentence)
-
-
 def remove_special_characters(text):
-    try:
-        text = re.sub(r"[^A-Za-z0-9(),!.?\'`]", " ", text)
-        text = re.sub(r"\'s", " 's ", text)
-        text = re.sub(r"\'ve", " 've ", text)
-        text = re.sub(r"n\'t", " 't ", text)
-        text = re.sub(r"\'re", " 're ", text)
-        text = re.sub(r"\'d", " 'd ", text)
-        text = re.sub(r"\'ll", " 'll ", text)
-        text = re.sub(r",", " ", text)
-        text = re.sub(r"\.", " ", text)
-        text = re.sub(r"!", " ", text)
-        text = re.sub(r"\(", " ( ", text)
-        text = re.sub(r"\)", " ) ", text)
-        text = re.sub(r"\?", " ", text)
-        text = re.sub(r"\s{2,}", " ", text)
-        text = text.lower()
-    except:
-        pass
+    text = re.sub(r"[^A-Za-z0-9(),!.?\'`]", " ", text)
+    text = re.sub(r"\'s", " 's ", text)
+    text = re.sub(r"\'ve", " 've ", text)
+    text = re.sub(r"n\'t", " 't ", text)
+    text = re.sub(r"\'re", " 're ", text)
+    text = re.sub(r"\'d", " 'd ", text)
+    text = re.sub(r"\'ll", " 'll ", text)
+    text = re.sub(r",", " ", text)
+    text = re.sub(r"\.", " ", text)
+    text = re.sub(r"!", " ", text)
+    text = re.sub(r"\(", " ( ", text)
+    text = re.sub(r"\)", " ) ", text)
+    text = re.sub(r"\?", " ", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    text = text.lower()
 
     return text
 

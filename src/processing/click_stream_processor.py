@@ -9,11 +9,7 @@ import logging
 import database
 import numpy as np
 
-from tqdm import tqdm
-
-from data_structure.click_stream_dataset import ClickStreamDataset
 from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
-from torch.utils.data import TensorDataset, random_split
 
 from utils.constants import (
     WIKI_ARTICLES_DATASET_PATH,

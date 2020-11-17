@@ -7,11 +7,9 @@ sys.path.extend([os.getcwd(), src_path])
 import itertools
 import json
 import pandas as pd
-import torch
 from tqdm import tqdm
 
 from utils.utils import clean_title
-from ast import literal_eval
 
 from utils.constants import WIKI_ARTICLES_DATASET_PATH, WIKI_ARTICLES_TOKENIZED_PATH
 

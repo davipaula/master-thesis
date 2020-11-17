@@ -7,12 +7,12 @@ import re
 tailRE = re.compile("\w+")
 
 
-def dropNested(text, openDelim, closeDelim):
+def drop_nested(text, open_delimiter, close_delimiter):
     """
     A matching function for nested expressions, e.g. namespaces and tables.
     """
-    openRE = re.compile(openDelim, re.IGNORECASE)
-    closeRE = re.compile(closeDelim, re.IGNORECASE)
+    openRE = re.compile(open_delimiter, re.IGNORECASE)
+    closeRE = re.compile(close_delimiter, re.IGNORECASE)
     # partition text in separate blocks { } { }
     spans = []  # pairs (s, e) for each partition
     nest = 0  # nesting level
