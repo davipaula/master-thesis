@@ -1,16 +1,20 @@
-import json
 import os
 import sys
-from itertools import chain
+
+from utils.constants import (
+    NDCG_COLUMN,
+    MAP_COLUMN,
+    PRECISION_COLUMN,
+    IS_IN_TOP_ARTICLES_COLUMN,
+    K_COLUMN,
+)
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
 import logging
-import math
 
-import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
@@ -20,8 +24,7 @@ import random
 
 import matplotlib.pyplot as plt
 
-from database import ArticlesDatabase
-from utils.constants import (
+from src.utils.constants import (
     RESULT_FILE_COLUMNS_NAMES,
     TARGET_ARTICLE_COLUMN,
     SOURCE_ARTICLE_COLUMN,
@@ -29,22 +32,15 @@ from utils.constants import (
     ACTUAL_CLICK_RATE_COLUMN,
     PREDICTED_CLICK_RATE_COLUMN,
     ARTICLE_COLUMN,
-    OUT_LINKS_COUNT_COLUMN,
-    IN_LINKS_COUNT_COLUMN,
-    PARAGRAPH_COUNT_COLUMN,
-    SENTENCE_COUNT_COLUMN,
     CLEAN_MODEL_NAMES,
-    COMPLETE_MODELS,
     SMASH_WORD_LEVEL,
-    SMASH_MODELS,
 )
 
-WORD_COUNT_BIN = "word_count_bin"
-NDCG_COLUMN = "ndcg"
-MAP_COLUMN = "map"
-PRECISION_COLUMN = "precision"
-IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
-K_COLUMN = "k"
+from src.utils.metrics_calculator import (
+    get_ndcg_at_k_by_article,
+    average_precision_at_k,
+    precision_at_k,
+)
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
@@ -127,16 +123,23 @@ plt.rc("font", family="serif")
 
 class ResultsAnalyzer:
     def __init__(self):
-        self.results = self.build_models_results()
+        self.results = self._build_models_results()
         self.source_articles = self.results[SOURCE_ARTICLE_COLUMN].unique().tolist()
 
-        self.top_articles = self.build_top_n_matrix_by_article()
+        self.top_articles = self._get_top_n_actual_articles()
 
         self.predictions_by_model = None
         self.predictions_by_model_and_article = None
         self.results_by_model_and_article = None
 
-    def build_models_results(self):
+    @staticmethod
+    def _build_models_results() -> pd.DataFrame:
+        """Reads the results files and returns a pd.DataFrame with all results
+
+        Returns
+        -------
+        pd.DataFrame
+        """
         results_files = [file for file in glob.glob(f"{BASE_RESULTS_PATH}*.csv")]
 
         results = pd.DataFrame(columns=RESULT_FILE_COLUMNS_NAMES)
@@ -146,7 +149,23 @@ class ResultsAnalyzer:
 
         return results.drop_duplicates()
 
-    def get_top_n_predicted_by_article_and_model(self, model: str, n=10):
+    def _get_top_n_predicted_by_article_and_model(
+        self, model: str, n: int = 10
+    ) -> pd.DataFrame:
+        """Returns top n predicted target articles by source article and model
+
+        Parameters
+        ----------
+        model : str
+            Name of the model to return the top n predicted results
+        n : int
+            Number of results to be returned
+
+        Returns
+        -------
+        pd.DataFrame
+
+        """
         model_results = self.results[(self.results[MODEL_COLUMN] == model)]
         model_results = (
             model_results.sort_values(PREDICTED_CLICK_RATE_COLUMN, ascending=False)
@@ -170,7 +189,18 @@ class ResultsAnalyzer:
 
         return model_results
 
-    def build_top_n_matrix_by_article(self, n=10):
+    def _get_top_n_actual_articles(self, n: int = 10) -> pd.DataFrame:
+        """Returns the top n actual results by article
+
+        Parameters
+        ----------
+        n : int
+            Number of actual results to return
+
+        Returns
+        -------
+        pd.DataFrame
+        """
         first_model = self.results["model"].unique()[0]
         actual_results = self.results[self.results["model"] == first_model].sort_values(
             by=[SOURCE_ARTICLE_COLUMN, ACTUAL_CLICK_RATE_COLUMN, TARGET_ARTICLE_COLUMN],
@@ -187,52 +217,46 @@ class ResultsAnalyzer:
 
         return top_n_results
 
-    def get_sample_source_articles(self, n=10):
+    def get_sample_source_articles(self, n: int = 10):
+        """Returns a random sample of source articles
+
+        Parameters
+        ----------
+        n : int
+            Number of sample source articles to be returned
+
+        Returns
+        -------
+
+        """
         return self.results[SOURCE_ARTICLE_COLUMN].sample(n=n)
 
-    def get_models(self):
+    def _get_models(self) -> pd.Series:
+        """Returns the model names
+
+        Returns
+        -------
+        pd.Series
+        """
         return self.results[MODEL_COLUMN].unique()
 
-    @staticmethod
-    def calculate_precision(predictions: List[bool]):
-        running_sum = 0
-        correct_predictions = 0
+    def _get_top_n_predictions_by_model(self, n: int = 10) -> pd.DataFrame:
+        """Returns the top n predictions by model
 
-        for prediction_index, prediction in enumerate(predictions, start=1):
-            if prediction is True:
-                correct_predictions += 1
-                running_sum += correct_predictions / float(prediction_index)
+        Parameters
+        ----------
+        n : int
+            Top N articles to calculate the predictions
 
-        return running_sum / correct_predictions
+        Returns
+        -------
+        pandas.core.frame.DataFrame
 
-    @staticmethod
-    def precision_at_k(predictions: List[bool], k: int):
-        correct_predictions = sum(predictions[:k])
-
-        return correct_predictions / len(predictions[:k])
-
-    @staticmethod
-    def average_precision_at_k(predictions: List[bool], k: int) -> float:
-        predictions_at_k = predictions[:k]
-
-        running_sum = 0
-        correct_predictions = 0
-
-        for prediction_index, prediction in enumerate(predictions_at_k, start=1):
-            if prediction is True:
-                correct_predictions += 1
-                running_sum += correct_predictions / float(prediction_index)
-
-        if correct_predictions == 0:
-            return 0
-
-        return running_sum / correct_predictions
-
-    def get_predictions_by_model(self, n=10):
+        """
         if self.predictions_by_model is not None:
             return self.predictions_by_model
 
-        models = self.get_models()
+        models = self._get_models()
 
         results = pd.DataFrame(
             columns=[
@@ -247,62 +271,12 @@ class ResultsAnalyzer:
         logger.info("Aggregating predictions for each model")
         for model in tqdm(models):
             results = results.append(
-                self.get_top_n_predicted_by_article_and_model(model, n)
+                self._get_top_n_predicted_by_article_and_model(model, n)
             )
 
         self.predictions_by_model = results
 
         return self.predictions_by_model
-
-    def calculate_idcg(self, predictions):
-        sorted_predictions = [
-            sorted(article_predictions, reverse=True)
-            for article_predictions in predictions
-        ]
-
-        return self.calculate_dcg(sorted_predictions)
-
-    def calculate_idcg_at_k_by_article(self, k):
-        perfect_predictions = pd.Series([True] * k)
-
-        return self.calculate_dcg_at_k_by_article(perfect_predictions, k)
-
-    @staticmethod
-    def calculate_dcg_at_k_by_article(article_predictions, k):
-        article_predictions_at_k = article_predictions[:k]
-
-        dcg = (np.power(2, article_predictions_at_k[1:]) - 1) / np.log2(
-            np.arange(3, article_predictions_at_k.size + 2)
-        )
-
-        dcg = np.concatenate(([float(article_predictions_at_k.iloc[0])], dcg))
-
-        return np.sum(dcg)
-
-    @staticmethod
-    def calculate_dcg(predictions: List[List[bool]]):
-        cumulative_gain_list = []
-
-        for article_predictions in predictions:
-            article_cumulative_gain = []
-            for i, article_prediction in enumerate(article_predictions, 1):
-                article_cumulative_gain.append(
-                    (2 ** article_prediction - 1) / (math.log2(i + 1))
-                )
-
-            cumulative_gain_list.append(sum(article_cumulative_gain))
-
-        return cumulative_gain_list
-
-    def calculate_ndcg(self, predictions):
-        np.seterr(divide="ignore", invalid="ignore")
-        dcg = np.array(self.calculate_dcg(predictions))
-        idcg = np.array(self.calculate_idcg(predictions))
-        ndcg = np.nan_to_num(dcg / idcg)
-
-        ndcg = np.mean(ndcg)
-
-        return ndcg
 
     def get_article_results(
         self, article: str = None, model: str = SMASH_WORD_LEVEL
@@ -325,7 +299,7 @@ class ResultsAnalyzer:
         if article is None:
             article = random.choice(self.source_articles)
 
-        predictions = self.get_predictions_by_model()
+        predictions = self._get_top_n_predictions_by_model()
 
         article_results = predictions[predictions[SOURCE_ARTICLE_COLUMN] == article]
 
@@ -349,18 +323,38 @@ class ResultsAnalyzer:
 
         print(results_table[["actual click rate", model]])
 
-    def calculate_statistics_per_model(self) -> pd.DataFrame:
-        predictions_df = pd.DataFrame.from_dict(self.get_predictions_by_model())
+    def calculate_metrics_by_model(self) -> pd.DataFrame:
+        """Calculates the result metrics by model
 
-        logger.info("Calculating results by model")
-        results_by_model_and_article = self.get_results_by_model_and_article(
+        Returns
+        -------
+        pd.DataFrame
+
+        """
+        predictions_df = self._get_top_n_predictions_by_model()
+
+        logger.info("Calculating result metrics by model")
+        results_by_model_and_article = self._get_results_by_model_and_article(
             predictions_df, k=10
         )
 
         return results_by_model_and_article.groupby(MODEL_COLUMN).mean().reset_index()
 
-    def calculate_statistics_per_model_different_k(self, ks: List[int] = None):
+    def calculate_metrics_by_model_different_k(
+        self, ks: List[int] = None
+    ) -> pd.DataFrame:
+        """Calculates the result metrics by model with different `ks`
 
+        Parameters
+        ----------
+        ks : List[int]
+            List of `ks` to calculate the metric results
+
+        Returns
+        -------
+        pd.DataFrame
+
+        """
         if not ks:
             ks = [1, 3, 5, 10, 20]
 
@@ -370,11 +364,11 @@ class ResultsAnalyzer:
 
         logger.info("Calculating results by model")
         for k in ks:
-            self.top_articles = self.build_top_n_matrix_by_article(n=k)
+            self.top_articles = self._get_top_n_actual_articles(n=k)
             self.predictions_by_model = None
-            predictions_df = self.get_predictions_by_model(n=k)
+            predictions_df = self._get_top_n_predictions_by_model(n=k)
 
-            results_by_model_and_article = self.get_results_by_model_and_article(
+            results_by_model_and_article = self._get_results_by_model_and_article(
                 predictions_df, k=k
             )
 
@@ -398,54 +392,20 @@ class ResultsAnalyzer:
 
         return results
 
-    def calculate_statistics_per_article(self):
+    def calculate_metrics_by_article(self) -> pd.DataFrame:
+        """Calculate the result metrics by article
+
+        Returns
+        -------
+        pd.DataFrame
+        """
         if self.results_by_model_and_article:
             return self.results_by_model_and_article
 
-        db = ArticlesDatabase()
-
-        test_articles = list(
-            set(
-                self.results[SOURCE_ARTICLE_COLUMN].to_list()
-                + self.results[TARGET_ARTICLE_COLUMN].to_list()
-            )
-        )
-
-        tokenized_words_df = pd.read_csv("./data/articles_length.csv")
-
-        # Workaround to normalize the word count
-        word_count_df = pd.read_csv("./data/articles_word_count.csv")
-
-        tokenized_words_df = tokenized_words_df.merge(
-            word_count_df, on=[ARTICLE_COLUMN]
-        )
-
-        tokenized_words_df["missing_words_percentage"] = 1 - (
-            tokenized_words_df["tokenized_word_count"]
-            / tokenized_words_df["word_count"]
-        )
-
-        logger.info("Getting features from DB")
-        articles_features_df = pd.DataFrame.from_dict(
-            db.get_features_from_articles(test_articles),
-        )
-
-        articles_features_df = articles_features_df.rename(
-            columns={
-                0: ARTICLE_COLUMN,
-                1: OUT_LINKS_COUNT_COLUMN,
-                2: IN_LINKS_COUNT_COLUMN,
-                3: PARAGRAPH_COUNT_COLUMN,
-                4: SENTENCE_COUNT_COLUMN,
-            }
-        )
-
-        articles_features_df = articles_features_df.merge(
-            tokenized_words_df, on=[ARTICLE_COLUMN]
-        )
+        articles_features_df = pd.read_csv("./data/article_features.csv")
 
         logger.info("Getting predictions by model")
-        predictions_df = pd.DataFrame.from_dict(self.get_predictions_by_model())
+        predictions_df = self._get_top_n_predictions_by_model()
 
         predictions_df = predictions_df.merge(
             articles_features_df,
@@ -454,7 +414,7 @@ class ResultsAnalyzer:
         ).drop(columns=[ARTICLE_COLUMN])
 
         logger.info("Calculating results by model")
-        results_by_model_and_article = self.get_results_by_model_and_article(
+        results_by_model_and_article = self._get_results_by_model_and_article(
             predictions_df, k=10
         )
 
@@ -472,9 +432,26 @@ class ResultsAnalyzer:
 
         return self.results_by_model_and_article
 
-    def get_results_by_model_and_article(
-        self, predictions_df, k: int, selected_models=None
-    ):
+    @staticmethod
+    def _get_results_by_model_and_article(
+        predictions_df: pd.DataFrame, k: int, selected_models: List[str] = None
+    ) -> pd.DataFrame:
+        """Returns the results for each model and article
+
+        Parameters
+        ----------
+        predictions_df : pd.DataFrame
+            Predictions by model and article
+        k : int
+            k used to calculate the `@k` metrics
+        selected_models : List[str]
+            Models to calculate the results
+
+        Returns
+        -------
+        pd.DataFrame
+
+        """
         if not selected_models:
             selected_models = predictions_df[MODEL_COLUMN].unique().tolist()
 
@@ -504,7 +481,7 @@ class ResultsAnalyzer:
                         & (results_by_model_and_article[MODEL_COLUMN] == model)
                     ),
                     NDCG_COLUMN,
-                ] = self.get_ndcg_at_k_by_article(source_article_predictions, k=k)
+                ] = get_ndcg_at_k_by_article(source_article_predictions, k=k)
 
                 results_by_model_and_article.loc[
                     (
@@ -515,7 +492,7 @@ class ResultsAnalyzer:
                         & (results_by_model_and_article[MODEL_COLUMN] == model)
                     ),
                     MAP_COLUMN,
-                ] = self.average_precision_at_k(source_article_predictions, k=k)
+                ] = average_precision_at_k(source_article_predictions, k=k)
 
                 results_by_model_and_article.loc[
                     (
@@ -526,48 +503,9 @@ class ResultsAnalyzer:
                         & (results_by_model_and_article[MODEL_COLUMN] == model)
                     ),
                     PRECISION_COLUMN,
-                ] = self.precision_at_k(source_article_predictions, k=k)
+                ] = precision_at_k(source_article_predictions, k=k)
 
         return results_by_model_and_article
-
-    def get_ndcg_at_k_by_article(self, source_article_predictions: List[bool], k: int):
-        np.seterr(divide="ignore", invalid="ignore")
-        dcg_at_k = self.calculate_dcg_at_k_by_article(source_article_predictions, k)
-
-        # All source articles have 10 most visited target articles, so the perfect rank would be
-        # [True, True, True, True, True, True, True, True, True, True]
-        idcg_at_k = self.calculate_idcg_at_k_by_article(
-            len(source_article_predictions[:k])
-        )
-
-        if idcg_at_k == 0:
-            return 0
-
-        try:
-            return np.nan_to_num(dcg_at_k / idcg_at_k)
-
-        except Exception as err:
-            print(err)
-
-            exit(1)
-
-    def calculate_tokenized_lengths(self, article):
-        tokenized_length = len(self.flatten_article(json.loads(article)))
-
-        return tokenized_length
-
-    def calculate_tokenized_lengths_original(self, articles):
-        tokenized_length = [
-            len(self.flatten_article(json.loads(article))) for article in articles
-        ]
-
-        return pd.Series(tokenized_length)
-
-    def flatten_article(self, article):
-        flatten_sentences = list(chain.from_iterable(article))
-        flatten_words = list(chain.from_iterable(flatten_sentences))
-
-        return flatten_words
 
     def get_performance_figure(
         self,
@@ -590,7 +528,7 @@ class ResultsAnalyzer:
             Column with the feature that will be used to group the articles
         x_label : str
             Label to be displayed in the x-axis
-        figsize : int
+        figsize : Tuple[int, int]
             Size of the figure
         legend_columns_count : int
             Number of columns in the legend
@@ -604,7 +542,7 @@ class ResultsAnalyzer:
         None
         """
 
-        results = self.calculate_statistics_per_article()
+        results = self.calculate_metrics_by_article()
 
         bin_column = f"{feature_column}_bin"
         bins = pd.qcut(results[feature_column], q=buckets_count)
@@ -686,7 +624,7 @@ class ResultsAnalyzer:
         -------
         None
         """
-        results_per_model = self.calculate_statistics_per_model()
+        results_per_model = self.calculate_metrics_by_model()
 
         print(self._get_clean_results(results_per_model, selected_models))
 
@@ -735,7 +673,7 @@ class ResultsAnalyzer:
         -------
         None
         """
-        results_different_k = self.calculate_statistics_per_model_different_k(ks)
+        results_different_k = self.calculate_metrics_by_model_different_k(ks)
 
         performance_different_k = (
             results_different_k[results_different_k[MODEL_COLUMN].isin(models)]
@@ -748,58 +686,3 @@ class ResultsAnalyzer:
         performance_different_k.sort_values(MODEL_COLUMN, inplace=True)
 
         print(performance_different_k)
-
-
-if __name__ == "__main__":
-    pd.set_option("display.max_rows", 500)
-    pd.set_option("display.max_columns", 500)
-    pd.set_option("display.width", 1000)
-
-    _results = ResultsAnalyzer()
-    pred = [
-        [True, True, True, True, True],
-        [False, False, False, False, False],
-        [True, False, True, False, True],
-    ]
-    # print(_results.calculate_mean_average_precision_at_k(pred))
-    # results = _results.calculate_statistics_per_model()
-    _results.get_performance_figure(
-        SMASH_MODELS,
-        SENTENCE_COUNT_COLUMN,
-        "Text length as sentence count (%s equal-sized buckets)",
-    )
-    # print(results_per_article.describe())
-    #
-    # results_per_model = _results.calculate_statistics_per_model()
-    # print(results_per_model)
-    #
-    # _results.get_article_results("Ireland")
-
-    # results_per_model_2 = _results.calculate_statistics_per_model_different_k(
-    #     [1, 3, 5, 10]
-    # )
-    # DOC2VEC_SIAMESE = "doc2vec_siamese"
-    # DOC2VEC_COSINE = "doc2vec_cosine"
-    # WIKIPEDIA2VEC_SIAMESE = "wikipedia2vec_siamese"
-    # WIKIPEDIA2VEC_COSINE = "wikipedia2vec_cosine"
-    # SMASH_WORD_LEVEL = "smash_word_level"
-    # SMASH_SENTENCE_LEVEL = "smash_sentence_level"
-    # SMASH_PARAGRAPH_LEVEL = "smash_paragraph_level"
-    # SMASH_WORD_LEVEL_INTRODUCTION = "smash_word_level_introduction"
-    # SMASH_SENTENCE_LEVEL_INTRODUCTION = "smash_sentence_level_introduction"
-    # SMASH_PARAGRAPH_LEVEL_INTRODUCTION = "smash_paragraph_level_introduction"
-    #
-    # COMPLETE_MODELS = [
-    #     DOC2VEC_SIAMESE,
-    #     WIKIPEDIA2VEC_SIAMESE,
-    #     SMASH_WORD_LEVEL,
-    #     SMASH_SENTENCE_LEVEL,
-    #     SMASH_PARAGRAPH_LEVEL,
-    # ]
-    #
-    # nn = results_per_model_2[results_per_model_2["model"].isin(COMPLETE_MODELS)].pivot(
-    #     index="model", columns="k", values="ndcg"
-    # )
-    # print(nn)
-
-    # _results.get_ndcg_for_all_models()

@@ -1,8 +1,10 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import json
 import re
 import timeit
+from itertools import chain
 
 import numpy as np
 import pandas as pd
@@ -194,6 +196,27 @@ def get_model_name(level: str, model_name: str, introduction_only: bool):
     model_name = model_name + "_introduction_only" if introduction_only else model_name
 
     return model_name
+
+
+def flatten_article(article):
+    flatten_sentences = list(chain.from_iterable(article))
+    flatten_words = list(chain.from_iterable(flatten_sentences))
+
+    return flatten_words
+
+
+def calculate_tokenized_lengths_original(articles):
+    tokenized_length = [
+        len(flatten_article(json.loads(article))) for article in articles
+    ]
+
+    return pd.Series(tokenized_length)
+
+
+def calculate_tokenized_lengths(article):
+    tokenized_length = len(flatten_article(json.loads(article)))
+
+    return tokenized_length
 
 
 if __name__ == "__main__":

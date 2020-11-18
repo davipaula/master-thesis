@@ -14,7 +14,7 @@ import json
 from tqdm import tqdm
 import pandas as pd
 
-from utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
+from src.utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
 
 logger = logging.getLogger(__name__)
 LOG_FORMAT = (
