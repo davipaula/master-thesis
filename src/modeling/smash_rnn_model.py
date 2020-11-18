@@ -2,6 +2,7 @@
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 import logging
+from typing import Dict, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -41,7 +42,29 @@ LEVELS = {
 
 
 class SmashRNNModel(nn.Module):
-    def __init__(self, dict, dict_len, embedding_size, levels):
+    """
+    Class that represents the Smash RNN model
+    """
+
+    def __init__(
+        self,
+        embeddings: torch.Tensor,
+        vocab_size: int,
+        embedding_dimension_size: int,
+        levels: str,
+    ):
+        """
+
+        Parameters
+        ----------
+        embeddings : torch.Tensor
+            Dictionary containing words and embedding
+        vocab_size : int
+            Number of words in the vocabulary
+        embedding_dimension_size : int
+            Number of dimensions of embedding layer
+        levels : str
+        """
         super(SmashRNNModel, self).__init__()
 
         if torch.cuda.is_available():
@@ -51,20 +74,25 @@ class SmashRNNModel(nn.Module):
             torch.manual_seed(123)
             self.device = torch.device("cpu")
 
-        self.dict = dict
+        self.dict = embeddings
 
         self.levels = LEVELS[levels]
 
         # Init embedding layer
         self.embedding = (
-            nn.Embedding(num_embeddings=dict_len, embedding_dim=embedding_size)
-            .from_pretrained(dict)
+            nn.Embedding(
+                num_embeddings=vocab_size, embedding_dim=embedding_dimension_size
+            )
+            .from_pretrained(embeddings)
             .to(self.device)
         )
 
         # RNN + attention layers
         self.word_gru = nn.GRU(
-            embedding_size, GRU_HIDDEN_SIZE, bidirectional=True, batch_first=True
+            embedding_dimension_size,
+            GRU_HIDDEN_SIZE,
+            bidirectional=True,
+            batch_first=True,
         ).to(self.device)
 
         self.word_gru_out_size = GRU_HIDDEN_SIZE * 2
@@ -120,8 +148,26 @@ class SmashRNNModel(nn.Module):
         ).to(self.device)
 
     def forward(
-        self, target_article, source_article, paragraphs_limit=None,
-    ):
+        self,
+        target_article: Dict[str, List[str]],
+        source_article: Dict[str, List[str]],
+        paragraphs_limit: int = None,
+    ) -> torch.Tensor:
+        """Executes a forward pass for Smash RNN
+
+        Parameters
+        ----------
+        target_article : Dict[str, List[str]]
+            Batch of target articles
+        source_article : Dict[str, List[str]]
+            Batch of source articles
+        paragraphs_limit : int
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         target_article_representation = self.get_document_representation(
             target_article, levels=self.levels, paragraphs_limit=paragraphs_limit
         )
@@ -134,7 +180,7 @@ class SmashRNNModel(nn.Module):
 
         del source_article
 
-        # Concatenates document representations. This is the siamese part of the model
+        # Concatenates article representations. This is the siamese part of the model
         concatenated_articles_representation = torch.cat(
             (
                 source_article_representation,
@@ -155,8 +201,27 @@ class SmashRNNModel(nn.Module):
         return articles_similarity
 
     def get_document_representation(
-        self, articles_batch, levels=None, paragraphs_limit=None
-    ):
+        self,
+        articles_batch: Dict[str, List[str]],
+        levels: List[str] = None,
+        paragraphs_limit: int = None,
+    ) -> torch.Tensor:
+        """Obtains the representation of an article
+
+        Parameters
+        ----------
+        articles_batch : Dict[str, List[str]]
+            Batch of articles
+        levels : List[str]
+            List with the level encoders
+        paragraphs_limit : int
+            Maximum number of paragraphs that will be processed. Ignored if `None`.
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         document_representation_list = []
         for level in levels:
             (
@@ -256,7 +321,22 @@ class SmashRNNModel(nn.Module):
 
         return document_representation
 
-    def get_tensors_at_level(self, articles_batch, level):
+    def get_tensors_at_level(
+        self, articles_batch: Dict[str, List[str]], level: str
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Converts a tensor to the specified level
+
+        Parameters
+        ----------
+        articles_batch : Dict[str, List[str]]
+            Batch of articles
+        level : str
+            Level to convert the articles
+
+        Returns
+        -------
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
+        """
         if level == "sentence":
             articles = self.transform_to_sentence_level(articles_batch)
 
@@ -284,8 +364,24 @@ class SmashRNNModel(nn.Module):
         )
 
     def get_paragraph_level_representation(
-        self, paragraphs_per_article, sentence_level_representation
-    ):
+        self,
+        paragraphs_per_article: torch.Tensor,
+        sentence_level_representation: torch.Tensor,
+    ) -> torch.Tensor:
+        """Returns the representation of a sequence of paragraphs
+
+        Parameters
+        ----------
+        paragraphs_per_article : torch.Tensor
+            Tensor with the number of paragraphs per article in the batch
+        sentence_level_representation : torch.Tensor
+            Tensor with the sentences representation of the paragraph
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         packed_paragraphs = pack_padded_sequence(
             sentence_level_representation,
             lengths=paragraphs_per_article,
@@ -332,15 +428,33 @@ class SmashRNNModel(nn.Module):
             paragraph_gru_output * paragraph_alphas.unsqueeze(2)
         ).sum(dim=1)
 
-        return document_representation  # , paragraph_alphas
+        return document_representation
 
     def get_sentence_level_representation(
         self,
-        batch_size,
-        flatten_sentences,
-        max_paragraphs_per_article,
-        sentences_per_paragraph,
-    ):
+        batch_size: int,
+        flatten_sentences: torch.Tensor,
+        max_paragraphs_per_article: int,
+        sentences_per_paragraph: torch.Tensor,
+    ) -> torch.Tensor:
+        """Returns the representation of a sequence of sentences
+
+        Parameters
+        ----------
+        batch_size : int
+            Size of the batch
+        flatten_sentences : torch.Tensor
+            Tensor with the words representation of the sentences
+        max_paragraphs_per_article : int
+            Maximum number of paragraphs per article in the batch
+        sentences_per_paragraph : torch.Tensor
+            Tensor with the number of sentences per paragraph in the batch
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         sentences_per_paragraph = sentences_per_paragraph.reshape(
             batch_size * max_paragraphs_per_article
         )
@@ -375,13 +489,35 @@ class SmashRNNModel(nn.Module):
 
     def get_word_level_representation(
         self,
-        batch_size,
-        flatten_word_ids,
-        flatten_words_per_sentence,
-        max_paragraphs_per_article,
-        max_sentences_per_paragraph,
-        max_words_per_sentence,
-    ):
+        batch_size: int,
+        flatten_word_ids: torch.Tensor,
+        flatten_words_per_sentence: torch.Tensor,
+        max_paragraphs_per_article: int,
+        max_sentences_per_paragraph: int,
+        max_words_per_sentence: torch.Tensor,
+    ) -> torch.Tensor:
+        """Obtains the representation of a sequence of words
+
+        Parameters
+        ----------
+        batch_size : int
+            Size of the batch
+        flatten_word_ids : torch.Tensor
+            Tensor with word embeddings of a sentence
+        flatten_words_per_sentence : torch.Tensor
+            Tensor with the number of words per sentence in the batch
+        max_paragraphs_per_article : int
+            Maximum number of paragraphs per article in the batch
+        max_sentences_per_paragraph : int
+            Maximum number of sentences per paragraph in the batch
+        max_words_per_sentence : torch.Tensor
+            Tensor with the maximum number of words per sentence
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         word_embeddings = self.embedding(flatten_word_ids)
         # Cleaning memory
         del flatten_word_ids
@@ -427,7 +563,21 @@ class SmashRNNModel(nn.Module):
 
         return word_level_representation
 
-    def get_sentence_alphas(self, sentence_level_gru):
+    def get_sentence_alphas(
+        self, sentence_level_gru: torch.nn.utils.rnn.PackedSequence
+    ) -> torch.Tensor:
+        """Obtains the alphas from the sentence representations
+
+        Parameters
+        ----------
+        sentence_level_gru : torch.nn.utils.rnn.PackedSequence
+            Output of sentence level GRU
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         sentence_state = torch.tanh(self.sentence_attention(sentence_level_gru.data))
 
         sentence_context_vector = self.sentence_context_layer(sentence_state).squeeze(1)
@@ -455,7 +605,21 @@ class SmashRNNModel(nn.Module):
 
         return sentence_alphas
 
-    def get_word_alphas(self, word_gru_out):
+    def get_word_alphas(
+        self, word_gru_out: torch.nn.utils.rnn.PackedSequence
+    ) -> torch.Tensor:
+        """Obtains the alphas from the word representations
+
+        Parameters
+        ----------
+        word_gru_out : torch.nn.utils.rnn.PackedSequence
+            Output of words GRU
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         # This implementation uses the feature sentence_embeddings. Paper uses hidden state
         # This equation is represented in the paper as `u_{it}`
         word_state = torch.tanh(self.word_attention(word_gru_out.data))
@@ -482,40 +646,68 @@ class SmashRNNModel(nn.Module):
 
         return word_alphas
 
-    def transform_to_word_level(self, document):
-        batch_size = document[TEXT_IDS_COLUMN].shape[0]
+    def transform_to_word_level(
+        self, article: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """Prepares the article to be processed at the word level
 
-        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
-            document[WORDS_PER_SENTENCE_COLUMN]
+        Parameters
+        ----------
+        article : Dict[str, List[str]]
+            Document to be prepared
+
+        Returns
+        -------
+        Dict[str, List[str]]
+
+        """
+        batch_size = article[TEXT_IDS_COLUMN].shape[0]
+
+        article[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
+            article[WORDS_PER_SENTENCE_COLUMN]
         )
-        document[TEXT_IDS_COLUMN] = get_document_at_word_level(
-            document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], self.device
+        article[TEXT_IDS_COLUMN] = get_document_at_word_level(
+            article[TEXT_IDS_COLUMN], article[WORDS_PER_SENTENCE_COLUMN], self.device
         )
-        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones(
+        article[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones(
             (batch_size, 1), dtype=int, device=self.device
         )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
+        article[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
             batch_size, dtype=int, device=self.device
         )
 
-        return document
+        return article
 
-    def transform_to_sentence_level(self, document):
-        batch_size = document[TEXT_IDS_COLUMN].shape[0]
+    def transform_to_sentence_level(
+        self, article: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
+        """Prepares the article to be processed at the sentence level
 
-        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
-            document[TEXT_IDS_COLUMN], self.device
+        Parameters
+        ----------
+        article : Dict[str, List[str]]
+            Article to be prepared
+
+        Returns
+        -------
+        Dict[str, List[str]]
+
+        """
+        batch_size = article[TEXT_IDS_COLUMN].shape[0]
+
+        article[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
+            article[TEXT_IDS_COLUMN], self.device
         )
-        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
-            document[WORDS_PER_SENTENCE_COLUMN], self.device
+        article[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
+            article[WORDS_PER_SENTENCE_COLUMN], self.device
         )
-        document[
+        article[
             SENTENCES_PER_PARAGRAPH_COLUMN
         ] = get_sentences_per_paragraph_at_sentence_level(
-            document[SENTENCES_PER_PARAGRAPH_COLUMN]
+            article[SENTENCES_PER_PARAGRAPH_COLUMN]
         )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
+        article[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
             batch_size, dtype=int, device=self.device
         )
 
-        return document
+        return article

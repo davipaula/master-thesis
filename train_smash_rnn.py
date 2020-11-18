@@ -4,6 +4,7 @@
 
 import sys
 import os
+from typing import List, Union
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
@@ -13,23 +14,14 @@ from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PAT
 
 from tqdm import tqdm
 import argparse
-import csv
 import logging
-import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from utils.utils import (
-    get_document_at_sentence_level,
-    get_words_per_sentence_at_sentence_level,
-    get_document_at_word_level,
-    get_sentences_per_paragraph_at_sentence_level,
-    get_words_per_document_at_word_level,
-)
 from modeling.smash_rnn_model import SmashRNNModel
 from modeling.smash_dataset import SMASHDataset
 from datetime import datetime
-from utils.utils import get_word2vec_path
+from utils.utils import get_word2vec_path, load_embeddings_from_file
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +46,11 @@ RESULTS_PATH = "./results/validation/"
 
 
 class SmashRNN:
+    """
+    Class to run the SmashRNN training steps
+
+    """
+
     def __init__(self):
         if torch.cuda.is_available():
             torch.cuda.manual_seed(123)
@@ -83,22 +80,13 @@ class SmashRNN:
         word2vec_path = get_word2vec_path(self.opt.w2v_dimension)
 
         # Load from txt file (in word2vec format)
-        dict = pd.read_csv(
-            filepath_or_buffer=word2vec_path,
-            header=None,
-            skiprows=1,
-            sep="\s",
-            engine="python",
-            quoting=csv.QUOTE_NONE,
-        ).values[:, 1:]
-        dict_len, embed_dim = dict.shape
-        dict_len += 1
-        unknown_word = np.zeros((1, embed_dim))
-        dict = torch.from_numpy(
-            np.concatenate([unknown_word, dict], axis=0).astype(np.float)
+        embeddings, vocab_size, embeddings_dimension_size = load_embeddings_from_file(
+            word2vec_path
         )
 
-        self.model = SmashRNNModel(dict, dict_len, embed_dim, levels=self.opt.level)
+        self.model = SmashRNNModel(
+            embeddings, vocab_size, embeddings_dimension_size, levels=self.opt.level
+        )
         self.model.to(self.device)
 
         # Overall model optimization and evaluation parameters
@@ -111,7 +99,18 @@ class SmashRNN:
 
         self.model.train()
 
-    def train(self, level="paragraph"):
+    def train(self, level: str = "paragraph") -> None:
+        """Executes the training steps of SMASH RNN
+
+        Parameters
+        ----------
+        level : str
+            The deepest hierarchy level to calculate the model
+
+        Returns
+        -------
+        None
+        """
         click_stream_train = torch.load(TRAIN_DATASET_PATH)
         training_params = {
             "batch_size": self.batch_size,
@@ -151,7 +150,9 @@ class SmashRNN:
                 self.optimizer.zero_grad()
 
                 predictions = self.model(
-                    target_articles, source_articles, paragraphs_limit,
+                    target_articles,
+                    source_articles,
+                    paragraphs_limit,
                 )
                 del source_articles
                 del target_articles
@@ -176,9 +177,7 @@ class SmashRNN:
                 )
             )
 
-            validation_loss = self.validate(
-                int(epoch / self.opt.validation_interval), level
-            )
+            validation_loss = self.validate(epoch, level)
 
             if validation_loss < best_loss:
                 best_loss = validation_loss
@@ -197,45 +196,22 @@ class SmashRNN:
         self.save_model()
         print(f"Training finished {datetime.now()}. Best epoch {best_epoch + 1}")
 
-    def transform_to_word_level(self, document):
-        batch_size = document[TEXT_IDS_COLUMN].shape[0]
+    def validate(self, validation_step: int, level: str) -> Union[float, torch.Tensor]:
+        """Executes a validation step of the model at the defined level. Returns
+        the validation loss for the step.
 
-        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
-            document[WORDS_PER_SENTENCE_COLUMN]
-        )
-        document[TEXT_IDS_COLUMN] = get_document_at_word_level(
-            document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], self.device
-        )
-        document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones(
-            (batch_size, 1), dtype=int, device=self.device
-        )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
-            batch_size, dtype=int, device=self.device
-        )
+        Parameters
+        ----------
+        validation_step : int
+            The current validation step
+        level : str
+            The deepest level to calculate the model
 
-        return document
+        Returns
+        -------
+        Union[float, torch.Tensor]
 
-    def transform_to_sentence_level(self, document):
-        batch_size = document[TEXT_IDS_COLUMN].shape[0]
-
-        document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
-            document[TEXT_IDS_COLUMN], self.device
-        )
-        document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
-            document[WORDS_PER_SENTENCE_COLUMN], self.device
-        )
-        document[
-            SENTENCES_PER_PARAGRAPH_COLUMN
-        ] = get_sentences_per_paragraph_at_sentence_level(
-            document[SENTENCES_PER_PARAGRAPH_COLUMN]
-        )
-        document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(
-            batch_size, dtype=int, device=self.device
-        )
-
-        return document
-
-    def validate(self, validation_step, level):
+        """
         click_stream_validation = torch.load(VALIDATION_DATASET_PATH)
 
         validation_params = {
@@ -299,22 +275,42 @@ class SmashRNN:
 
         return round(final_loss.item(), 8)
 
-    def save_model(self):
+    def save_model(self) -> None:
+        """Saves the current model in the appropriate folder
+
+        Returns
+        -------
+        None
+
+        """
         model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod
-    def calculate_loss(loss_list):
+    def calculate_loss(
+        loss_list: List[Union[float, torch.Tensor]]
+    ) -> Union[float, torch.Tensor]:
+        """Calculates the loss for a specific epoch
+
+        Parameters
+        ----------
+        loss_list : List[Union[float, torch.Tensor]]
+            List with all losses from a specific epoch
+
+        Returns
+        -------
+        Union[float, torch.Tensor]
+
+        """
         return sum(loss_list) / len(loss_list)
 
     @staticmethod
-    def get_args():
+    def get_args() -> argparse.Namespace:
         parser = argparse.ArgumentParser(
             """Implementation of the model described in the paper: Semantic Text Matching for Long-Form Documents to predict the number of clicks for Wikipedia articles"""
         )
 
         parser.add_argument("--num_epochs", type=int, default=1)
-        parser.add_argument("--validation_interval", type=int, default=1)
         parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
         parser.add_argument("--paragraphs_limit", type=int, default=None)

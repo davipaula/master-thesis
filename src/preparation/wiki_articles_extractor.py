@@ -4,7 +4,7 @@ You can use this script to obtain sections/paragraphs/sentences and their word i
 
 USAGE:
 
-python wiki_cli.py process <wiki_dump_path> <word2vec_path> <output_path> [<max_doc_count>]
+python wiki_cli.py process <wiki_dump_path> <embeddings_path> <output_path> [<max_doc_count>]
 
 EXAMPLE:
 
@@ -74,7 +74,7 @@ def convert_to_plain_text(text):
 def process_text(text):
     """
     :param text: Wikitext
-    :return: Sections dict(title, text, paragraphs[])
+    :return: Sections embeddings(title, text, paragraphs[])
     """
     appendices_and_footers_sections = [
         "See also",
@@ -94,7 +94,7 @@ def process_text(text):
     )
     sects = []
 
-    # Extract sections from document text
+    # Extract sections from article text
     # TODO: there is a bug that is inserting empty paragraphs. The code below should be refactored, allowing to insert
     # TODO: a new sect only if sect[i]["paragraphs"] is not empty
     for i, match in enumerate(headline_matches):
@@ -159,7 +159,7 @@ def process_dump(page_xml):
     text = elem.find(text_path).text
     ns = elem.find(ns_path).text
 
-    # Get the article name of the links in the document
+    # Get the article name of the links in the article
     links_in_document = list(segment(page_xml, include_interlinks=True)[2])
 
     # Filter invalid namespaces (user pages, etc)

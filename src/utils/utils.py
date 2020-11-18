@@ -1,10 +1,12 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
+import csv
 import json
 import re
 import timeit
 from itertools import chain
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -226,3 +228,38 @@ if __name__ == "__main__":
     # test_sentence_level()
 
     measure_document()
+
+
+def load_embeddings_from_file(embeddings_path: str) -> Tuple[torch.Tensor, int, int]:
+    """Loads the embeddings from a txt file in word2vec format
+
+    Parameters
+    ----------
+    embeddings_path : str
+        Path to load the embeddings file
+
+    Returns
+    -------
+    Tuple[torch.Tensor, int, int]
+
+    """
+    embeddings = pd.read_csv(
+        filepath_or_buffer=embeddings_path,
+        header=None,
+        skiprows=1,
+        sep="\s",
+        engine="python",
+        quoting=csv.QUOTE_NONE,
+    ).values[:, 1:]
+
+    vocab_size, embeddings_dimension_size = embeddings.shape
+    vocab_size += 1
+
+    # Adds a tensor filled with zeros that will be used to replace unknown words
+    # This should not impact this project, since the unknown words were filtered in the tokenization step
+    # TODO refactor this function and check if we can remove this line
+    unknown_word = np.zeros((1, embeddings_dimension_size))
+    embeddings = torch.from_numpy(
+        np.concatenate([unknown_word, embeddings], axis=0).astype(np.float)
+    )
+    return embeddings, vocab_size, embeddings_dimension_size

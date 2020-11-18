@@ -17,16 +17,8 @@ from tqdm import tqdm
 
 from modeling.smash_dataset import SMASHDataset
 from modeling.smash_rnn_model import SmashRNNModel
-import csv
-import numpy as np
 import argparse
-from src.utils.utils import (
-    get_words_per_document_at_word_level,
-    get_document_at_word_level,
-    get_document_at_sentence_level,
-    get_words_per_sentence_at_sentence_level,
-    get_sentences_per_paragraph_at_sentence_level,
-)
+from src.utils.utils import load_embeddings_from_file
 
 from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PATH
 
@@ -53,7 +45,18 @@ TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 RESULTS_PATH = "./results/"
 
 
-def test(opt):
+def test(opt: argparse.Namespace) -> None:
+    """Executes a test step for Smash RNN
+
+    Parameters
+    ----------
+    opt : argparse.Namespace
+        Model parameters. See `get_args()`
+
+    Returns
+    -------
+    None
+    """
     if torch.cuda.is_available():
         torch.cuda.manual_seed(123)
         device = torch.device("cuda")
@@ -124,26 +127,32 @@ def test(opt):
     )
 
 
-def load_model(model_folder, model_name, opt):
-    # Load from txt file (in word2vec format)
+def load_model(
+    model_folder: str, model_name: str, opt: argparse.Namespace
+) -> SmashRNNModel:
+    """Loads the Smash RNN model to execute the test steps
+
+    Parameters
+    ----------
+    model_folder : str
+        Path for the folder where models are stored
+    model_name : str
+        Name of the model to be loaded
+    opt : argparse.Namespace
+        Arguments to run the test
+
+    Returns
+    -------
+    SmashRNNModel
+
+    """
     word2vec_path = get_word2vec_path(opt.w2v_dimension)
-    dict = pd.read_csv(
-        filepath_or_buffer=word2vec_path,
-        header=None,
-        sep="\s",
-        engine="python",
-        skiprows=1,
-        quoting=csv.QUOTE_NONE,
-    ).values[:, 1:]
-    dict_len, embed_dim = dict.shape
-    dict_len += 1
-    unknown_word = np.zeros((1, embed_dim))
-    dict = torch.from_numpy(
-        np.concatenate([unknown_word, dict], axis=0).astype(np.float)
+    embeddings, vocab_size, embeddings_dimension_size = load_embeddings_from_file(
+        word2vec_path
     )
 
     # Siamese + Attention model
-    model = SmashRNNModel(dict, dict_len, embed_dim, opt.level)
+    model = SmashRNNModel(embeddings, vocab_size, embeddings_dimension_size, opt.level)
 
     model_path = f"{model_folder}{model_name}_model.pt"
     logger.info(f"Model path: {model_path}")
@@ -166,52 +175,25 @@ def load_model(model_folder, model_name, opt):
     return model
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
+    """Returns the arguments to run test steps
+
+    Returns
+    -------
+    argparse.Namespace
+
+    """
     parser = argparse.ArgumentParser(
         """Implementation of Siamese multi-attention RNN"""
     )
-    parser.add_argument("--level", type=str, default="paragraph")
-    parser.add_argument("--batch_size", type=int, default=2)
+    parser.add_argument("--level", type=str, default="sentence")
+    parser.add_argument("--batch_size", type=int, default=6)
     parser.add_argument("--paragraphs_limit", type=int, default=None)
     parser.add_argument("--model_name", type=str, default="base")
     parser.add_argument("--w2v_dimension", type=int, default=50)
     parser.add_argument("--introduction_only", type=bool, default=False)
 
     return parser.parse_args()
-
-
-def transform_to_word_level(document, device):
-    batch_size = document[TEXT_IDS_COLUMN].shape[0]
-
-    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_document_at_word_level(
-        document[WORDS_PER_SENTENCE_COLUMN]
-    )
-    document[TEXT_IDS_COLUMN] = get_document_at_word_level(
-        document[TEXT_IDS_COLUMN], document[WORDS_PER_SENTENCE_COLUMN], device
-    )
-    document[SENTENCES_PER_PARAGRAPH_COLUMN] = torch.ones((batch_size, 1), dtype=int)
-    document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
-
-    return document
-
-
-def transform_to_sentence_level(document, device):
-    batch_size = document[TEXT_IDS_COLUMN].shape[0]
-
-    document[TEXT_IDS_COLUMN] = get_document_at_sentence_level(
-        document[TEXT_IDS_COLUMN], device
-    )
-    document[WORDS_PER_SENTENCE_COLUMN] = get_words_per_sentence_at_sentence_level(
-        document[WORDS_PER_SENTENCE_COLUMN], device
-    )
-    document[
-        SENTENCES_PER_PARAGRAPH_COLUMN
-    ] = get_sentences_per_paragraph_at_sentence_level(
-        document[SENTENCES_PER_PARAGRAPH_COLUMN]
-    )
-    document[PARAGRAPHS_PER_DOCUMENT_COLUMN] = torch.ones(batch_size, dtype=int)
-
-    return document
 
 
 if __name__ == "__main__":

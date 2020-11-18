@@ -71,8 +71,8 @@ class SMASHDataset(Dataset):
         return article
 
     def get_articles(self, articles: List[str]):
-        """"
-        should return a dict of lists following the same structure of article
+        """ "
+        should return a embeddings of lists following the same structure of article
         article = {
             "title": [self.articles.iloc[index]],
             "text": [text_embeddings_padded],
@@ -215,7 +215,7 @@ class SMASHDataset(Dataset):
         # padded_sentences = np.array(
         #     [
         #         [[row + [-1] * (max_word_length - len(row)) for row in sentence] for sentence in paragraph]
-        #         for paragraph in document
+        #         for paragraph in article
         #     ]
         # )
         #
