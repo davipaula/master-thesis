@@ -3,8 +3,6 @@ import os
 import sys
 from itertools import chain
 
-K_COLUMN = "k"
-
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -16,9 +14,11 @@ import numpy as np
 import pandas as pd
 
 from tqdm import tqdm
-from typing import List
+from typing import List, Tuple
 import glob
 import random
+
+import matplotlib.pyplot as plt
 
 from database import ArticlesDatabase
 from utils.constants import (
@@ -33,6 +33,10 @@ from utils.constants import (
     IN_LINKS_COUNT_COLUMN,
     PARAGRAPH_COUNT_COLUMN,
     SENTENCE_COUNT_COLUMN,
+    CLEAN_MODEL_NAMES,
+    COMPLETE_MODELS,
+    SMASH_WORD_LEVEL,
+    SMASH_MODELS,
 )
 
 WORD_COUNT_BIN = "word_count_bin"
@@ -40,6 +44,7 @@ NDCG_COLUMN = "ndcg"
 MAP_COLUMN = "map"
 PRECISION_COLUMN = "precision"
 IS_IN_TOP_ARTICLES_COLUMN = "is_in_top_articles"
+K_COLUMN = "k"
 
 BASE_RESULTS_PATH = "./results/test/"
 DOC2VEC_RESULTS_PATH = BASE_RESULTS_PATH + "results_doc2vec_level_test.csv"
@@ -82,24 +87,42 @@ SMASH_RNN_PARAGRAPH_LEVEL_200D_RESULTS_PATH = (
     BASE_RESULTS_PATH + "results_paragraph_level_200d.csv"
 )
 
-# For debugging purposes only
-BASE_VALIDATION_RESULTS_PATH = "./results/"
-SMASH_RNN_WORD_LEVEL_VALIDATION_RESULTS_PATH = (
-    BASE_VALIDATION_RESULTS_PATH + "results_word_level_validation.csv"
-)
-SMASH_RNN_SENTENCE_LEVEL_VALIDATION_RESULTS_PATH = (
-    BASE_VALIDATION_RESULTS_PATH + "results_sentence_level_validation.csv"
-)
-SMASH_RNN_PARAGRAPH_LEVEL_VALIDATION_RESULTS_PATH = (
-    BASE_VALIDATION_RESULTS_PATH + "results_paragraph_level_validation.csv"
-)
-
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+
+SMASH_HATCH = "//"
+DOC2VEC_HATCH = "X"
+WIKIPEDIA2VEC_HATCH = "."
+
+system_styles = {
+    "doc2vec_siamese": dict(color="#b2abd2", hatch=DOC2VEC_HATCH),
+    "wikipedia2vec_siamese": dict(color="#e66101", hatch=WIKIPEDIA2VEC_HATCH),
+    "smash_paragraph_level": dict(color="#abdda4"),
+    "smash_sentence_level": dict(color="#fdae61"),
+    "smash_word_level": dict(color="#2b83ba"),
+}
+
+SMALL_SIZE = 10
+MEDIUM_SIZE = 12
+BIGGER_SIZE = 14
+
+plt.rc("font", size=SMALL_SIZE)  # controls default text sizes
+plt.rc("axes", titlesize=SMALL_SIZE)  # fontsize of the axes title
+plt.rc("axes", labelsize=MEDIUM_SIZE)  # fontsize of the x and y labels
+plt.rc("xtick", labelsize=SMALL_SIZE + 1)  # fontsize of the tick labels
+plt.rc("ytick", labelsize=SMALL_SIZE + 1)  # fontsize of the tick labels
+plt.rc("legend", fontsize=SMALL_SIZE + 1)  # legend fontsize
+plt.rc("figure", titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+plt.rc("pdf", fonttype=42)
+plt.rc("ps", fonttype=42)
+
+plt.rc("text", usetex=False)
+plt.rc("font", family="serif")
 
 
 class ResultsAnalyzer:
@@ -111,6 +134,7 @@ class ResultsAnalyzer:
 
         self.predictions_by_model = None
         self.predictions_by_model_and_article = None
+        self.results_by_model_and_article = None
 
     def build_models_results(self):
         results_files = [file for file in glob.glob(f"{BASE_RESULTS_PATH}*.csv")]
@@ -168,25 +192,6 @@ class ResultsAnalyzer:
 
     def get_models(self):
         return self.results[MODEL_COLUMN].unique()
-
-    def build_validation_models_results(self):
-        # For debugging purposes only
-        columns_names_validation = [
-            SOURCE_ARTICLE_COLUMN,
-            TARGET_ARTICLE_COLUMN,
-            ACTUAL_CLICK_RATE_COLUMN,
-            PREDICTED_CLICK_RATE_COLUMN,
-        ]
-        __models_validation = {
-            "smash_rnn_word_level": SMASH_RNN_WORD_LEVEL_VALIDATION_RESULTS_PATH,
-            "smash_rnn_sentence_level": SMASH_RNN_SENTENCE_LEVEL_VALIDATION_RESULTS_PATH,
-            "smash_rnn_paragraph_level": SMASH_RNN_PARAGRAPH_LEVEL_VALIDATION_RESULTS_PATH,
-        }
-        results_validation = pd.DataFrame(columns=columns_names_validation)
-        for model_path in __models_validation.values():
-            results_validation = results_validation.append(pd.read_csv(model_path))
-
-        return results_validation
 
     @staticmethod
     def calculate_precision(predictions: List[bool]):
@@ -299,7 +304,24 @@ class ResultsAnalyzer:
 
         return ndcg
 
-    def get_article_results(self, article: str = None) -> pd.DataFrame:
+    def get_article_results(
+        self, article: str = None, model: str = SMASH_WORD_LEVEL
+    ) -> None:
+        """Plots a table with the actual and predicted top 10 articles for a selected article
+         and model
+
+        Parameters
+        ----------
+        article : str
+            Source article selected to get the actual and predicted top 10 articles
+        model : str
+            Model selected to get the predicted top 10 articles
+
+        Returns
+        -------
+        None
+
+        """
         if article is None:
             article = random.choice(self.source_articles)
 
@@ -323,7 +345,9 @@ class ResultsAnalyzer:
             axis=1,
         )
 
-        return results_table
+        print(f"Source article: {article}")
+
+        print(results_table[["actual click rate", model]])
 
     def calculate_statistics_per_model(self) -> pd.DataFrame:
         predictions_df = pd.DataFrame.from_dict(self.get_predictions_by_model())
@@ -375,6 +399,9 @@ class ResultsAnalyzer:
         return results
 
     def calculate_statistics_per_article(self):
+        if self.results_by_model_and_article:
+            return self.results_by_model_and_article
+
         db = ArticlesDatabase()
 
         test_articles = list(
@@ -427,21 +454,23 @@ class ResultsAnalyzer:
         ).drop(columns=[ARTICLE_COLUMN])
 
         logger.info("Calculating results by model")
-        ndcg_by_model_and_article = self.get_results_by_model_and_article(
+        results_by_model_and_article = self.get_results_by_model_and_article(
             predictions_df, k=10
         )
 
-        ndcg_by_model_and_article = ndcg_by_model_and_article.pivot(
+        results_by_model_and_article = results_by_model_and_article.pivot(
             index=SOURCE_ARTICLE_COLUMN, columns=MODEL_COLUMN, values=NDCG_COLUMN
         ).reset_index()
 
-        ndcg_by_model_and_article = ndcg_by_model_and_article.merge(
+        results_by_model_and_article = results_by_model_and_article.merge(
             articles_features_df,
             left_on=[SOURCE_ARTICLE_COLUMN],
             right_on=[ARTICLE_COLUMN],
         ).drop(columns=[ARTICLE_COLUMN])
 
-        return ndcg_by_model_and_article
+        self.results_by_model_and_article = results_by_model_and_article
+
+        return self.results_by_model_and_article
 
     def get_results_by_model_and_article(
         self, predictions_df, k: int, selected_models=None
@@ -540,6 +569,186 @@ class ResultsAnalyzer:
 
         return flatten_words
 
+    def get_performance_figure(
+        self,
+        models: List[str],
+        feature_column: str,
+        x_label: str,
+        figsize: Tuple[int, int] = (13, 6),
+        legend_columns_count: int = 3,
+        buckets_count: int = 8,
+        save_file_name: str = None,
+    ) -> None:
+        """Plots a performance figure with the results of each model according
+        to the features of the source articles
+
+        Parameters
+        ----------
+        models : List[str]
+            List with the models that will be displayed in the plot
+        feature_column : str
+            Column with the feature that will be used to group the articles
+        x_label : str
+            Label to be displayed in the x-axis
+        figsize : int
+            Size of the figure
+        legend_columns_count : int
+            Number of columns in the legend
+        buckets_count : int
+            Number of groups
+        save_file_name : str
+            Path to save the figures. Will not be saved if ommited
+
+        Returns
+        -------
+        None
+        """
+
+        results = self.calculate_statistics_per_article()
+
+        bin_column = f"{feature_column}_bin"
+        bins = pd.qcut(results[feature_column], q=buckets_count)
+
+        results[bin_column] = bins
+        result_by_model = results.groupby([bin_column]).mean()[models]
+
+        fig = plt.figure(figsize=figsize)
+
+        ax = result_by_model.plot(
+            kind="bar",
+            ax=fig.gca(),
+            rot=0,
+            width=0.7,
+            alpha=0.9,
+            edgecolor=["black"],
+        )
+
+        box = ax.get_position()
+        ax.set_position(
+            [box.x0, box.y0 + box.height * 0.25, box.width, box.height * 0.75]
+        )
+
+        # Formats the bars
+        for container in ax.containers:
+            container_system = container.get_label()
+
+            style = system_styles[container_system]
+            for patch in container.patches:
+                if "color" in style:
+                    patch.set_color(style["color"])
+                if "hatch" in style:
+                    patch.set_hatch(style["hatch"])
+                if "linewidth" in style:
+                    patch.set_linewidth(style["linewidth"])
+                if "edgecolor" in style:
+                    patch.set_edgecolor(style["edgecolor"])
+                else:
+                    patch.set_edgecolor("black")
+
+        model_names = [CLEAN_MODEL_NAMES[model] for model in models]
+
+        ax.legend(
+            model_names,
+            ncol=legend_columns_count,
+            loc="upper center",
+            fancybox=True,
+            shadow=False,
+            bbox_to_anchor=(0.5, 1.2),
+        )
+
+        # Formats the x label as "(lower, upper]"
+        ax.set_xticklabels(
+            [f"({int(i.left)}, {int(i.right)}]" for i in bins.cat.categories]
+        )
+
+        y_label = "NDCG@10"
+        ax.set_xlabel(x_label % len(result_by_model))
+        ax.set_ylabel(y_label)
+
+        if save_file_name:
+            save_file_path = f"./results/figures/{save_file_name}.png"
+            pdf_dpi = 300
+
+            #         logger.info(f"Saved to {save_file_path}")
+            plt.savefig(save_file_path, bbox_inches="tight", dpi=pdf_dpi)
+
+        plt.show()
+
+    def get_performance_by_model(self, selected_models: List[str]) -> None:
+        """Prints a table with the performance results by model
+
+        Parameters
+        ----------
+        selected_models : List[str]
+            List with the models to be plotted in the table
+
+        Returns
+        -------
+        None
+        """
+        results_per_model = self.calculate_statistics_per_model()
+
+        print(self._get_clean_results(results_per_model, selected_models))
+
+    @staticmethod
+    def _get_clean_results(
+        model_results: pd.DataFrame, selected_models: List[str]
+    ) -> pd.DataFrame:
+        """Cleans the results and formats the table
+
+        Parameters
+        ----------
+        model_results : pd.DataFrame
+            Pandas DataFrame with the results by model
+        selected_models : List[str]
+            List with the models to be plotted in the table
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        clean_results = model_results[
+            model_results[MODEL_COLUMN].isin(selected_models)
+        ].copy()
+        clean_results[MODEL_COLUMN] = clean_results["model"].map(CLEAN_MODEL_NAMES)
+        clean_results.sort_values(MODEL_COLUMN, inplace=True)
+
+        clean_results.columns = ["Model", "NDCG@10", "MAP@10", "Precision@10"]
+
+        return clean_results
+
+    def get_performance_different_k(
+        self, models: List[str], ks: List[int] = None, metric_column: str = NDCG_COLUMN
+    ) -> None:
+        """Prints a table with the performance results according to different k
+
+        Parameters
+        ----------
+        models : List[str]
+            List with the models to be plotted in the table
+        ks : List[int]
+            List with the ks to be plotted in the table
+        metric_column : str
+            Metric that will be used to display the results. Default `ndcg`
+
+        Returns
+        -------
+        None
+        """
+        results_different_k = self.calculate_statistics_per_model_different_k(ks)
+
+        performance_different_k = (
+            results_different_k[results_different_k[MODEL_COLUMN].isin(models)]
+            .pivot(index=MODEL_COLUMN, columns=K_COLUMN, values=metric_column)
+            .reset_index()
+        )
+        performance_different_k[MODEL_COLUMN] = performance_different_k[
+            MODEL_COLUMN
+        ].map(CLEAN_MODEL_NAMES)
+        performance_different_k.sort_values(MODEL_COLUMN, inplace=True)
+
+        print(performance_different_k)
+
 
 if __name__ == "__main__":
     pd.set_option("display.max_rows", 500)
@@ -554,7 +763,11 @@ if __name__ == "__main__":
     ]
     # print(_results.calculate_mean_average_precision_at_k(pred))
     # results = _results.calculate_statistics_per_model()
-    results_per_article = _results.calculate_statistics_per_article()
+    _results.get_performance_figure(
+        SMASH_MODELS,
+        SENTENCE_COUNT_COLUMN,
+        "Text length as sentence count (%s equal-sized buckets)",
+    )
     # print(results_per_article.describe())
     #
     # results_per_model = _results.calculate_statistics_per_model()

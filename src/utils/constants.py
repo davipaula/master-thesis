@@ -52,3 +52,115 @@ RESULT_FILE_COLUMNS_NAMES = [
     ACTUAL_CLICK_RATE_COLUMN,
     PREDICTED_CLICK_RATE_COLUMN,
 ]
+
+WORD_COUNT_BIN = "word_count_bin"
+OUT_LINKS_BIN = "out_links_bin"
+OUT_LINKS_COLUMN = "out_links_count"
+IN_LINKS_BIN = "in_links_bin"
+IN_LINKS_COLUMN = "in_links_count"
+PARAGRAPH_COUNT_BIN = "paragraph_count_bin"
+SENTENCE_COUNT_BIN = "sentence_count_bin"
+MISSING_WORDS_COLUMN = "missing_words_percentage"
+MISSING_WORDS_BIN = "missing_words_percentage_bin"
+MODEL_COLUMN = "model"
+
+ALL_FEATURES = [WORD_COUNT_COLUMN, OUT_LINKS_COLUMN, IN_LINKS_COLUMN]
+
+DOC2VEC_SIAMESE = "doc2vec_siamese"
+DOC2VEC_COSINE = "doc2vec_cosine"
+WIKIPEDIA2VEC_SIAMESE = "wikipedia2vec_siamese"
+WIKIPEDIA2VEC_COSINE = "wikipedia2vec_cosine"
+SMASH_WORD_LEVEL = "smash_word_level"
+SMASH_SENTENCE_LEVEL = "smash_sentence_level"
+SMASH_PARAGRAPH_LEVEL = "smash_paragraph_level"
+SMASH_WORD_LEVEL_INTRODUCTION = "smash_word_level_introduction"
+SMASH_SENTENCE_LEVEL_INTRODUCTION = "smash_sentence_level_introduction"
+SMASH_PARAGRAPH_LEVEL_INTRODUCTION = "smash_paragraph_level_introduction"
+
+ALL_MODELS = [
+    DOC2VEC_SIAMESE,
+    DOC2VEC_COSINE,
+    WIKIPEDIA2VEC_SIAMESE,
+    WIKIPEDIA2VEC_COSINE,
+    SMASH_WORD_LEVEL,
+    SMASH_SENTENCE_LEVEL,
+    SMASH_PARAGRAPH_LEVEL,
+    SMASH_WORD_LEVEL_INTRODUCTION,
+    SMASH_SENTENCE_LEVEL_INTRODUCTION,
+    SMASH_PARAGRAPH_LEVEL_INTRODUCTION,
+]
+
+INTRODUCTION_MODELS = [
+    SMASH_WORD_LEVEL_INTRODUCTION,
+    SMASH_SENTENCE_LEVEL_INTRODUCTION,
+    SMASH_PARAGRAPH_LEVEL_INTRODUCTION,
+]
+
+COMPLETE_MODELS = [
+    DOC2VEC_SIAMESE,
+    WIKIPEDIA2VEC_SIAMESE,
+    SMASH_WORD_LEVEL,
+    SMASH_SENTENCE_LEVEL,
+    SMASH_PARAGRAPH_LEVEL,
+]
+
+COMPLETE_MODELS_SAVE_CONFIG = [
+    (
+        PARAGRAPH_COUNT_COLUMN,
+        "Source article length as paragraph count (%s equal-sized buckets)",
+    ),
+    (
+        SENTENCE_COUNT_COLUMN,
+        "Source article length as sentence count (%s equal-sized buckets)",
+    ),
+    (WORD_COUNT_COLUMN, "Source article length as word count (%s equal-sized buckets)"),
+    (
+        OUT_LINKS_COLUMN,
+        "Number of links present in the source articles (%s equal-sized buckets)",
+    ),
+    (
+        IN_LINKS_COLUMN,
+        "Number of articles with links pointing to the source articles (%s equal-sized buckets)",
+    ),
+    (
+        MISSING_WORDS_COLUMN,
+        "Percentage of missing words in GloVe (%s equal-sized buckets)",
+    ),
+]
+
+SMASH_MODELS = [
+    SMASH_WORD_LEVEL,
+    SMASH_SENTENCE_LEVEL,
+    SMASH_PARAGRAPH_LEVEL,
+]
+
+SMASH_AND_INTRODUCTION_MODELS = [
+    SMASH_WORD_LEVEL,
+    SMASH_SENTENCE_LEVEL,
+    SMASH_PARAGRAPH_LEVEL,
+    SMASH_WORD_LEVEL_INTRODUCTION,
+    SMASH_SENTENCE_LEVEL_INTRODUCTION,
+    SMASH_PARAGRAPH_LEVEL_INTRODUCTION,
+]
+
+COSINE_MODELS = [
+    DOC2VEC_SIAMESE,
+    WIKIPEDIA2VEC_SIAMESE,
+    DOC2VEC_COSINE,
+    WIKIPEDIA2VEC_COSINE,
+]
+
+BEST_MODELS = [DOC2VEC_SIAMESE, SMASH_WORD_LEVEL, WIKIPEDIA2VEC_SIAMESE]
+
+CLEAN_MODEL_NAMES = {
+    DOC2VEC_SIAMESE: "Doc2Vec",
+    DOC2VEC_COSINE: "Doc2Vec Cosine",
+    WIKIPEDIA2VEC_SIAMESE: "Wikipedia2Vec",
+    WIKIPEDIA2VEC_COSINE: "Wikipedia2Vec Cosine",
+    SMASH_WORD_LEVEL: "SMASH RNN (P + S + W)",
+    SMASH_SENTENCE_LEVEL: "SMASH RNN (P + S)",
+    SMASH_PARAGRAPH_LEVEL: "SMASH RNN (P)",
+    SMASH_WORD_LEVEL_INTRODUCTION: "SMASH RNN Introduction (P + S + W)",
+    SMASH_SENTENCE_LEVEL_INTRODUCTION: "SMASH RNN Introduction (P + S)",
+    SMASH_PARAGRAPH_LEVEL_INTRODUCTION: "SMASH RNN Introduction (P)",
+}
