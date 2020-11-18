@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import torch
 from torch.utils.data.dataset import Dataset
-from typing import List
+from typing import List, Dict
 import logging
 import json
 
@@ -26,6 +26,15 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 class SMASHDataset(Dataset):
     def __init__(self, dataset_path: str, introduction_only: bool = False):
+        """
+
+        Parameters
+        ----------
+        dataset_path : str
+            Path where Wikipedia articles dataset is stored
+        introduction_only : bool
+            Flag to use only introduction section of the articles
+        """
         super(SMASHDataset, self).__init__()
 
         if torch.cuda.is_available():
@@ -55,7 +64,19 @@ class SMASHDataset(Dataset):
     def __len__(self):
         return len(self.text_embeddings)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: np.int64) -> Dict[str, str]:
+        """Returns the data for an article
+
+        Parameters
+        ----------
+        index : np.int64
+            Index that represents the article
+
+        Returns
+        -------
+        Dict[str, str]
+
+        """
         text_embedding = self.text_embeddings.iloc[index]
 
         text_structure = self.get_document_structure(text_embedding)
@@ -70,9 +91,10 @@ class SMASHDataset(Dataset):
 
         return article
 
-    def get_articles(self, articles: List[str]):
+    def get_articles(self, articles: List[str]) -> Dict[str, List[str]]:
         """ "
-        should return a embeddings of lists following the same structure of article
+        Returns a dictionary with data for the article, according to the structure below:
+
         article = {
             "title": [self.articles.iloc[index]],
             "text": [text_embeddings_padded],
@@ -80,6 +102,15 @@ class SMASHDataset(Dataset):
             "sentences_per_paragraph": [sentences_per_paragraph],
             "paragraphs_per_document": [paragraphs_per_document],
         }
+
+        Parameters
+        ----------
+        articles : List[str]
+            Title of the articles to be retrieved
+
+        Returns
+        -------
+        Dict[str, List[str]]
         """
         batch_size = len(articles)
 
@@ -115,7 +146,7 @@ class SMASHDataset(Dataset):
         for index, _ in enumerate(articles):
             article = articles_list[index]
             text_ids_tensor[index, :] = (
-                self.get_padded_document(
+                self.get_padded_article(
                     article[TEXT_IDS_COLUMN],
                     max_paragraph_length,
                     max_sentence_length,
@@ -146,11 +177,6 @@ class SMASHDataset(Dataset):
                 device=self.device,
                 dtype=torch.int,
             )
-
-        # text_ids_tensor = torch.from_numpy(text_ids_tensor)
-        # words_per_sentence_tensor = torch.from_numpy(words_per_sentence_tensor)
-        # sentences_per_paragraph_tensor = torch.from_numpy(sentences_per_paragraph_tensor)
-        # paragraphs_per_document_tensor = torch.from_numpy(paragraphs_per_document_tensor)
 
         articles_list = {
             TITLE_COLUMN: articles,
@@ -186,13 +212,31 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    def get_padded_document(
+    def get_padded_article(
         self,
-        document,
+        article: List[List[List[int]]],
         max_paragraph_length: int,
         max_sentence_length: int,
         max_word_length: int,
-    ):
+    ) -> torch.Tensor:
+        """Returns a zero padded article
+
+        Parameters
+        ----------
+        article : List[List[List[int]]]
+            Batch of articles
+        max_paragraph_length : int
+            Length of document with the largest number of paragraphs in batch
+        max_sentence_length : int
+            Length of the paragraph with the largest number of sentences in batch
+        max_word_length : int
+            Length of the sentence with the largest number of words in batch
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
         document_placeholder = torch.full(
             (max_paragraph_length, max_sentence_length, max_word_length),
             -1,
@@ -200,7 +244,7 @@ class SMASHDataset(Dataset):
             device=self.device,
         )
 
-        for paragraph_index, paragraph in enumerate(document):
+        for paragraph_index, paragraph in enumerate(article):
             for sentence_index, sentence in enumerate(paragraph):
                 document_placeholder[
                     paragraph_index, sentence_index, : len(sentence)
@@ -211,15 +255,6 @@ class SMASHDataset(Dataset):
                 )
 
         document_placeholder += 1
-
-        # padded_sentences = np.array(
-        #     [
-        #         [[row + [-1] * (max_word_length - len(row)) for row in sentence] for sentence in paragraph]
-        #         for paragraph in article
-        #     ]
-        # )
-        #
-        # padded_document = F.pad(torch.tensor(padded_sentences), (0, 0, 0, 1, 0, 1), "constant", -1)
 
         return document_placeholder
 
@@ -245,9 +280,24 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
+    @staticmethod
     def get_padded_sentences_per_paragraph(
-        self, document_structure, max_paragraph_length: int
-    ):
+        document_structure: List[int], max_paragraph_length: int
+    ) -> List[int]:
+        """Returns a padded sentences per paragraph
+
+        Parameters
+        ----------
+        document_structure : List[int]
+            Document structure
+        max_paragraph_length : int
+            Length of the largest paragraph
+
+        Returns
+        -------
+        List[int]
+
+        """
         if len(document_structure) < max_paragraph_length:
             extended_paragraphs = [
                 0 for _ in range(max_paragraph_length - len(document_structure))
@@ -256,7 +306,20 @@ class SMASHDataset(Dataset):
 
         return document_structure
 
-    def get_max_lengths(self, articles):
+    @staticmethod
+    def get_max_lengths(articles: List[Dict[str, str]]) -> Dict[str, int]:
+        """Get the max length in a batch of articles
+
+        Parameters
+        ----------
+        articles : List[Dict[str, str]]
+            Batch of articles
+
+        Returns
+        -------
+        Dict[str, int]
+
+        """
         word_length_list = []
         sent_length_list = []
         paragraph_length_list = []
@@ -276,13 +339,21 @@ class SMASHDataset(Dataset):
             "max_paragraph_length": max(paragraph_length_list),
         }
 
-    def get_n_percentile_paragraph_length(self, n=90):
+    def get_n_percentile_paragraph_length(self, n: int = 90) -> int:
+        """Gets the length of the paragraph at the nth percentile
+
+        Parameters
+        ----------
+        n : int
+            Percentile to get the paragraph length
+
+        Returns
+        -------
+        int
+
+        """
         articles_text = self.text_embeddings
         paragraphs_per_article = [len(article_text) for article_text in articles_text]
-        # sentences_per_paragraph_per_article = [
-        #     [len(sentences) for sentences in article_text] for article_text in articles_text
-        # ]
-        # sentences_per_paragraph_per_article = [max(sentence) for sentence in sentences_per_paragraph_per_article]
 
         return int(np.percentile(paragraphs_per_article, n))
 
@@ -294,7 +365,7 @@ if __name__ == "__main__":
         torch.manual_seed(123)
 
     test = SMASHDataset(
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english_complete.csv"
+        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
     )
 
     test.get_n_percentile_paragraph_length()
@@ -315,29 +386,7 @@ if __name__ == "__main__":
         "Cinema of the United Kingdom",
         "Satoru Iwata",
         "Honor (The Walking Dead)",
-        "Tamara Rojo",
-        "Demian Maia",
-        "Child of the Sun",
-        "Swedish Mauser",
-        "San Fernando Valley",
-        "Paul Nicholls (horse racing)",
-        "Adzuki bean",
-        "Big Brother (British series 8)",
-        "Dan Byrd",
-        "Curious George 2: Follow That Monkey!",
-        "Mil Mi-26",
-        "Hand of Death (1976 film)",
-        "Camelot (film)",
-        "Pyarey Afzal",
-        "Lothaire Bluteau",
-        "Deism",
-        "Douglas Costa",
     ]
 
-    # logger.info("Started getting articles")
-
-    # for n in range(50):
-    #     (test.get_articles(articles_to_get))
-
-    # logger.info("Finished getting articles")
-    # print(test.__getitem__(1))
+    a = test.get_articles(articles_to_get)
+    print(a)
