@@ -356,37 +356,3 @@ class SMASHDataset(Dataset):
         paragraphs_per_article = [len(article_text) for article_text in articles_text]
 
         return int(np.percentile(paragraphs_per_article, n))
-
-
-if __name__ == "__main__":
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(123)
-    else:
-        torch.manual_seed(123)
-
-    test = SMASHDataset(
-        "/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/data/dataset/wiki_articles_english.csv"
-    )
-
-    test.get_n_percentile_paragraph_length()
-
-    articles_to_get = [
-        "Curtis Axel",
-        "To Write Love on Her Arms (film)",
-        "Joseph Smith",
-        "Darren Moore",
-        "Non-cellular life",
-        "Dir En Grey",
-        "My Neighbor Totoro",
-        "Imaginary Heroes",
-        "Video game bot",
-        "Curt Menefee",
-        "Dr. Mario 64",
-        "Ghost Rider (2007 film)",
-        "Cinema of the United Kingdom",
-        "Satoru Iwata",
-        "Honor (The Walking Dead)",
-    ]
-
-    a = test.get_articles(articles_to_get)
-    print(a)
