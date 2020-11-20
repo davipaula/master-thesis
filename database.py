@@ -5,6 +5,8 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from typing import List
 
+from sqlalchemy_utils import database_exists
+
 import spacy
 from bs4 import BeautifulSoup
 
@@ -16,6 +18,8 @@ import pandas as pd
 
 from src.utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
 
+WIKIPEDIA_DUMP_DB_PATH = "./wikipedia_dump.db"
+
 logger = logging.getLogger(__name__)
 LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
@@ -25,11 +29,22 @@ logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 class ArticlesDatabase:
     def __init__(self):
-        self.conn = sqlite3.connect("./wikipedia_dump.db")
+        self.check_database()
+        self.conn = sqlite3.connect(WIKIPEDIA_DUMP_DB_PATH)
         self.cursor = self.conn.cursor()
         self.cursor.arraysize = 10
 
+    def check_database(self):
+        if not database_exists(WIKIPEDIA_DUMP_DB_PATH):
+            self.prepare_database()
+
+    def prepare_database(self):
+        logger.info("Database does not exist. Starting database preparation")
+        self.create_table()
+        self.create_index()
+
     def create_table(self):
+        logger.info("Creating table")
         self.cursor.execute(
             "CREATE TABLE ARTICLES (title TEXT, sections TEXT, links TEXT)"
         )

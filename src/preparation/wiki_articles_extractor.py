@@ -1,28 +1,8 @@
-"""
-
-You can use this script to obtain sections/paragraphs/sentences and their word indexes from a Wiki dump.
-
-USAGE:
-
-python wiki_cli.py process <wiki_dump_path> <embeddings_path> <output_path> [<max_doc_count>]
-
-EXAMPLE:
-
-python wiki_cli.py process /Volumes/data/repo/data/simplewiki-latest-pages-articles.xml \
-    /Volumes/data/repo/data/glove.6B/glove.6B.200d.w2vformat.txt \
-    simplewiki.jsonl 100
-
-OUTPUT:
-
-JSON-line file (one valid JSON per line)
-
-{"title": "Contact network", "sections": [{"title": "Introduction", "text": "'''Contact network''' may mean:\n*Creative network\n*Social network\n*Power network", "paragraphs": [[[1871, 849, 107, 1702, 4069, 849, 659, 849, 268, 849]]]}]}
-
-"""
 import multiprocessing
 import sys
 import os
 from datetime import datetime
+from typing import Any, Union, List, Dict
 
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -71,10 +51,17 @@ def convert_to_plain_text(text):
     return text.strip()
 
 
-def process_text(text):
-    """
-    :param text: Wikitext
-    :return: Sections embeddings(title, text, paragraphs[])
+def process_text(text: Any) -> Union[List, None]:
+    """Processes XML and returns the clean text
+
+    Parameters
+    ----------
+    text : Any
+        Text extracted from XML page
+
+    Returns
+    -------
+    Union[List, None]
     """
     appendices_and_footers_sections = [
         "See also",
@@ -137,14 +124,20 @@ def process_text(text):
     return sects
 
 
-def process_dump(page_xml):
-    """
-    :param log_every: Print process every X docs
-    :param wiki_dump_path: Path to Wikipedia XML dump
-    :param max_doc_count: limit the number of articles to be returned (0 = no limit)
-    :return: Generator for processed docs (Wikipedia articles)
-    """
+def process_dump(
+    page_xml: Any,
+) -> Dict[str, Union[Union[str, None, List[Dict[str, Union[str, Any]]], list], Any]]:
+    """Processes the page xml and returns a Dict with title, sections and links
 
+    Parameters
+    ----------
+    page_xml : Any
+        XML extracted from Wikipedia dump
+
+    Returns
+    -------
+        Dict
+    """
     # Parse XML element
     elem = cElementTree.fromstring(page_xml)
     filter_namespaces = ("0",)
@@ -170,6 +163,7 @@ def process_dump(page_xml):
     if "#REDIRECT" in text or "#redirect" in text or "#Redirect" in text:
         return
 
+    # TODO (optional) should transform this into a data class
     return {
         "title": title,
         "sections": process_text(text),
@@ -178,9 +172,11 @@ def process_dump(page_xml):
 
 
 def extract_wiki_articles() -> None:
-    """
-    Extracts XML from wiki dump and stores it into the database
-    :return:
+    """Extracts XML from wiki dump and stores it into the database
+
+    Returns
+    -------
+    None
     """
     if not os.path.exists(WIKI_DUMP_PATH):
         logger.error(f"Wiki dump does not exist at: {WIKI_DUMP_PATH}")
@@ -212,4 +208,4 @@ def extract_wiki_articles() -> None:
         if page:
             articles_db.add_articles(page["title"], page["sessions"], page["links"])
 
-    logger.info("Tokens saved")
+    logger.info("Articles saved to DB")
