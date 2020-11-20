@@ -16,6 +16,8 @@ import json
 from tqdm import tqdm
 import pandas as pd
 
+import os.path
+
 from src.utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
 
 WIKIPEDIA_DUMP_DB_PATH = "./wikipedia_dump.db"
@@ -35,7 +37,7 @@ class ArticlesDatabase:
         self.cursor.arraysize = 10
 
     def check_database(self):
-        if not database_exists(WIKIPEDIA_DUMP_DB_PATH):
+        if not os.path.isfile(WIKIPEDIA_DUMP_DB_PATH):
             self.prepare_database()
 
     def prepare_database(self):
