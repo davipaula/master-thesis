@@ -1,22 +1,13 @@
 import argparse
-import sys
-import os
-
-from tqdm import tqdm
-
-from utils.constants import TEST_DATASET_PATH
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
 import logging
 
 import pandas as pd
 import torch
 from torch import nn
+from tqdm import tqdm
 
-from modeling.wikipedia2vec_model import Wikipedia2VecModel
+from src.modeling.wikipedia2vec_model import Wikipedia2VecModel
+from src.utils.constants import TEST_DATASET_PATH
 
 logger = logging.getLogger(__name__)
 

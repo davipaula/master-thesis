@@ -1,15 +1,16 @@
 import pandas as pd
-from utils.utils import clean_title
-from utils.constants import (
+
+from ..utils.constants import (
+    CLICK_RATE_COLUMN,
     CLICK_STREAM_DUMP_PATH,
     CLICK_STREAM_PROCESSED_PATH,
+    NUMBER_OF_CLICKS_COLUMN,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    NUMBER_OF_CLICKS_COLUMN,
     TOTAL_CLICKS_COLUMN,
     TYPE_COLUMN,
-    CLICK_RATE_COLUMN,
 )
+from ..utils.utils import clean_title
 
 
 def extract_click_stream_data():

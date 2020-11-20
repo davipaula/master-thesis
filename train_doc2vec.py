@@ -1,22 +1,4 @@
 import argparse
-import sys
-import os
-
-from utils.constants import (
-    TRAIN_DATASET_PATH,
-    VALIDATION_DATASET_PATH,
-    MODEL_COLUMN,
-    SOURCE_ARTICLE_COLUMN,
-    TARGET_ARTICLE_COLUMN,
-    ACTUAL_CLICK_RATE_COLUMN,
-    PREDICTED_CLICK_RATE_COLUMN,
-    CLICK_RATE_COLUMN,
-)
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
 import logging
 from datetime import datetime
 
@@ -26,6 +8,16 @@ from torch import nn
 from tqdm import tqdm
 
 from src.modeling.doc2vec_model import Doc2VecModel
+from src.utils.constants import (
+    ACTUAL_CLICK_RATE_COLUMN,
+    CLICK_RATE_COLUMN,
+    MODEL_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    TRAIN_DATASET_PATH,
+    VALIDATION_DATASET_PATH,
+)
 
 logger = logging.getLogger(__name__)
 

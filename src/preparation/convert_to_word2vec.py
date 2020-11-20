@@ -1,5 +1,5 @@
-from gensim.test.utils import datapath, get_tmpfile
 from gensim.scripts.glove2word2vec import glove2word2vec
+from gensim.test.utils import datapath, get_tmpfile
 
 
 def convert(

@@ -1,12 +1,15 @@
 import logging
 
+import pandas as pd
 import torch
 from tqdm import tqdm
-import pandas as pd
 
-from modeling.doc2vec_model import Doc2VecModel
-from utils.constants import CLICK_STREAM_TEST_DATASET_PATH, RESULT_FILE_COLUMNS_NAMES
-from utils.utils import cosine_similarity
+from src.modeling.doc2vec_model import Doc2VecModel
+from src.utils.constants import (
+    CLICK_STREAM_TEST_DATASET_PATH,
+    RESULT_FILE_COLUMNS_NAMES,
+)
+from src.utils.utils import cosine_similarity
 
 logger = logging.getLogger(__name__)
 

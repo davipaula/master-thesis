@@ -1,28 +1,25 @@
+import logging
+import random
 from ast import literal_eval
 from typing import List
 
-import pandas as pd
-import os
-import random
-import torch
-from datetime import datetime
-import logging
-import database
 import numpy as np
+import pandas as pd
+import torch
 
-from data_structure.click_stream_pre_processed import ClickStreamPreProcessed
-
-from utils.constants import (
+import database
+from ..data_structure.click_stream_pre_processed import ClickStreamPreProcessed
+from ..utils.constants import (
+    ARTICLE_COLUMN,
+    AVAILABLE_TITLES_PATH,
+    CLICK_RATE_COLUMN,
+    CLICK_STREAM_TEST_DATASET_PATH,
     CLICK_STREAM_TRAIN_DATASET_PATH,
     CLICK_STREAM_VALIDATION_DATASET_PATH,
-    CLICK_STREAM_TEST_DATASET_PATH,
-    SELECTED_ARTICLES_PATH,
-    AVAILABLE_TITLES_PATH,
     NUMBER_OF_CLICKS_COLUMN,
+    SELECTED_ARTICLES_PATH,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    ARTICLE_COLUMN,
-    CLICK_RATE_COLUMN,
 )
 
 LINKS_COLUMN = "links"

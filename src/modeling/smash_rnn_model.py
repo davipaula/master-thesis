@@ -4,24 +4,24 @@
 import logging
 from typing import Dict, List, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-from torch.nn.utils.rnn import pack_padded_sequence, PackedSequence, pad_packed_sequence
+from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 
-from utils.constants import (
+from ..utils.constants import (
+    PARAGRAPHS_PER_DOCUMENT_COLUMN,
+    SENTENCES_PER_PARAGRAPH_COLUMN,
     TEXT_IDS_COLUMN,
     WORDS_PER_SENTENCE_COLUMN,
-    SENTENCES_PER_PARAGRAPH_COLUMN,
-    PARAGRAPHS_PER_DOCUMENT_COLUMN,
 )
-from utils.utils import (
-    remove_zeros,
-    get_words_per_document_at_word_level,
-    get_document_at_word_level,
+from ..utils.utils import (
     get_document_at_sentence_level,
-    get_words_per_sentence_at_sentence_level,
+    get_document_at_word_level,
     get_sentences_per_paragraph_at_sentence_level,
+    get_words_per_document_at_word_level,
+    get_words_per_sentence_at_sentence_level,
+    remove_zeros,
 )
 
 logger = logging.getLogger(__name__)

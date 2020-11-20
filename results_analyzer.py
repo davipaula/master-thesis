@@ -1,44 +1,33 @@
-import os
-import sys
-
-from utils.constants import (
-    NDCG_COLUMN,
-    MAP_COLUMN,
-    PRECISION_COLUMN,
-    IS_IN_TOP_ARTICLES_COLUMN,
-    K_COLUMN,
-)
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
-import logging
-
-import pandas as pd
-
-from tqdm import tqdm
-from typing import List, Tuple
 import glob
+import logging
 import random
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
+import pandas as pd
+from tqdm import tqdm
 
 from src.utils.constants import (
-    RESULT_FILE_COLUMNS_NAMES,
-    TARGET_ARTICLE_COLUMN,
-    SOURCE_ARTICLE_COLUMN,
-    MODEL_COLUMN,
     ACTUAL_CLICK_RATE_COLUMN,
-    PREDICTED_CLICK_RATE_COLUMN,
     ARTICLE_COLUMN,
     CLEAN_MODEL_NAMES,
+    MODEL_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+    RESULT_FILE_COLUMNS_NAMES,
     SMASH_WORD_LEVEL,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
 )
-
+from src.utils.constants import (
+    IS_IN_TOP_ARTICLES_COLUMN,
+    K_COLUMN,
+    MAP_COLUMN,
+    NDCG_COLUMN,
+    PRECISION_COLUMN,
+)
 from src.utils.metrics_calculator import (
-    get_ndcg_at_k_by_article,
     average_precision_at_k,
+    get_ndcg_at_k_by_article,
     precision_at_k,
 )
 

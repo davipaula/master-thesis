@@ -2,15 +2,16 @@ import itertools
 import logging
 import multiprocessing
 import os
-import torch
 from ast import literal_eval
-from src.data_structure.wiki_articles_dataset import WikiArticlesDataset
+from typing import List
+
+import torch
 from gensim.models import Doc2Vec
 from gensim.models.doc2vec import TaggedDocument
 from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
-from typing import List
 
-from utils.constants import ARTICLE_COLUMN, RAW_TEXT_COLUMN, TRAIN_DATASET_PATH
+from src.data_structure.wiki_articles_dataset import WikiArticlesDataset
+from ..utils.constants import ARTICLE_COLUMN, RAW_TEXT_COLUMN, TRAIN_DATASET_PATH
 
 logger = logging.getLogger(__name__)
 

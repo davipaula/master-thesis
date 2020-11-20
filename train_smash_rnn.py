@@ -1,36 +1,29 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
-
-import sys
-import os
-from typing import List, Union
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
-from utils.constants import (
-    RESULT_FILE_COLUMNS_NAMES,
-    WIKI_ARTICLES_DATASET_PATH,
-    SOURCE_ARTICLE_COLUMN,
-    TARGET_ARTICLE_COLUMN,
-    CLICK_RATE_COLUMN,
-    VALIDATION_DATASET_PATH,
-    TRAIN_DATASET_PATH,
-    MODEL_FOLDER,
-)
-
-from tqdm import tqdm
 import argparse
 import logging
+from datetime import datetime
+from typing import List, Union
+
 import pandas as pd
 import torch
 import torch.nn as nn
-from modeling.smash_rnn_model import SmashRNNModel
-from modeling.smash_dataset import SMASHDataset
-from datetime import datetime
-from utils.utils import get_word2vec_path, load_embeddings_from_file
+from tqdm import tqdm
+
+from src.modeling.smash_dataset import SMASHDataset
+from src.modeling.smash_rnn_model import SmashRNNModel
+from src.utils.constants import (
+    CLICK_RATE_COLUMN,
+    MODEL_FOLDER,
+    RESULT_FILE_COLUMNS_NAMES,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    TRAIN_DATASET_PATH,
+    VALIDATION_DATASET_PATH,
+    WIKI_ARTICLES_DATASET_PATH,
+)
+from src.utils.utils import get_word2vec_path, load_embeddings_from_file
 
 logger = logging.getLogger(__name__)
 

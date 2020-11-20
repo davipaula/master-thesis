@@ -2,19 +2,20 @@
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 
-import pandas as pd
+import json
+import logging
+from typing import Dict, List
+
 import numpy as np
+import pandas as pd
 import torch
 from torch.utils.data.dataset import Dataset
-from typing import List, Dict
-import logging
-import json
 
-from utils.constants import (
+from ..utils.constants import (
+    PARAGRAPHS_PER_DOCUMENT_COLUMN,
+    SENTENCES_PER_PARAGRAPH_COLUMN,
     TEXT_IDS_COLUMN,
     WORDS_PER_SENTENCE_COLUMN,
-    SENTENCES_PER_PARAGRAPH_COLUMN,
-    PARAGRAPHS_PER_DOCUMENT_COLUMN,
 )
 
 TITLE_COLUMN = "title"

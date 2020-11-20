@@ -1,12 +1,12 @@
-import sys
 import os
+import sys
 
-from preparation import convert_to_word2vec
-from preparation.click_stream_extractor import extract_click_stream_data
-from preparation.wiki_articles_extractor import extract_wiki_articles
-from preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
-from processing.click_stream_processor import generate_datasets
-from processing.wiki_articles_processor import create_wiki_articles_dataset
+from src.preparation import convert_to_word2vec
+from src.preparation.click_stream_extractor import extract_click_stream_data
+from src.preparation.wiki_articles_extractor import extract_wiki_articles
+from src.preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
+from src.processing.click_stream_processor import generate_datasets
+from src.processing.wiki_articles_processor import create_wiki_articles_dataset
 
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])

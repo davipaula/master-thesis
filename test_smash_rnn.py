@@ -2,35 +2,26 @@
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
 
-import sys
-import os
-
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
+import argparse
 import logging
+
 import pandas as pd
 import torch
 from torch import nn
 from tqdm import tqdm
 
-from modeling.smash_dataset import SMASHDataset
-from modeling.smash_rnn_model import SmashRNNModel
-import argparse
-from src.utils.utils import load_embeddings_from_file
-
-from utils.constants import (
-    RESULT_FILE_COLUMNS_NAMES,
-    WIKI_ARTICLES_DATASET_PATH,
-    TEST_DATASET_PATH,
+from src.modeling.smash_dataset import SMASHDataset
+from src.modeling.smash_rnn_model import SmashRNNModel
+from src.utils.constants import (
+    CLICK_RATE_COLUMN,
     MODEL_FOLDER,
+    RESULT_FILE_COLUMNS_NAMES,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    CLICK_RATE_COLUMN,
+    TEST_DATASET_PATH,
+    WIKI_ARTICLES_DATASET_PATH,
 )
-
-from utils.utils import get_word2vec_path, get_model_name
+from src.utils.utils import get_model_name, get_word2vec_path, load_embeddings_from_file
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from utils.constants import WORD2VEC_50D_PATH, WORD2VEC_200D_PATH
+from ..utils.constants import WORD2VEC_200D_PATH, WORD2VEC_50D_PATH
 
 
 def remove_zeros(elements_in_sequence):

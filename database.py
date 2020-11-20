@@ -1,22 +1,17 @@
 import csv
+import json
 import logging
+import os.path
 import sqlite3
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import List
 
-from sqlalchemy_utils import database_exists
-
+import jsonlines
+import pandas as pd
 import spacy
 from bs4 import BeautifulSoup
-
-import jsonlines
-import json
-
 from tqdm import tqdm
-import pandas as pd
-
-import os.path
 
 from src.utils.constants import AVAILABLE_TITLES_PATH, WORD2VEC_50D_PATH
 

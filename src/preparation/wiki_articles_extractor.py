@@ -1,8 +1,8 @@
 import multiprocessing
-import sys
 import os
+import sys
 from datetime import datetime
-from typing import Any, Union, List, Dict
+from typing import Any, Dict, List, Union
 
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -12,7 +12,7 @@ import re
 import logging
 from gensim.corpora.wikicorpus import get_namespace
 from gensim.scripts.segment_wiki import extract_page_xmls
-from utils.extractor_utils import (
+from ..utils.extractor_utils import (
     drop_nested,
     replaceInternalLinks,
     replaceExternalLinks,
@@ -20,7 +20,7 @@ from utils.extractor_utils import (
 from xml.etree import cElementTree
 from gensim.scripts.segment_wiki import segment
 
-from utils.constants import WIKI_DUMP_PATH
+from ..utils.constants import WIKI_DUMP_PATH
 
 from database import ArticlesDatabase
 

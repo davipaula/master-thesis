@@ -1,12 +1,12 @@
 import pandas as pd
 from torch.utils.data.dataset import Dataset
 
-from utils.constants import (
+from ..utils.constants import (
+    CLICK_RATE_COLUMN,
     CLICK_STREAM_PROCESSED_PATH,
+    NUMBER_OF_CLICKS_COLUMN,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    NUMBER_OF_CLICKS_COLUMN,
-    CLICK_RATE_COLUMN,
 )
 
 

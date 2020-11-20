@@ -1,9 +1,11 @@
 """
 @author: Davi Nascimento de Paula <davi.paula@gmail.com>
 """
-import torch
 from typing import List
+
+import torch
 from wikipedia2vec import Wikipedia2Vec
+
 from src.utils.utils import cosine_similarity
 
 MODEL_FILE = "./trained_models/wikipedia2vec_model"
