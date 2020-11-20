@@ -172,3 +172,7 @@ K_COLUMN = "k"
 NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
 TOTAL_CLICKS_COLUMN = "total_clicks"
 TYPE_COLUMN = "type"
+
+MODEL_FOLDER = "./trained_models/"
+
+RAW_TEXT_COLUMN = "raw_text"

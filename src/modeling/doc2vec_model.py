@@ -10,19 +10,14 @@ from gensim.models.doc2vec import TaggedDocument
 from gensim.test.test_doc2vec import ConcatenatedDoc2Vec
 from typing import List
 
+from utils.constants import ARTICLE_COLUMN, RAW_TEXT_COLUMN, TRAIN_DATASET_PATH
+
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-
-ARTICLE_COLUMN = "article"
-RAW_TEXT_COLUMN = "raw_text"
-TRAIN_FOLD = "train"
-FOLD_COLUMN = "fold"
 
 
 class Doc2VecModel:

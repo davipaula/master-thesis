@@ -10,7 +10,16 @@ os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
-from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PATH
+from utils.constants import (
+    RESULT_FILE_COLUMNS_NAMES,
+    WIKI_ARTICLES_DATASET_PATH,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    CLICK_RATE_COLUMN,
+    VALIDATION_DATASET_PATH,
+    TRAIN_DATASET_PATH,
+    MODEL_FOLDER,
+)
 
 from tqdm import tqdm
 import argparse
@@ -30,18 +39,7 @@ LOG_FORMAT = (
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
-PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
-SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
-WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
-TEXT_IDS_COLUMN = "text_ids"
-CLICK_RATE_COLUMN = "click_rate"
-TARGET_ARTICLE_COLUMN = "target_article"
-SOURCE_ARTICLE_COLUMN = "source_article"
 
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
-TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
-MODEL_FOLDER = "./trained_models/"
 RESULTS_PATH = "./results/validation/"
 
 

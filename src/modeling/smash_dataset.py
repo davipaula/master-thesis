@@ -10,10 +10,13 @@ from typing import List, Dict
 import logging
 import json
 
-PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
-SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
-WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
-TEXT_IDS_COLUMN = "text_ids"
+from utils.constants import (
+    TEXT_IDS_COLUMN,
+    WORDS_PER_SENTENCE_COLUMN,
+    SENTENCES_PER_PARAGRAPH_COLUMN,
+    PARAGRAPHS_PER_DOCUMENT_COLUMN,
+)
+
 TITLE_COLUMN = "title"
 
 logger = logging.getLogger(__name__)

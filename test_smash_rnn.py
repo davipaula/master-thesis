@@ -20,17 +20,17 @@ from modeling.smash_rnn_model import SmashRNNModel
 import argparse
 from src.utils.utils import load_embeddings_from_file
 
-from utils.constants import RESULT_FILE_COLUMNS_NAMES, WIKI_ARTICLES_DATASET_PATH
+from utils.constants import (
+    RESULT_FILE_COLUMNS_NAMES,
+    WIKI_ARTICLES_DATASET_PATH,
+    TEST_DATASET_PATH,
+    MODEL_FOLDER,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    CLICK_RATE_COLUMN,
+)
 
 from utils.utils import get_word2vec_path, get_model_name
-
-PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
-SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
-WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
-TEXT_IDS_COLUMN = "text_ids"
-CLICK_RATE_COLUMN = "click_rate"
-TARGET_ARTICLE_COLUMN = "target_article"
-SOURCE_ARTICLE_COLUMN = "source_article"
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +38,6 @@ LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-MODEL_FOLDER = "./trained_models/"
-FULL_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
-RESULTS_PATH = "./results/"
 
 
 def test(opt: argparse.Namespace) -> None:

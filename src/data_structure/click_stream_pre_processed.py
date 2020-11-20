@@ -1,12 +1,13 @@
 import pandas as pd
 from torch.utils.data.dataset import Dataset
 
-from utils.constants import CLICK_STREAM_PROCESSED_PATH
-
-TARGET_ARTICLE_COLUMN = "target_article"
-SOURCE_ARTICLE_COLUMN = "source_article"
-NUMBER_OF_CLICKS_COLUMN = "number_of_clicks"
-CLICK_RATE_COLUMN = "click_rate"
+from utils.constants import (
+    CLICK_STREAM_PROCESSED_PATH,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    NUMBER_OF_CLICKS_COLUMN,
+    CLICK_RATE_COLUMN,
+)
 
 
 class ClickStreamPreProcessed(Dataset):

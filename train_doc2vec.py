@@ -2,6 +2,17 @@ import argparse
 import sys
 import os
 
+from utils.constants import (
+    TRAIN_DATASET_PATH,
+    VALIDATION_DATASET_PATH,
+    MODEL_COLUMN,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    ACTUAL_CLICK_RATE_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+    CLICK_RATE_COLUMN,
+)
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -16,22 +27,12 @@ from tqdm import tqdm
 
 from src.modeling.doc2vec_model import Doc2VecModel
 
-PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
-ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
-CLICK_RATE_COLUMN = "click_rate"
-TARGET_ARTICLE_COLUMN = "target_article"
-SOURCE_ARTICLE_COLUMN = "source_article"
-MODEL_COLUMN = "model"
-
 logger = logging.getLogger(__name__)
 
 LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 
 
 class TrainDoc2Vec:
@@ -104,7 +105,9 @@ class TrainDoc2Vec:
         # ).to(self.device)
 
         return nn.Sequential(
-            nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),
+            nn.Linear(input_dim, mlp_dim),
+            nn.ReLU(),
+            nn.Linear(mlp_dim, output_dim),
         ).to(self.device)
 
     def train(self):

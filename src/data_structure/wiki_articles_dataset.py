@@ -3,9 +3,7 @@ from ast import literal_eval
 
 import pandas as pd
 
-FOLD_COLUMN = "fold"
-ARTICLE_COLUMN = "article"
-RAW_TEXT_COLUMN = "raw_text"
+from utils.constants import ARTICLE_COLUMN, RAW_TEXT_COLUMN
 
 
 class WikiArticlesDataset:

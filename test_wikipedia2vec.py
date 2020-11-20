@@ -4,6 +4,8 @@ import os
 
 from tqdm import tqdm
 
+from utils.constants import TEST_DATASET_PATH
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -22,8 +24,6 @@ LOG_FORMAT = (
     "[%(asctime)s] [%(levelname)s] %(message)s (%(funcName)s@%(filename)s:%(lineno)s)"
 )
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
-
-TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 
 
 class TestWikipedia2Vec:

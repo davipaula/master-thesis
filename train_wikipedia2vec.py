@@ -2,6 +2,17 @@ import argparse
 import sys
 import os
 
+from utils.constants import (
+    MODEL_COLUMN,
+    SOURCE_ARTICLE_COLUMN,
+    TARGET_ARTICLE_COLUMN,
+    ACTUAL_CLICK_RATE_COLUMN,
+    PREDICTED_CLICK_RATE_COLUMN,
+    TRAIN_DATASET_PATH,
+    VALIDATION_DATASET_PATH,
+    CLICK_RATE_COLUMN,
+)
+
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
@@ -16,15 +27,6 @@ from torch import nn
 
 from modeling.wikipedia2vec_model import Wikipedia2VecModel
 
-PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
-ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
-CLICK_RATE_COLUMN = "click_rate"
-TARGET_ARTICLE_COLUMN = "target_article"
-SOURCE_ARTICLE_COLUMN = "source_article"
-MODEL_COLUMN = "model"
-
-TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
 
 logger = logging.getLogger(__name__)
 
@@ -95,16 +97,14 @@ class TrainWikipedia2Vec:
 
     def get_regression_model(self, hidden_size):
         input_dim = hidden_size * 4  # 3 = number of concatenations
-        # Not mentioned in the paper.
+
         mlp_dim = int(input_dim / 2)
         output_dim = 1
 
-        # nn.Sequential(
-        #     nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim), nn.Sigmoid(),
-        # ).to(self.device)
-
         return nn.Sequential(
-            nn.Linear(input_dim, mlp_dim), nn.ReLU(), nn.Linear(mlp_dim, output_dim),
+            nn.Linear(input_dim, mlp_dim),
+            nn.ReLU(),
+            nn.Linear(mlp_dim, output_dim),
         ).to(self.device)
 
     def train(self):
