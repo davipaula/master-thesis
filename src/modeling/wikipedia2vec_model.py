@@ -45,7 +45,3 @@ class Wikipedia2VecModel:
         previous_article_vector = self.model.get_entity_vector(previous_article_title)
 
         return cosine_similarity(current_article_vector, previous_article_vector)
-
-
-if __name__ == "__main__":
-    model = Wikipedia2VecModel()

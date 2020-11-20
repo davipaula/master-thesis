@@ -1,27 +1,17 @@
 import sys
 import os
 
+from preparation import convert_to_word2vec
+from preparation.click_stream_extractor import extract_click_stream_data
+from preparation.wiki_articles_extractor import extract_wiki_articles
+from preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
+from processing.click_stream_processor import generate_datasets
+from processing.wiki_articles_processor import create_wiki_articles_dataset
+
 src_path = os.path.join(os.getcwd(), "src")
 sys.path.extend([os.getcwd(), src_path])
 
 import logging
-
-from preparation import convert_to_word2vec
-from preparation.click_stream_extractor import ClickStreamExtractor
-from preparation.wiki_articles_extractor import extract_wiki_articles
-from preparation.wiki_articles_tokenizer import WikiArticlesTokenizer
-from processing.click_stream_processor import ClickStreamProcessor
-from processing.wiki_articles_processor import WikiArticlesProcessor
-
-from database import ArticlesDatabase
-
-from utils.constants import (
-    CLICK_STREAM_DUMP_PATH,
-    WIKI_TITLES_PATH,
-    WIKI_DUMP_PATH,
-    WIKI_ARTICLES_TOKENIZED_PATH,
-    WORD2VEC_200D_PATH,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -31,59 +21,44 @@ LOG_FORMAT = (
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
-class DatasetCreator:
+def run():
+    """This function executes all the steps needed to extract the raw data from Wikipedia dump and
+    Wikipedia Clickstream and create the dataset for our experiments.
+
+    This is a fairly intense process and can take some hours, specially due to the Wikipedia dump extraction
+    and SpaCy tokenization processes.
+
+    Summary of the process:
+       - Converts Glove to Wiki2Vec format
+       - Pre-process clickstream data
+       - Extracts raw text from Wikipedia dump
+           - Adds text to database
+           - Generates a list with all available articles in Wikipedia dump
+       - Creates training, validation and evaluation datasets
+           - Obtains articles present in Wikipedia dump and Clickstream dataset
+           - Randomly selects articles to from training, validation and test datasets
+       - Tokenizes articles from training, validation and evaluation datasets
+            - Tokenizes only the selected articles to save time in the process
+       - Create the Wiki articles dataset
+            - Processes the tokenized text and creates a dataset
     """
-    - Convert Glove to Wiki2Vec format
-    - Pre-process click stream
-        - Extract data from click stream dump
-            - Keep only `type == 'link'`
-            - Clean titles
-            - Add metrics
-        - Save pre-processed file
-    - Prepare page titles
-        - Clean titles
-        - Save pre-processed file
-    - Create click stream dataset
-        - Open file
-        - Filter available titles in N0
-        - Generate random sample
-        - Save 'selected_articles.txt'
-        - Divide sample into train, validation and test
-    - Create Wiki dataset
-        - Open 'selected_articles.txt'
-        - Open Wiki articles dump
-        - Tokenize articles that are in 'selected_articles.txt'
-    """
+    logger.info(f"Process started:")
+    logger.info(f"Converting Glove file to Word2Vec format")
+    convert_to_word2vec.convert(
+        "./data/source/glove.6B.50d.txt", "./data/source/glove.6B.50d.w2vformat.txt"
+    )
 
-    def __init__(self):
-        pass
+    logger.info(f"Extracting Click Stream data")
+    extract_click_stream_data()
 
-    def run(self):
-        logger.info(f"Process started:")
-        # logger.info(f"Converting Glove file to Word2Vec format")
-        # convert_to_word2vec.convert("./data/source/glove.6B.200d.txt", "./data/source/glove.6B.200d.w2vformat.txt")
-        #
-        logger.info(f"Extracting Click Stream data")
-        ClickStreamExtractor().run()
-        #
-        # logger.info("Extracting Wiki articles")
-        # extract_wiki_articles()
-        #
-        # logger.info(f"Generating Available Titles")
-        # articles_db = ArticlesDatabase()
-        # articles_db.generate_available_articles()
+    logger.info("Extracting Wiki articles")
+    extract_wiki_articles()
 
-        # logger.info(f"Generating Click Stream Dataset")
-        ClickStreamProcessor().run()
+    logger.info(f"Generating Clickstream dataset")
+    generate_datasets()
 
-        logger.info("Tokenizing articles")
-        WikiArticlesTokenizer().process()
+    logger.info("Tokenizing articles")
+    WikiArticlesTokenizer().process()
 
-        # logger.info("Creating dataset with Wiki Articles")
-        WikiArticlesProcessor().run()
-
-
-if __name__ == "__main__":
-    os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi")
-
-    DatasetCreator().run()
+    logger.info("Creating dataset with Wiki Articles")
+    create_wiki_articles_dataset()

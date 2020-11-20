@@ -147,9 +147,3 @@ class Doc2VecModel:
             )
 
         return tagged_documents
-
-
-if __name__ == "__main__":
-    model = Doc2VecModel()
-
-    model.create_models()

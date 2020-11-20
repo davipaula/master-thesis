@@ -42,7 +42,7 @@ LOG_FORMAT = (
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
-def process_click_stream() -> None:
+def generate_datasets() -> None:
     """Processes click stream and generates the training, validation and evaluation datasets.
 
     Returns
@@ -414,15 +414,3 @@ def save_selected_articles_file(all_articles: set) -> None:
     selected_articles = pd.Series(list(all_articles))
 
     selected_articles.to_csv(SELECTED_ARTICLES_PATH, header=False, index=False)
-
-
-if __name__ == "__main__":
-    pd.set_option("display.max_rows", 500)
-    pd.set_option("display.max_columns", 500)
-    pd.set_option("display.width", 1000)
-    os.chdir("/Users/dnascimentodepau/Documents/python/thesis/thesis-davi/")
-
-    start = datetime.now()
-    logger.info("Started process")
-    process_click_stream()
-    logger.info(f"Finished process. Time elapsed: {datetime.now() - start}")

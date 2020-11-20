@@ -47,8 +47,3 @@ class WikiArticlesDataset:
         sentence_level = list(itertools.chain.from_iterable(literal_eval(text)))
 
         return " ".join(sentence_level)
-
-
-if __name__ == "__main__":
-    data = WikiArticlesDataset()
-    print(data.get_articles())

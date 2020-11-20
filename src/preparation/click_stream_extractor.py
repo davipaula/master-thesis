@@ -12,14 +12,14 @@ from utils.constants import (
 )
 
 
-def process_click_stream():
-    click_stream = __extract_click_stream_data()
-    click_stream = __add_metrics(click_stream)
+def extract_click_stream_data():
+    click_stream = _process_raw_click_stream()
+    click_stream = _add_metrics(click_stream)
 
     click_stream.to_csv(CLICK_STREAM_PROCESSED_PATH, index=False)
 
 
-def __add_metrics(dataset: pd.DataFrame) -> pd.DataFrame:
+def _add_metrics(dataset: pd.DataFrame) -> pd.DataFrame:
     """Adds the metric `click_through_rate` to the clickstream dataset
 
     Parameters
@@ -51,7 +51,7 @@ def __add_metrics(dataset: pd.DataFrame) -> pd.DataFrame:
     return click_stream_dataset
 
 
-def __extract_click_stream_data() -> pd.DataFrame:
+def _process_raw_click_stream() -> pd.DataFrame:
     """Returns a dataframe with the Click Stream Data
 
     Returns
@@ -100,7 +100,3 @@ def __extract_click_stream_data() -> pd.DataFrame:
     ]
 
     return click_stream_dataset
-
-
-if __name__ == "__main__":
-    process_click_stream()

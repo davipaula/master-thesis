@@ -22,7 +22,6 @@ from database import ArticlesDatabase
 from utils.constants import (
     SELECTED_ARTICLES_PATH,
     WIKI_ARTICLES_TOKENIZED_PATH,
-    WORD2VEC_200D_PATH,
     WORD2VEC_50D_PATH,
 )
 

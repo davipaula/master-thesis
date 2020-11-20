@@ -209,3 +209,6 @@ def extract_wiki_articles() -> None:
             articles_db.add_articles(page["title"], page["sessions"], page["links"])
 
     logger.info("Articles saved to DB")
+
+    articles_db.generate_available_articles()
+    logger.info("Generated Available Titles")

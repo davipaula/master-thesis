@@ -28,14 +28,3 @@ class ClickStreamPreProcessed(Dataset):
 
     def __getitem__(self, index):
         return self.dataset.iloc[index]
-
-    def get_titles(self):
-        titles = pd.Series.append(
-            self.dataset[SOURCE_ARTICLE_COLUMN], self.dataset[TARGET_ARTICLE_COLUMN]
-        )
-        return titles.unique()
-
-
-if __name__ == "__main__":
-    data = ClickStreamPreProcessed()
-    print(data[10])
