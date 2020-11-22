@@ -55,7 +55,6 @@ class SmashRNN:
         self.patience = 5
 
         self.opt = self.get_args()
-        self.num_validations = int(self.opt.num_epochs / self.opt.validation_interval)
         # End of configs
 
         self.model_name = (
@@ -258,7 +257,7 @@ class SmashRNN:
             "{} level\n Validation: {}/{}, Lr: {}, Loss: {}".format(
                 level.capitalize(),
                 validation_step,
-                self.num_validations,
+                self.opt.num_epochs,
                 self.optimizer.param_groups[0]["lr"],
                 final_loss,
             )

@@ -1,46 +1,46 @@
 CLICK_STREAM_DUMP_PATH = "./data/source/clickstream-enwiki-2020-03.tsv"
 CLICK_STREAM_PROCESSED_PATH = "./data/processed/click_stream.csv"
 
-WIKI_TITLES_PATH = "./data/source/enwiki-20200401-all-titles-in-ns0.gz"
+CLICK_STREAM_TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
+CLICK_STREAM_VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
+CLICK_STREAM_TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
 
 WIKI_DUMP_PATH = "./data/source/enwiki-20200401-pages-articles.xml.bz2"
-
-AVAILABLE_TITLES_PATH = "./data/processed/available_titles.txt"
-
-WORD2VEC_50D_PATH = "./data/source/glove.6B.50d.w2vformat.txt"
-WORD2VEC_200D_PATH = "./data/source/glove.6B.200d.w2vformat.txt"
-
-SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.txt"
-
-WIKI_ARTICLES_EXTRACTED_PATH = "./data/processed/enwiki_articles.jsonl"
 WIKI_ARTICLES_TOKENIZED_PATH = (
     "./data/processed/enwiki_tokenized_selected_articles_v2.jsonl"
 )
 WIKI_ARTICLES_DATASET_PATH = "./data/dataset/wiki_articles_english.csv"
 
+AVAILABLE_TITLES_PATH = "./data/processed/available_titles.txt"
+
+SELECTED_ARTICLES_PATH = "./data/processed/selected_articles.txt"
+
+WORD2VEC_50D_PATH = "./data/source/glove.6B.50d.w2vformat.txt"
+WORD2VEC_200D_PATH = "./data/source/glove.6B.200d.w2vformat.txt"
+
 TRAIN_DATASET_PATH = "./data/processed/train.csv"
 VALIDATION_DATASET_PATH = "./data/processed/validation.csv"
 TEST_DATASET_PATH = "./data/processed/test.csv"
 
-CLICK_STREAM_TRAIN_DATASET_PATH = "./data/dataset/click_stream_train.pth"
-CLICK_STREAM_VALIDATION_DATASET_PATH = "./data/dataset/click_stream_validation.pth"
-CLICK_STREAM_TEST_DATASET_PATH = "./data/dataset/click_stream_test.pth"
-
-ARTICLE_COLUMN = "article"
 WORD_COUNT_COLUMN = "word_count"
 OUT_LINKS_COUNT_COLUMN = "out_links_count"
 IN_LINKS_COUNT_COLUMN = "in_links_count"
 PARAGRAPH_COUNT_COLUMN = "paragraph_count"
 SENTENCE_COUNT_COLUMN = "sentence_count"
+IN_LINKS_COLUMN = "in_links_count"
+MISSING_WORDS_COLUMN = "missing_words_percentage"
 
+ALL_FEATURES = [WORD_COUNT_COLUMN, OUT_LINKS_COUNT_COLUMN, IN_LINKS_COUNT_COLUMN]
+
+ARTICLE_COLUMN = "article"
 MODEL_COLUMN = "model"
 PREDICTED_CLICK_RATE_COLUMN = "predicted_click_rate"
 ACTUAL_CLICK_RATE_COLUMN = "actual_click_rate"
 TARGET_ARTICLE_COLUMN = "target_article"
 SOURCE_ARTICLE_COLUMN = "source_article"
-
 TEXT_IDS_COLUMN = "text_ids"
 CLICK_RATE_COLUMN = "click_rate"
+
 PARAGRAPHS_PER_DOCUMENT_COLUMN = "paragraphs_per_document"
 SENTENCES_PER_PARAGRAPH_COLUMN = "sentences_per_paragraph"
 WORDS_PER_SENTENCE_COLUMN = "words_per_sentence"
@@ -53,18 +53,6 @@ RESULT_FILE_COLUMNS_NAMES = [
     PREDICTED_CLICK_RATE_COLUMN,
 ]
 
-WORD_COUNT_BIN = "word_count_bin"
-OUT_LINKS_BIN = "out_links_bin"
-OUT_LINKS_COLUMN = "out_links_count"
-IN_LINKS_BIN = "in_links_bin"
-IN_LINKS_COLUMN = "in_links_count"
-PARAGRAPH_COUNT_BIN = "paragraph_count_bin"
-SENTENCE_COUNT_BIN = "sentence_count_bin"
-MISSING_WORDS_COLUMN = "missing_words_percentage"
-MISSING_WORDS_BIN = "missing_words_percentage_bin"
-MODEL_COLUMN = "model"
-
-ALL_FEATURES = [WORD_COUNT_COLUMN, OUT_LINKS_COLUMN, IN_LINKS_COLUMN]
 
 DOC2VEC_SIAMESE = "doc2vec_siamese"
 DOC2VEC_COSINE = "doc2vec_cosine"
@@ -115,7 +103,7 @@ COMPLETE_MODELS_SAVE_CONFIG = [
     ),
     (WORD_COUNT_COLUMN, "Source article length as word count (%s equal-sized buckets)"),
     (
-        OUT_LINKS_COLUMN,
+        OUT_LINKS_COUNT_COLUMN,
         "Number of links present in the source articles (%s equal-sized buckets)",
     ),
     (
@@ -164,6 +152,7 @@ CLEAN_MODEL_NAMES = {
     SMASH_SENTENCE_LEVEL_INTRODUCTION: "SMASH RNN Introduction (P + S)",
     SMASH_PARAGRAPH_LEVEL_INTRODUCTION: "SMASH RNN Introduction (P)",
 }
+
 NDCG_COLUMN = "ndcg"
 MAP_COLUMN = "map"
 PRECISION_COLUMN = "precision"

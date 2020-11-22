@@ -228,7 +228,7 @@ def prepare_dataset() -> pd.DataFrame:
     pandas.core.frame.DataFrame
 
     """
-    _pre_processed_dataset = ClickStreamPreProcessed().dataset
+    _pre_processed_dataset = ClickStreamPreProcessed().dataset.copy(deep=True)
 
     logger.info(f"Clickstream dataset original size {len(_pre_processed_dataset)}")
     logger.info("Filtering dataset")
@@ -255,15 +255,9 @@ def split_datasets() -> None:
     None
     """
     random.seed(123)
-    source_dataset = prepare_dataset().copy()
+    source_dataset = prepare_dataset()
 
-    click_stream_data_sum = (
-        source_dataset.groupby(SOURCE_ARTICLE_COLUMN).sum().reset_index()
-    )
-
-    unique_source_articles = click_stream_data_sum[
-        click_stream_data_sum[CLICK_RATE_COLUMN] > 0.95
-    ][SOURCE_ARTICLE_COLUMN].drop_duplicates()
+    unique_source_articles = source_dataset[SOURCE_ARTICLE_COLUMN].drop_duplicates()
     num_source_articles = len(unique_source_articles)
 
     num_source_articles_sample = int(num_source_articles * DATASET_SAMPLE_PERCENT)

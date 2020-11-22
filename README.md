@@ -13,21 +13,37 @@ conda activate smash-rnn
 pip install -r requirements.txt
 ```
 
-### Datasets (to be updated)
-This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip this file in the project root folder.
+### Datasets
+This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets used in this experiment [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip this file in the project root folder.
 To download using wget, you can run:
 
     wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj" -O data.zip && rm -rf /tmp/cookies.txt
+    
+    
+To create the datasets from scratch, you need to run the steps below. Please note that:
+- This process may take up to 8 hours to complete when running on a server (data extraction and tokenization are the most time consuming tasks).
+- The availability of Wikipedia dumps is limited - in general only the last 3-5 dumps are available.
+- This process was tested only with the English language, and Simple English Wikipedia dumps. 
+
+1. Download Clickstream data: https://dumps.wikimedia.org/other/clickstream/
+1. Download Wikipedia dump: https://ftp.acc.umu.se/mirror/wikimedia.org/dumps/enwiki/
+1. Move the Clickstream and Wikipedia dump files into the folder `./data/source`
+1. In the root folder, run the script `dataset_creator.py`
+```bash
+python dataset_creator.py
+``` 
 
 ### Training
 - Smash RNN:
-To train the model with default parameters, run:
+To train the model with default parameters, go to the root of the application and run:
 
-- **python train_smash_rnn.py**
+```
+python train_smash_rnn.py
+```
 
 **Options**
 - _--num_epochs_: The number of epochs to train the model (default: 1)
-- _--batch_size_: The number of articles in each batch (default: 6)
+- _--batch_size_: The number of articles in each batch. This value needs to be small when using the complete article structure due to memory limitation issues  (default: 6)
 - _--level_: The deepest level of Smash RNN. Possible choices are `word`, `sentence` or `paragraph` (default: `paragraph`)
 - _--paragraphs_limit_: Maximum number of paragraphs per article that will be processed (default: 300)
 - _--model_name_: Name to use when saving the model and results (default: `base`)
@@ -55,12 +71,24 @@ You can find trained models in this [link](https://drive.google.com/file/d/1IqkO
 #### Additional models
 Additional models were developed to compare the results with Smash-RNN:
 - Wikipedia2Vec:
-    - Train: **python train_wikipedia2vec.py**
-    - Test: **python test_wikipedia2vec.py**
+    1. First you need to learn the embeddings for the Wikipedia2Vec model. See instructions in https://wikipedia2vec.github.io/wikipedia2vec/commands/
+     
+    - Train: 
+    
+    ```python train_wikipedia2vec.py```
+    
+    - Test: 
+    
+    ```python test_wikipedia2vec.py```
     
 - Doc2Vec:
-    - Train: **python train_doc2vec.py**
-    - Test: **python test_doc2vec.py**
+    - Train: 
+    
+    ```python train_doc2vec.py```
+    
+    - Test: 
+    
+    ```python test_doc2vec.py```
     
 #### Results analysis
-To generate the tables and figures from Section `Results`, please follow the steps presented in Jupyter Notebook **Results analyzer.ipynb** 
+To generate the tables and figures from Section `Results` of the thesis, please follow the steps presented in Jupyter Notebook ``Results analyzer.ipynb`` 
