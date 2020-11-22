@@ -1,28 +1,23 @@
+import bz2
+import logging
 import multiprocessing
 import os
-import sys
+import re
 from datetime import datetime
 from typing import Any, Dict, List, Union
+from xml.etree import cElementTree
 
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
-import bz2
-import re
-import logging
 from gensim.corpora.wikicorpus import get_namespace
 from gensim.scripts.segment_wiki import extract_page_xmls
-from ..utils.extractor_utils import (
-    drop_nested,
-    replaceInternalLinks,
-    replaceExternalLinks,
-)
-from xml.etree import cElementTree
 from gensim.scripts.segment_wiki import segment
 
-from ..utils.constants import WIKI_DUMP_PATH
-
 from database import ArticlesDatabase
+from ..utils.constants import WIKI_DUMP_PATH
+from ..utils.extractor_utils import (
+    drop_nested,
+    replaceExternalLinks,
+    replaceInternalLinks,
+)
 
 logger = logging.getLogger(__name__)
 

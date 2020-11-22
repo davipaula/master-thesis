@@ -1,7 +1,5 @@
 import json
 import logging
-import os
-import sys
 from itertools import compress
 from typing import Dict, List, Tuple
 
@@ -9,11 +7,7 @@ import gensim
 import spacy
 from tqdm import tqdm
 
-src_path = os.path.join(os.getcwd(), "src")
-sys.path.extend([os.getcwd(), src_path])
-
 from database import ArticlesDatabase
-
 from ..utils.constants import (
     SELECTED_ARTICLES_PATH,
     WIKI_ARTICLES_TOKENIZED_PATH,
