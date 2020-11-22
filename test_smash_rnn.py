@@ -12,13 +12,14 @@ from tqdm import tqdm
 
 from src.modeling.smash_dataset import SMASHDataset
 from src.modeling.smash_rnn_model import SmashRNNModel
+from src.utils.utils import get_model_path
 from src.utils.constants import (
     CLICK_RATE_COLUMN,
+    CLICK_STREAM_TEST_DATASET_PATH,
     MODEL_FOLDER,
     RESULT_FILE_COLUMNS_NAMES,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    TEST_DATASET_PATH,
     WIKI_ARTICLES_DATASET_PATH,
 )
 from src.utils.utils import get_model_name, get_word2vec_path, load_embeddings_from_file
@@ -52,7 +53,7 @@ def test(opt: argparse.Namespace) -> None:
 
     logger.info("Initializing parameters")
 
-    click_stream_test = torch.load(TEST_DATASET_PATH)
+    click_stream_test = torch.load(CLICK_STREAM_TEST_DATASET_PATH)
 
     batch_size = opt.batch_size
     test_params = {
@@ -140,7 +141,7 @@ def load_model(
     # Siamese + Attention model
     model = SmashRNNModel(embeddings, vocab_size, embeddings_dimension_size, opt.level)
 
-    model_path = f"{model_folder}{model_name}_model.pt"
+    model_path = get_model_path(model_folder, model_name)
     logger.info(f"Model path: {model_path}")
     if torch.cuda.is_available():
         model_state_dict = torch.load(model_path)
@@ -172,10 +173,10 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         """Implementation of Siamese multi-attention RNN"""
     )
-    parser.add_argument("--level", type=str, default="sentence")
+    parser.add_argument("--level", type=str, default="paragraph")
     parser.add_argument("--batch_size", type=int, default=6)
     parser.add_argument("--paragraphs_limit", type=int, default=None)
-    parser.add_argument("--model_name", type=str, default="base")
+    parser.add_argument("--model_name", type=str, default=None)
     parser.add_argument("--w2v_dimension", type=int, default=50)
     parser.add_argument("--introduction_only", type=bool, default=False)
 

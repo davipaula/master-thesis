@@ -3,6 +3,7 @@
 """
 import csv
 import json
+import os
 import re
 import timeit
 from itertools import chain
@@ -192,12 +193,16 @@ def get_word2vec_path(w2v_dimension: int):
     return word2vec_paths[w2v_dimension]
 
 
-def get_model_name(level: str, model_name: str, introduction_only: bool):
-    model_name = f"{level}_level_{model_name}"
+def get_model_name(level: str, model_name: str = None, introduction_only: bool = False):
+    formatted_name: str = f"{level}_level"
 
-    model_name = model_name + "_introduction_only" if introduction_only else model_name
+    if model_name:
+        formatted_name += f"_{model_name}"
 
-    return model_name
+    if introduction_only:
+        formatted_name = "_introduction_only"
+
+    return formatted_name
 
 
 def flatten_article(article):
@@ -263,3 +268,11 @@ def load_embeddings_from_file(embeddings_path: str) -> Tuple[torch.Tensor, int, 
         np.concatenate([unknown_word, embeddings], axis=0).astype(np.float)
     )
     return embeddings, vocab_size, embeddings_dimension_size
+
+
+def get_model_path(model_folder: str, model_name: str):
+    model_file = model_name + "_model.pt"
+
+    model_path = os.path.join(model_folder, model_file)
+
+    return model_path

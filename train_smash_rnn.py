@@ -19,11 +19,16 @@ from src.utils.constants import (
     RESULT_FILE_COLUMNS_NAMES,
     SOURCE_ARTICLE_COLUMN,
     TARGET_ARTICLE_COLUMN,
-    TRAIN_DATASET_PATH,
+    CLICK_STREAM_TRAIN_DATASET_PATH,
     VALIDATION_DATASET_PATH,
     WIKI_ARTICLES_DATASET_PATH,
 )
-from src.utils.utils import get_word2vec_path, load_embeddings_from_file
+from src.utils.utils import (
+    get_model_name,
+    get_model_path,
+    get_word2vec_path,
+    load_embeddings_from_file,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +38,7 @@ LOG_FORMAT = (
 logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 
-RESULTS_PATH = "./results/validation/"
+RESULTS_PATH = "results/validation/"
 
 
 class SmashRNN:
@@ -57,12 +62,11 @@ class SmashRNN:
         self.opt = self.get_args()
         # End of configs
 
-        self.model_name = (
-            self.opt.model_name + "_introduction_only"
-            if self.opt.introduction_only
-            else self.opt.model_name
+        self.model_name = get_model_name(
+            self.opt.level, self.opt.model_name, self.opt.introduction_only
         )
 
+        logger.info("Loading articles text")
         self.articles = SMASHDataset(
             WIKI_ARTICLES_DATASET_PATH, introduction_only=self.opt.introduction_only
         )
@@ -74,6 +78,7 @@ class SmashRNN:
             word2vec_path
         )
 
+        logger.info("Initializing model")
         self.model = SmashRNNModel(
             embeddings, vocab_size, embeddings_dimension_size, levels=self.opt.level
         )
@@ -88,6 +93,7 @@ class SmashRNN:
         self.batch_size = self.opt.batch_size
 
         self.model.train()
+        logger.info("Model loaded")
 
     def train(self, level: str = "paragraph") -> None:
         """Executes the training steps of SMASH RNN
@@ -101,7 +107,8 @@ class SmashRNN:
         -------
         None
         """
-        click_stream_train = torch.load(TRAIN_DATASET_PATH)
+        logger.info("Loading training dataset")
+        click_stream_train = torch.load(CLICK_STREAM_TRAIN_DATASET_PATH)
         training_params = {
             "batch_size": self.batch_size,
             "shuffle": True,
@@ -117,14 +124,12 @@ class SmashRNN:
             else self.articles.get_n_percentile_paragraph_length()
         )
 
-        print("Starting training {}".format(datetime.now()))
+        logger.info("Starting training {}".format(datetime.now()))
 
         num_epochs_without_improvement = 0
         best_loss = 1
         best_weights = None
         best_epoch = 0
-
-        print(range(self.opt.num_epochs))
 
         for epoch in range(self.opt.num_epochs):
             self.model.train()
@@ -157,7 +162,7 @@ class SmashRNN:
 
             loss = self.calculate_loss(loss_list)
 
-            print(
+            logger.info(
                 "Epoch: {}/{}, Lr: {}, Loss: {}, Time: {}".format(
                     epoch + 1,
                     self.opt.num_epochs,
@@ -184,7 +189,7 @@ class SmashRNN:
                 break
 
         self.save_model()
-        print(f"Training finished {datetime.now()}. Best epoch {best_epoch + 1}")
+        logger.info(f"Training finished {datetime.now()}. Best epoch {best_epoch + 1}")
 
     def validate(self, validation_step: int, level: str) -> Union[float, torch.Tensor]:
         """Executes a validation step of the model at the defined level. Returns
@@ -253,7 +258,7 @@ class SmashRNN:
             index=False,
         )
 
-        print(
+        logger.info(
             "{} level\n Validation: {}/{}, Lr: {}, Loss: {}".format(
                 level.capitalize(),
                 validation_step,
@@ -273,7 +278,7 @@ class SmashRNN:
         None
 
         """
-        model_path = f"{MODEL_FOLDER}{self.opt.level}_level_{self.model_name}_model.pt"
+        model_path = get_model_path(MODEL_FOLDER, self.model_name)
         torch.save(self.model.state_dict(), model_path)
 
     @staticmethod
@@ -304,7 +309,7 @@ class SmashRNN:
         parser.add_argument("--batch_size", type=int, default=6)
         parser.add_argument("--level", type=str, default="paragraph")
         parser.add_argument("--paragraphs_limit", type=int, default=None)
-        parser.add_argument("--model_name", type=str, default="base")
+        parser.add_argument("--model_name", type=str, default=None)
         parser.add_argument("--w2v_dimension", type=int, default=50)
         parser.add_argument("--introduction_only", type=bool, default=False)
 

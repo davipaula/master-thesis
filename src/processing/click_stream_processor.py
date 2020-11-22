@@ -8,8 +8,8 @@ import pandas as pd
 import torch
 
 import database
-from ..data_structure.click_stream_pre_processed import ClickStreamPreProcessed
-from ..utils.constants import (
+from src.data_structure.click_stream_pre_processed import ClickStreamPreProcessed
+from src.utils.constants import (
     ARTICLE_COLUMN,
     AVAILABLE_TITLES_PATH,
     CLICK_RATE_COLUMN,

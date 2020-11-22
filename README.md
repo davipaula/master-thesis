@@ -2,24 +2,28 @@
 
 This repository contains the code used to run the experiments of the Master thesis `Text-based Prediction of Popular Click Paths in Wikipedia`
 
-## Install (to be updated)
+## Install
 
 ```
-# Setup virtual Python 3.6 environment (with conda)
+# Setup virtual Python 3.7 environment (with conda)
 conda create -n smash-rnn python=3.7
 conda activate smash-rnn
 
-# Dependencies
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ### Datasets
-This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. You can find the datasets used in this experiment [here](https://drive.google.com/file/d/1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj). You need to unzip this file in the project root folder.
-To download using wget, you can run:
+This project uses a combination of English language Wikipedia articles and Wikipedia English clickstream data. 
 
-    wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1c9ksCCzr6GQnCdZPW0LR4m8TAdCRUbaj" -O data.zip && rm -rf /tmp/cookies.txt
+#### Using prepared datasets:
+
+- Download the datasets used in this experiment [here](https://github.com/malteos/thesis-davi/releases/download/0.2-alpha/data.zip). You need to unzip this file in the project root folder.
+
+- Unzip the file in the root folder of the project    
     
-    
+#### Creating datasets from scratch
+
 To create the datasets from scratch, you need to run the steps below. Please note that:
 - This process may take up to 8 hours to complete when running on a server (data extraction and tokenization are the most time consuming tasks).
 - The availability of Wikipedia dumps is limited - in general only the last 3-5 dumps are available.
@@ -33,7 +37,11 @@ To create the datasets from scratch, you need to run the steps below. Please not
 python dataset_creator.py
 ``` 
 
-### Training
+### Using models
+You can find trained models in this [link](https://github.com/malteos/thesis-davi/releases/download/0.2-alpha/trained_models.zip). You need to unzip this file in the project root folder.
+
+
+#### Training from scratch
 - Smash RNN:
 To train the model with default parameters, go to the root of the application and run:
 
@@ -63,10 +71,6 @@ To test the model with default parameters, run:
 - _--w2v_dimension_: Number of dimensions of Word2Vec (default: 50)
 - _--introduction_only_: Whether the model should use only the introduction section or the complete text of the article (default: `False`)
 
-
-You can find trained models in this [link](https://drive.google.com/file/d/1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex/view?usp=sharing). You need to unzip this file in the project root folder.
-
-    wget --load-cookies /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=$(wget --quiet --save-cookies /tmp/cookies.txt --keep-session-cookies --no-check-certificate 'https://docs.google.com/uc?export=download&id=1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex' -O- | sed -rn 's/.*confirm=([0-9A-Za-z_]+).*/\1\n/p')&id=1IqkOR7k2t3vjszvCM0SJSPzX6ApijBex" -O trained_models.zip && rm -rf /tmp/cookies.txt
 
 #### Additional models
 Additional models were developed to compare the results with Smash-RNN:
